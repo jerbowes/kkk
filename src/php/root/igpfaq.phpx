@@ -1,0 +1,1081 @@
+<?php
+	//#==================================================================
+	//# I-Group Portal FAQ
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2013/05/05 20:51:06 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/igpfaq.phpx,v $
+	//# $Id: igpfaq.phpx,v 1.33 2013/05/05 20:51:06 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no war_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+	session_start();
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$param = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl =  $_SERVER['PHP_SELF'] . '?' .  $param;
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}else{
+			$returl =  $_SERVER['PHP_SELF'];
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'	=>	'USA I-Group Portal Frequently Asked Questions',
+		'TITLE'		=>	'MKP USA I-Group Frequently Asked Questions FAQ',
+        'MODULE'    =>  'igpfaq.phpx',
+        'CSS'   	=>  'igpfaq',
+		'NAV1'		=>	"INFO"	// Level 1 menu navigation group
+	);
+
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$FAQCFG = array ( 
+		'EDITLEVEL' => '7' , 	// WIC Access Level required for edit
+		'PUBLICACCESS' => '0'	// Level and below visible to everyone 
+		);
+	//
+	// Roster of All Useable Fields
+	//
+	$ALLFIELD = array(
+		'igpfaq_id',
+		'igpfaq_access',
+		'igpfaq_category',
+		'igpfaq_subcategory',
+		'igpfaq_class',
+		'igpfaq_state',
+		'igpfaq_type',
+		'igpfaq_audience',
+		'igpfaq_keywords',
+		'igpfaq_summary',
+		'assignee_id',
+		'shelf_life',
+		'more_info',
+		'igpfaq_content',
+		'last_modified',
+	);
+
+	//
+	// Roster of fields displayed in query list
+	//
+	$SHOW = array(
+		'igpfaq_class',
+		'igpfaq_category',
+		'igpfaq_subcategory',
+		'igpfaq_type',
+		'igpfaq_audience',
+		'igpfaq_summary'
+	);
+	// Fields that can have query drill down links on display
+	$LINK = array(
+		'igpfaq_class',
+		'igpfaq_access',
+		'igpfaq_category',
+		'igpfaq_state',
+		'igpfaq_type',
+		'igpfaq_subcategory',
+		'igpfaq_audience',
+		'assignee_id'
+	);
+	// Fields that are from a Menu Picklist that can have new members
+	$EXTEND = array(
+		'igpfaq_subcategory'
+	);
+
+	// Required for New Entry
+	$RequiredField = array(
+		"igpfaq_category"	=>	"enter category",
+		"igpfaq_class"		=>	"enter class",
+		"igpfaq_summary"	=>	"enter summary description of faq"
+	);
+	// Global query choices
+	$InValidChoice = array (
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	// Edit record fields with edit disabled
+	$NoEdit = array(
+		'igpfaq_id',
+		'last_modified',
+	);
+
+	// Formatting styles of fields for forms
+	$FieldType = array(
+		'igpfaq_content'		=>	'textarea',
+		'igpfaq_class'			=>	'Menu',
+		'igpfaq_access'			=>	'MenuArray',
+		'igpfaq_assignee_id'	=>	'MenuArray',
+		'igpfaq_audience'		=>	'Menu'
+	);
+
+	// Picklist menus
+	$Menu = array(
+		'igpfaq_class'		=> "SELECT choice FROM menu WHERE table_name = 'igpfaq' AND field_name = 'class'",
+		'igpfaq_access'		=> "SELECT choice, description FROM menu WHERE table_name = 'igpfaq' AND field_name = 'access'",
+		'igpfaq_assignee_id'	=> "SELECT w.warrior_id, w.war_fname from warrior w",
+		'igpfaq_audience'	=> "SELECT choice FROM menu WHERE table_name = 'igpfaq' AND field_name = 'audience'",
+
+	);
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// END Custom Block
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	spew_header($FMT);
+	if (array_key_exists('Action', $_REQUEST)) {
+		$FMT[BANNER] .= "<BR>$_REQUEST[Action]";
+		$FMT[BANNER] .= "<BR>[PROTOTYPE]";		// DEVONLY
+		echo "<PRE>\n";	// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		//
+		// Access setup
+		//
+		if (array_key_exists('access', $_SESSION)) {
+			$my_access_level = $_SESSION['access'];
+		}else{
+			$my_access_level = $FAQCFG['PUBLICACCESS'];
+		}
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+			caa_connect();
+			//echo "<P>";	//DEBUG DEVONLY
+			//print_r($_REQUEST);//DEBUG DEVONLY
+			//echo "</P>";	//DEBUG DEVONLY
+			//echo "<P>";	//DEBUG DEVONLY
+			//print_r($_REQUEST);//DEBUG DEVONLY
+			//echo "</P>";	//DEBUG DEVONLY
+			// Get list of fields for this table
+			$fieldlabels = get_field_labels('igpfaq', 'igpfaq');
+			//print_r($fieldlabels);//DEBUG DEVONLY
+			$allfields = array_keys($fieldlabels);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($allfields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$goodfields = array();
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($allfields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$goodfields[$f] = $_REQUEST[$altkey];
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}else{
+					if ($_REQUEST[$f]) {
+						$goodfields[$f] = $_REQUEST[$f];
+					}
+				}
+			}
+			//echo "<P>";	//DEBUG DEVONLY
+			//print_r($goodfields);//DEBUG DEVONLY
+			//echo "</P>";	//DEBUG DEVONLY
+			// Delete auto_increment primary keys
+			unset ($goodfields['igpfaq_id']);
+
+			//echo "<P>";	//DEBUG DEVONLY
+			//print_r(goodfields);//DEBUG DEVONLY
+			//echo "</P>";	//DEBUG DEVONLY
+
+			$fields = array_keys($goodfields);
+			sort($fields);
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $goodfields)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO igpfaq (';
+			foreach ($fields as $f) {
+				$sql .= $f . ',';
+			}
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sql2 .= "'" . $val . "'" . ',';
+			}
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update" ) {
+			if (! array_key_exists('igpfaq_id', $_REQUEST)) {
+				die ("No Faq Item Id Set") ;
+			}
+			caa_connect();
+			//echo "<P>";	//DEBUG DEVONLY
+			//print_r($_REQUEST);//DEBUG DEVONLY
+			//echo "</P>";	//DEBUG DEVONLY
+			//echo "<P>";	//DEBUG DEVONLY
+			//print_r($_REQUEST);//DEBUG DEVONLY
+			//echo "</P>";	//DEBUG DEVONLY
+			// Get list of fields for this table
+			$fieldlabels = get_field_labels('igpfaq', 'igpfaq');
+			//print_r($fieldlabels);//DEBUG DEVONLY
+			$allfields = array_keys($fieldlabels);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($allfields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$goodfields = array();
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($allfields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$goodfields[$f] = $_REQUEST[$altkey];
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}else{
+					if ($_REQUEST[$f]) {
+						$goodfields[$f] = $_REQUEST[$f];
+					}
+				}
+			}
+
+			$fields = array_keys($goodfields);
+			sort($fields);
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $goodfields)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'UPDATE igpfaq SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sqlentry[] =   $f . " = '" . $val . "'";
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE igpfaq_id = '$goodfields[igpfaq_id]'";
+			echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<H3>Update successful</H3>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query  Results
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query"
+	  		|| $_REQUEST['Action'] == "List" ) {
+			spew_query_form();
+			spew_query_results();
+	  	}//if ($_REQUEST['Action'] == "Query / List")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabels = get_field_labels('igpfaq','igpfaq');
+			unset($fieldlabels['igpfaq_id']);
+			foreach ($fieldlabels as $fieldname => $val) {
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					// If Menu type of Menu
+					if ( $FieldType[$fieldname] == "Menu" || $FieldType[$fieldname] == "MenuArray" ) {
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							//echo "<BR>$menusql\n";//DEBUG DEVONLY
+							$menuitems = get_menu($menusql);
+							sort($menuitems);
+							//print_r($menuitems);//DEBUG DEVONLY
+							spew_select_menu($fieldname, $val,'All',$menuitems);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = mysql_query_array($result, MYSQL_ASSOC);
+							ksort($menuitems);
+							//print_r($menuitems);//DEBUG DEVONLY
+							spew_select_hash_menu($fieldname, '$val','All',$menulist);
+						}
+
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_$fieldname>";
+						}
+					}
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		} //Endif ($_REQUEST[Action] == "New" ) {
+
+		//----------------------------------------------------------------------
+	  	// Edit
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+			if (! array_key_exists('igpfaq_id', $_REQUEST)) {
+				die ("No Item Id Set") ;
+			}
+			caa_connect();
+			$sql = "SELECT * FROM igpfaq WHERE igpfaq_id = '$_REQUEST[igpfaq_id]'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+			$fieldlabels = get_field_labels('igpfaq','igpfaq');
+			foreach ($fieldlabels as $fieldname => $val) {
+				echo "<TR><TD VALIGN=TOP class=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" || $FieldType[$fieldname] == "MenuArray" ) {
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = get_menu($menusql);
+							sort($menuitems);
+							//print_r($menuitems);//DEBUG DEVONLY
+							spew_select_menu($fieldname, $val,'All',$menuitems);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+								$menusql = $Menu[$fieldname];
+							//echo "<BR>$menusql\n";//DEBUG DEVONLY
+						$result = mysql_query($menusql);
+							$menuitems = mysql_query_array($result, MYSQL_ASSOC);
+							ksort($menuitems);
+							//print_r($menuitems);//DEBUG DEVONLY
+							spew_select_hash_menu($fieldname, '$val','All',$menulist);
+						}
+					}
+				}else{
+					if (in_array($fieldname, $NoEdit)) {
+						echo "$row[$fieldname]<BR>";
+					}else{
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+				}
+				echo "</TD>\n";
+			}// Endforeach ($fieldlabels as $fieldname => $val) 
+			echo "</TABLE>\n";
+
+			echo "<INPUT TYPE=HIDDEN NAME=igpfaq_id VALUE=$_REQUEST[igpfaq_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Query VALUE=Query>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Query VALUE=Update>\n";
+
+			echo "</FORM>\n";
+	  	}//Endif ($_REQUEST['Action'] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View / Show
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Show"
+	  		|| $_REQUEST['Action'] == "View") {
+
+			if (! array_key_exists('igpfaq_id', $_REQUEST)) {
+				die ("No FAQ Id Set") ;
+			}else{
+				$fid = $_REQUEST['igpfaq_id'];
+			}
+
+			caa_connect();
+
+			$fieldlabel = array ();
+			$fieldlabel = get_field_labels('igpfaq','igpfaq',$WICCFG['DBNAME']);
+
+			$sql = "SELECT * FROM igpfaq WHERE igpfaq_id = '$fid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER=0>\n";
+			$viewlist = array (
+				'igpfaq_class',
+				'igpfaq_category',
+				'igpfaq_subcategory',
+				'igpfaq_type',
+				'igpfaq_audience'
+				);
+			foreach ($viewlist as $f) {
+				if (isset ( $row[$f] )) {
+					echo "<TR><TD class=tds>$fieldlabel[$f]</TD>\n";
+					echo "<TD class=tds><A HREF=$_SERVER[PHP_SELF]?$f=";
+					echo urlencode($row[$f]); 
+					echo "&Query=Query>$row[$f]</A></TD>\n";
+				}
+			}//Endforeach ($viewlist as $f) {
+			echo "</TABLE>\n";
+
+			echo "<TABLE BORDER=1 WIDTH=80% CELLPADDING=5 CELLSPACING=4>\n";
+			echo "<TH class=ths>$row[igpfaq_summary]</TH>\n";
+			echo "<TR>\n";
+			echo "<TD class=tds COLSPAN=2>$row[igpfaq_content]</TD>\n";
+			echo "</TABLE>\n";
+
+			echo "</CENTER>\n";
+	  	}//Endif ($_REQUEST['Query'] == "Show")
+	  	//End Show
+
+	}else{
+		// No $_REQUEST[Query]
+		spew_query_form();
+		spew_entire_list();
+	}
+	spew_footer($FMT);
+
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		caa_connect();
+		$list = array();
+		echo "<CENTER>\n";
+		//if (array_key_exists('access', $_SESSION)) {
+			//echo "<P class=trace>You have access level $_SESSION[access], you will only \n";
+			//echo "see FAQ's within your viewing authorization</P>\n";
+		//}else{
+			//echo "<P class=trace>You will only see publicly viewable FAQ's. For greater access\n";
+			//echo "<A HREF=/login.phpx>Log In</A></P>\n";
+		//}
+		// Blurb
+		echo "<P class=trace>Select Class, Category, etc and click <I>List</I> \n";
+		echo "to see matching FAQs</P>\n";
+
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER CELLSPACING=3>\n";
+		echo "<TH class=ths>Class</TH>\n";
+		echo "<TH class=ths>Category</TH>\n";
+		echo "<TH class=ths>Sub-Category</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		//echo "<TH class=ths>Keyword</TH>\n";
+		//echo "<TH class=ths>Audience</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		// Col 1
+		echo "<TR>\n";
+
+		// Class
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT igpfaq_class from igpfaq ORDER BY igpfaq_class";
+		$list = get_menu($sql);
+		spew_select_menu('igpfaq_class','All','All',$list);
+		echo "</TD>\n";
+
+		// Category
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT igpfaq_category from igpfaq ORDER BY igpfaq_category";
+		$list = get_menu($sql);
+		spew_select_menu('igpfaq_category','All','All',$list);
+		echo "</TD>\n";
+
+		// Sub Category
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT igpfaq_subcategory from igpfaq ORDER BY igpfaq_subcategory";
+		$list = get_menu($sql);
+		spew_select_menu('igpfaq_subcategory','All','All',$list);
+		echo "</TD>\n";
+
+		// Type
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT igpfaq_type from igpfaq ORDER BY igpfaq_type";
+		$list = get_menu($sql);
+		spew_select_menu('igpfaq_type','All','All',$list);
+		echo "</TD>\n";
+
+
+		// Keywords
+		//echo "<TD class=tds>\n";
+		//echo "<INPUT TYPE=TEXT NAME=kw>\n";
+		//echo "</TD>\n";
+
+		// Audience
+		//echo "<TD class=tds>\n";
+		//$sql = "SELECT DISTINCT igpfaq_audience from igpfaq ORDER BY igpfaq_audience";
+		//$audlist = get_menu($sql);
+		//sort ($audlist);
+		//spew_select_menu('igpfaq_audience','All','All',$audlist);
+		//echo "</TD>\n";
+
+		// Sortby
+		echo "<TD class=tds>\n";
+		$sortlist = array (
+			'igpfaq_audience,igpfaq_category'			=>	 'Audience',
+			'igpfaq_category,igpfaq_subcategory'			=>	 'Category',
+			'igpfaq_subcategory'			=>	 'Subcategory',
+			'igpfaq_type,igpfaq_category,ipfaq_subcategory'				=>	 'Type',
+			'igpfaq_id'					=>	 'ID',
+			'igpfaq_state,igpfaq_category'				=>	 'State',
+			'igpfaq_class,igp_category,igp_subcategory'				=>	 'Class',
+			'igpfaq_summary'			=>  'Summary',
+		);
+		ksort ($sortlist);
+		spew_select_hash_menu('sortby','Category','Category',$sortlist);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+		if ( $_SESSION['access'] >= $FAQCFG['EDITLEVEL'] ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function spew_query_results
+	//----------------------------------------------------------------
+	function spew_query_results() {
+		global $SHOW;
+		global $_REQUEST;
+		global $LINK;
+		global $FAQCFG;
+		global $WICCFG;
+		global $ALLFIELD;
+		global $InValidChoice;
+		global $my_access_level;
+		$fieldlabels = array();
+		$fields = array();
+		$where = array();
+		//
+		// Drill Down Link URL Setup
+		//
+		print_r ($SHOW); //DEBUG DEVONLY
+
+		foreach ($SHOW as $f ) {
+			if ( isset ($_REQUEST[$f] ) ) {
+				if (! in_array($_REQUEST[$f], $InValidChoice)) {
+					$previous_query_string .= $f . '=' . urlencode($_REQUEST[$f]) . '&';
+				}
+			}
+		}
+		$fieldlabels = get_field_labels('igpfaq','igpfaq',$WICCFG['DBNAME']);
+		echo "<PRE>\n";//DEBUG DEVONLY
+		print_r($_REQUEST);//DEBUG DEVONLY
+		echo "</PRE>\n";//DEBUG DEVONLY
+
+		echo "<P>&nbsp</P>\n";//DEBUG DEVONLY
+		print_r($fieldlabels);//DEBUG DEVONLY
+		echo "<P>&nbsp</P>\n";//DEBUG DEVONLY
+
+		$fields = array_keys($fieldlabels);
+
+		echo "<P>&nbsp</P>\n";//DEBUG DEVONLY
+		print_r($fields);//DEBUG DEVONLY
+		echo "<P>&nbsp</P>\n";//DEBUG DEVONLY
+
+		$sql = 'SELECT * FROM igpfaq ';
+
+		caa_connect();
+
+		foreach ($fields as $f) {
+			if (array_key_exists($f, $_REQUEST)) { 
+				$val = $_REQUEST[$f];
+				echo "<BR>Key $f is in Request with value of $val\n"; // DEBUG DEVONLY
+				if (in_array($val, $InValidChoice)){
+					echo "<BR>Unsetting $val as Invalid\n"; // DEBUG DEVONLY
+					unset($val) ;
+				}
+
+				if (isset($val)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					// Access control
+					if ( $f == "access" ) {
+						$where[] = $f . "<='" . $val . "'" ;
+					}else{
+						$where[] = $f . "='" . $val . "'" ;
+					}
+				}
+			}
+		}
+
+		if (! array_key_exists('access', $_SESSION)) { 
+			$where[] = "igpfaq_access < '1'";
+		}
+
+		if ( count($where) ) {
+			$sql .= ' WHERE ' . implode(' AND ', $where);
+		}
+
+		if (isset($_REQUEST['sortby'])){
+			$sql .= " ORDER BY $_REQUEST[sortby]";
+		}else{
+			$sql .= " ORDER BY igpfaq_summary";
+		}
+
+		echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+		echo "<p class=trace>Summary link shows content, other links refine query.</p>\n";
+		$result = mysql_query($sql);
+
+		$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+		echo "<CENTER>\n";
+		echo "<TABLE BORDER CELLPADDING=2>\n";
+
+		unset($fields[igpfaq_id]);
+		//
+		// Generated Column Headers
+		//
+		if ($_SESSION['access'] >= $FAQCFG['EDITLEVEL'] ) {
+			echo "<TH class=ths>ID</TH>\n";
+			echo "<TH class=ths>State</TH>\n";
+		}
+		foreach ($ALLFIELD as $f) {
+			if (in_array($f, $SHOW)) {
+				echo "<TH class=ths>$fieldlabels[$f]</TH>\n";
+			}
+		}
+		//
+		// Generate Tale Rows
+		//
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			//
+			// But Wait, are you authorized to see this row?
+			//
+			if ( $row[access] > $my_access_level ) {
+				$rows_not_seen++ ;
+				next;
+			}else{
+				// You may pass
+			}
+
+			echo "<TR>\n";
+			if ($_SESSION['access'] >= $FAQCFG['EDITLEVEL'] ) {
+				echo "<TD class=tdcs>$row[igpfaq_id]</TD>\n";
+				echo "<TD class=tdcs>$row[igpfaq_state]</TD>\n";
+			}
+			foreach ($ALLFIELD as $f) {
+                   $display = $row[$f];
+                   //
+                   // Special Cases, not LINK
+                   //
+				if ( $f == "igpfaq_summary" ) {
+					$display = "<A HREF=$_SERVER[PHP_SELF]";
+					$display .= "?igpfaq_id=$row[igpfaq_id]"; 
+					$display .= "&Action=Show>";
+					$display .= "$row[$f]</A>\n";
+				}
+
+				if (in_array($f, $SHOW)) {
+					echo "<TD VALIGN=TOP class=tdt>";
+					if (in_array($f, $LINK)) {
+						echo "<A HREF=";
+						echo "$_SERVER[PHP_SELF]";
+						echo '?';
+						echo "${previous_query_string}$f="; 
+						echo urlencode($row[$f]); 
+						echo "&Query=$_REQUEST[Query]>";
+						echo "$row[$f]</A>\n";
+					}else{
+						echo "$display\n";
+					}
+					echo "<BR></TD>\n";
+				}
+			}
+		}
+		echo "</TABLE>\n";
+		if ( isset ($rows_not_seen) ) {
+			echo "<P class=trace>Your query found $rows_not_seen faq(s) you have \n";
+			echo "insufficient access to see.\n";
+			
+			if (! array_key_exists('access', $_SESSION)) {
+				echo "<BR>Your access level is known after you <A HREF=/login.phpx>Log In</A>";
+			}
+			echo "</P>\n";
+		}
+		echo "</CENTER>\n";
+	}
+
+
+	//----------------------------------------------------------------
+	// Function spew_entire_list
+	//----------------------------------------------------------------
+	function spew_entire_list() {
+		global $SHOW;
+		global $LINK;
+		global $FAQCFG;
+		global $WICCFG;
+		global $ALLFIELD;
+		global $InValidChoice;
+		global $my_access_level;
+		$fieldlabels = array();
+		$fields = array();
+		$where = array();
+
+		caa_connect();
+
+		$sql = 'SELECT * FROM igpfaq ';
+
+		if (! array_key_exists('access', $_SESSION)) { 
+			$where[] = "igpfaq_access < '1'";
+			array_push($where, $sqlw);
+		}
+
+		if ( count($where) ) {
+			$sql .= ' WHERE ' . implode(' AND ', $where);
+		}
+
+		if (isset($_REQUEST['sortby'])){
+			$sql .= " ORDER BY $_REQUEST[sortby]";
+		}else{
+			$sql .= " ORDER BY igpfaq_id";
+		}
+
+		echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+		$result = mysql_query($sql);
+
+		$result = mysql_query($sql) ;
+		echo "<CENTER>\n";
+		echo "<TABLE WIDTH=80% CELLPADDING=2>\n";
+		echo "<TR>\n";
+		echo "<TD class=tds>\n";
+
+		//
+		// Generate Summary Entries
+		//
+		// Blurb
+		echo "<P class=tds>List of current Frequently Asked Questions. For answers, scroll down.</P>\n";
+		echo "<OL>\n";
+		
+		// Generate Table of contents
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			//
+			// But Wait, are you authorized to see this row?
+			//
+			if ( $row['access'] > $my_access_level ) {
+				$rows_not_seen++ ;
+				next;
+			}
+
+			echo "<LI>\n";
+			echo "<A HREF=$_SERVER[PHP_SELF]";
+			echo "?igpfaq_id=$row[igpfaq_id]"; 
+			echo "&Action=Show>";
+			echo "$row[igpfaq_summary]</A>\n";
+			echo "</LI>\n";
+		}
+		echo "</OL>\n";
+
+		$result = mysql_query($sql) ;
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			//
+			// But Wait, are you authorized to see this row?
+			//
+			if ( $row['access'] > $my_access_level ) {
+				$rows_not_seen++ ;
+				next;
+			}
+			$cnt++;
+
+			echo "${cnt}. <A HREF=$_SERVER[PHP_SELF]";
+			echo "?igpfaq_id=$row[igpfaq_id]"; 
+			echo "&Action=Show>";
+			echo"$row[igpfaq_summary]</A>\n";
+			echo "<P class=faqcontent>\n";
+				echo "$row[igpfaq_content]"; 
+			echo "</P>\n";
+
+		}
+		echo "</TD>\n";
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+
+		if ( isset ($rows_not_seen) ) {
+			echo "<P class=trace>Your query found $rows_not_seen faq(s) you have \n";
+			echo "insufficient access to see.\n";
+			
+			if (! array_key_exists('access', $_SESSION)) {
+				echo "<BR>Your access level is known after you <A HREF=/login.phpx>Log In</A>";
+			}
+			echo "</P>\n";
+		}
+
+		echo "</CENTER>\n";
+	}
+
+
+	//----------------------------------------------------------------
+	// Function Show Comment History
+	//----------------------------------------------------------------
+
+	function show_comment_history ( $cid, $ctable ) {
+		global $WICCFG;
+
+		$subname = "show_comment_history";
+
+    	echo "<P class=trace>Entering $subname in $program</P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"author_id"			=>	"45759",
+			"comment_type"		=>	"Comment",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		//
+		// Get List of nicknames for comment authors
+		//
+		$Who = array();
+		$sql = "SELECT w.war_id, w.war_fname, w.war_nname, w.war_lname, war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$pid' ";
+        $Who = get_warrior_name_picklist($sql);
+
+		//
+		// Get List of emails for comment authors
+		//
+		$AuthorEmail = array();
+		$sql = "SELECT w.war_id , war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$pid' ";
+        $AuthorEmail = get_menu_array($sql);
+
+		//
+		// Get List of existing comment types
+		//
+		$sql = "SELECT distinct comment_type from comment";
+		$ctypes =  get_menu($sql);
+
+		//
+		// Generate SQL query
+		//
+	
+		$dbh = caa_connect;
+		$cfields =  get_fields('comment','comment');
+	
+		$sql = "SELECT  ";
+		$sql .= " c.comment_id, c.comment_access,  c.author_id, c.date_created, c.comment_type,";
+		$sql .= " c.comment_summary, c.comment_detail"; 
+		$sql .= " FROM comment c WHERE c.table_name = '$ctable' and c.table_id = '$pid' ";
+
+		if (! isset($_SESSION[war_id] ) ) {
+			$sql .= " AND c.comment_access = 'Public' ";
+			echo "<P class=trace>Following are all public entries. ";
+			echo "Remaining entries visible after <A HREF=/login.phpx>logging in.</A></P>\n";
+		}
+
+		$sql .= " ORDER BY c.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//
+
+		$TotalEntries = '0';
+		$result = mysql_query($sql);
+		$rowcount = mysql_num_rows($result);
+		$Sort = array();
+		$Comment = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Comment History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Comment] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			print "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Comment Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Comment=Summary/', '', $url);
+			print "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">Show Comment Details</P>\n";
+		}
+
+		$count = mysql_num_rows($result);
+		echo "<CENTER>\n";
+		$howmany = "Entries";
+
+		if ( $count == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<TABLE id=${ctable}_comment_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Comment'] == "Detail" ) {
+			echo "<TH class=ths>Details of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=commentlist>\n";
+
+		while ($Comment = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			$ts =  timestamp2display($Comment[date_created]);
+			echo "<LI>";
+			echo "<A HREF=\"/comment.phpx?comment_id=$Comment[comment_id]&Action=View\">";
+			echo "<IMG SRC=/images/smallballs/greenball.gif HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Comment['author_id'];
+
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">$Who[$author_id]</A>:\n";
+
+			echo "$Comment[comment_summary]\n";
+
+			if ( $_REQUEST[Comment] == "Detail" ) {
+				echo "<UL id=commentlistbody><LI>\n";
+				echo "<PRE>\n";
+				$cleantext = stripslashes($Comment[comment_detail]);
+				$display = wordwrap($cleantext, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		if (! $count) {
+			echo "<LI>No comment entries</LI>\n";
+		}
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+	}// End function show_comment_history
+
+	//----------------------------------------------------------------
+	// Function Get Warrior Full Name Picklist
+	//----------------------------------------------------------------
+	function get_warrior_name_picklist ( $sql ) {
+		global $WICCFG;
+        caa_connect();
+        $row = array();
+        $MyWho = array();
+        if (empty ($sql) ) {
+            die ("Function get_warrior_name_picklist attempted without sql statement: $sql");
+        }
+		$result =  mysql_query($sql);
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			if ( empty ( $row['war_nname'] ) ) {
+				$name = $row['war_fname'] . ' ' . $row['war_lname'];
+			}else{
+				$name = $row['war_nname'] . ' ' . $row['war_lname'];
+			}
+			$id = $row['war_id'];
+			$MyWho[$id]  = $name;
+		}
+        return($MyWho);
+	}// End funtion get_warrior_name_picklist
+
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>

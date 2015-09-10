@@ -1,0 +1,10 @@
+#!/bin/sh
+perl dump_schema.pl > schema.raw
+perl genmessage.pl > /tmp/load-message.sql
+ln -s /tmp/load-message.sql
+#x=access_group	# Table name to generate message
+#perl load_message.pl -t $x > /tmp/load-message-${x}.sql
+perl gendatadict.pl > /tmp/load-datadictionary.sql
+ln -s /tmp/load-datadictionary.sql
+perl genhelp.pl > /tmp/load-help.sql
+ln -s /tmp/load-help.sql

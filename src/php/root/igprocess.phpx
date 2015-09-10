@@ -1,0 +1,1880 @@
+<?php
+	//#==================================================================
+	//# I-Group Process Library
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2013/08/07 13:42:36 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/igprocess.phpx,v $
+	//# $Id: igprocess.phpx,v 1.88 2013/08/07 13:42:36 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"I-Group Process Library",
+		'TITLE'			=>	"I-Group Process Library",
+		'MODULENAME'	=>	"igprocess.phpx",
+		'NAV1'			=>	'IGROUPS'
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration parameters
+	//------------------------------------------------------------------------
+	$IGPCFG = array (
+		'NUMRECENT'		=>	'10',	// Number of listings for 'List Recently Changed'
+		'ACCESSGROUP'	=>	'I-Group Process Admin',
+		'ADMINLEVEL'	=>	'6',		// change contributor_id
+		'EDITLEVEL'		=>	'4'		// warrior_permission access level to get edit screen
+	);
+	//------------------------------------------------------------------------
+	// Who can edit stuff
+	//------------------------------------------------------------------------
+	if ($_SESSION['access'] >= $IGPCFG['EDITLEVEL'] ) {
+		$_SESSION['igp_access'] = $IGPCFG['EDITLEVEL'] ;
+	}else{
+		//
+		// If you are an I-Group Rep, you may edit (hey, they need some perks)
+		//
+		$dbh = caa_connect();
+		$wid = $_SESSION['war_id'];
+		if ( ! empty ($wid) ) {
+			$sql = "SELECT count(igroup_rep) from igroup WHERE igroup_rep = '$wid'";
+			$is_rep  = get_value($sql);
+			if ( ! empty ($is_rep) ) {
+				$_SESSION['igp_access'] = $IGPCFG['EDITLEVEL'] ;
+			}
+		}
+	}
+	//
+	// Future, Query access_group, group_roster
+	//
+	//$sql = "SELECT ... from access_group g, group_roster r ";
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		'igprocess_id',
+		'igprocess_class',
+		'igprocess_type',
+		'igprocess_level',
+		'igprocess_energy',
+		'igprocess_format',
+		'igprocess_participation',
+		'igprocess_state',
+		'igprocess_minutes',
+		'igprocess_rating',
+		'igprocess_name',
+		'igprocess_keywords',
+		'last_updated',
+		'updated_by',
+		'igprocess_description',
+		'contributor_id',
+		'igprocess_attribution'
+	);
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+		'igprocess_class',
+		'igprocess_type',
+		'igprocess_energy',
+		'igprocess_format',
+		'igprocess_participation',
+		'igprocess_level',
+		'igprocess_minutes',
+		'igprocess_rating',
+		'igprocess_name'
+	);
+	$NEW = array(
+		'igprocess_class',
+		'igprocess_type',
+		'igprocess_level',
+		'igprocess_energy',
+		'igprocess_participation',
+		'igprocess_minutes',
+		'igprocess_format',
+		'igprocess_keywords',
+		'igprocess_name',
+		'igprocess_description',
+		'igprocess_attribution'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'igprocess_class',
+		'igprocess_type',
+		'igprocess_energy',
+		'igprocess_format',
+		'igprocess_participation',
+		'igprocess_level',
+		'contributor_id'
+	);
+	//
+	// Menu picklists made from self query: extensible
+	//
+	$EXTEND = array ( 
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'igprocess_name'			=>	'enter process name',
+		'igprocess_class'			=>	'select/enter process class',
+		'igprocess_keywords'		=>	'enter at least one search keyword in lower case',
+		'igprocess_energy'          =>  'select/enter archetypal energy',
+		'igprocess_description'		=>	'enter process description',
+		'igprocess_level'			=>	'select process maturity level (1-5)',
+		'igprocess_type'			=>	'select/enter process type from list'
+	);
+
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'igprocess_id',
+		'last_updated',
+		'updated_by',
+		'igprocess_rating'
+	);
+
+	$BaseMenu = "SELECT choice from menu where table_name = 'igprocess' and field_name = ";
+	$Menu = array(
+		"igprocess_type"		=>	  "$BaseMenu 'igprocess_type' ORDER BY choice",
+		"igprocess_class"		=>	  "$BaseMenu 'igprocess_class' ORDER BY choice",
+		"igprocess_energy"		=>	  "$BaseMenu 'igprocess_energy' ORDER BY choice",
+		"igprocess_state"		=>	  "$BaseMenu 'igprocess_state' ORDER BY choice",
+		"igprocess_format" 		=>	  "$BaseMenu 'igprocess_format' ORDER BY choice ",
+		"igprocess_participation" 	=>	"$BaseMenu 'igprocess_participation' ORDER BY choice",
+		"igprocess_level"		=>	  "$BaseMenu 'igprocess_level' ORDER BY choice"
+	);
+
+	$FieldType = array(
+		'contributor_id'   			=>	'ContactMenu',
+		'igprocess_class'			=>	'Menu',
+		'igprocess_format'			=>	'Menu',
+		'igprocess_minutes'			=>	'ShortText',
+		'igprocess_participation'	=>	'Menu',
+		'igprocess_attribution'		=>	'TextArea',
+		'igprocess_type'			=>	'Menu',
+		'igprocess_state'			=>	'Menu',
+		'igprocess_energy'			=>	'Menu',
+		'igprocess_level'			=>	'Menu',
+		'igprocess_name'			=>	'LongText',
+		'igprocess_keywords'		=>	'LongText',
+		'igprocess_description'		=>	'TextArea'
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+        'igprocess_level'		=>  'tdcs',
+        'igprocess_rating'		=>  'tdcs',
+        'igprocess_minutes'		=>  'tdcs'
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+	if (! array_key_exists('Action', $_REQUEST)) {
+		$_REQUEST['Action'] = "List Recently Updated";
+	}
+
+	if (array_key_exists('Action', $_REQUEST)) {
+		//$FMT['BANNER2'] = $_REQUEST['Action'];
+		if ($_REQUEST['Action'] == "Printable" ) {
+			$FMT['NONAV'] = "True";
+			if (isset($_REQUEST['igprocess_id'])) {
+				caa_connect();
+				$pid = $_REQUEST['igprocess_id'];
+				$sql = "SELECT igprocess_name from igprocess where igprocess_id = '$pid'";
+				$FMT['BANNER2'] = get_value($sql);
+				$FMT['BANNER']	= "I-Group Process Library";
+			}
+		}
+
+
+		if ($_REQUEST['Action'] == "View" ) {
+			if (isset($_REQUEST['igprocess_id'])) {
+				caa_connect();
+				$pid = $_REQUEST['igprocess_id'];
+				$sql = "SELECT igprocess_name from igprocess where igprocess_id = '$pid'";
+				$FMT['BANNER2'] = get_value($sql);
+				$FMT['BANNER']	= "I-Group Process Library";
+			}
+		}
+
+		spew_header($FMT);
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+			if ( isset ($_SESSION['war_id'] ) ) {
+				$_REQUEST['contributor_id'] = $_SESSION['war_id'];
+			}
+			caa_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('igprocess','process', $WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['igprocess_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO igprocess (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					// Convert <"> to &lt;&quot;&gt;
+					$safeval = igroupportal_htmlspecialchars($_REQUEST[$f]);
+					// Insure sql and single quotes are escaped
+					$val = mysql_real_escape_string($safeval);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) ;
+			echo "<CENTER>\n";
+			$pid = mysql_insert_id();
+			echo "<H2>Process $pid successfully added.</H2>\n";
+			echo "</CENTER>\n";
+			$_REQUEST['igprocess_id'] = $pid;
+			send_email_ack($pid);
+			$_REQUEST['Action'] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+
+			if ( array_key_exists('igprocess_id', $_REQUEST)) {
+				$pid = $_REQUEST['igprocess_id'];
+				if (! is_numeric( $pid ) ) {
+					die ("ERROR: Attempt to update requires igprocess_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Process Id Set") ;
+			}
+
+			caa_connect();
+
+			// Update updated_by, set to author
+			//
+			if (isset ($_SESSION['war_id']) ) {
+				$_REQUEST['updated_by'] = $_SESSION['war_id'];
+			}
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM igprocess WHERE igprocess_id = '$pid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('igprocess','aaaaaaaaaa', $WICCFG['DBNAME']);
+
+			print '<pre>';	// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n"; // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$sql = 'UPDATE igprocess SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						// Convert <"> to &lt;&quot;&gt;
+						$safeval = igroupportal_htmlspecialchars($_REQUEST[$f]);
+						// Insure sql and single quotes are escaped
+						$val = mysql_real_escape_string($safeval);
+						$sqlx =   $f . " = '" . $val . "'";
+						array_push($sqlentry, $sqlx);
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE igprocess_id = '$pid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+				send_email_update($pid);
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST['Action'] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query / List
+		//----------------------------------------------------------------------
+	  	if ( $_REQUEST['Action'] == "Query" 
+	  		|| $_REQUEST['Action'] == "Query Recently Updated"
+	  		|| $_REQUEST['Action'] == "Query Mine" 
+			|| $_REQUEST['Action'] == "List" 
+	  		|| $_REQUEST['Action'] == "List Recently Updated"
+	  		|| $_REQUEST['Action'] == "List Mine" 
+			) {
+
+			caa_connect();
+
+			spew_query_form();
+
+			$fieldlabel = get_field_labels('igprocess','igprocess', $WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER['QUERY_STRING'])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$validentries[] = $key . '=' . $val;
+			}
+			$validentries = array_unique($validentries);
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$sql = "SELECT * from igprocess ";
+
+			//
+			// Construct where clause into an array
+			//
+			$where = array();
+
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = stripslashes($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if (!empty( $val) ) {	// DEV: Can we populate an entry with a blank, e.g. reset?
+						if ( $f == 'igprocess_keywords' ) {
+							$kw = array();
+							$kwsql = array();
+							$kw = preg_split('/\W+/', $val);
+							foreach ($kw as $k) {
+								$kwsql[] =  $f . " LIKE '%" . $k . "%'" ;
+								$kwsql[] =  "igprocess_name LIKE '%" . $k . "%'" ;
+							}
+							$where[] = '(' . implode(' OR ', $kwsql)  . ')';
+						}else{
+							if ( preg_match('/%/', $val)) { 
+								$where[] =  $f . "LIKE '" . $val . "'" ;
+							}else{
+								$where[] =  $f . "='" . $val . "'" ;
+							}
+						}
+					}
+				}
+			}
+			//
+			// Revision Control
+			//
+			if ( $_REQUEST['Action'] == "List Mine" 
+			 	|| $_REQUEST['Action'] == "Query Mine" ) {
+				$where[] = "contributor_id = '$_SESSION[war_id]'"; 
+			}
+
+			if ( $_SESSION['access'] < $IGPCFG['ADMINLEVEL'] ) {
+				// Non Admin but may be author
+				// TODO: Will have to figure out reviewer access
+				$where[] = "(igprocess_state = 'Released' OR contributor_id = '$_SESSION[war_id]')"; 
+			}
+
+			if ( count($where) ) {
+				$sql .= ' WHERE (' . implode(' AND ', $where) . ')';
+			}
+
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Class'		=>	'igprocess_class, igprocess_name',
+				'Level'		=>	'igprocess_level, igprocess_name',
+				'Name'		=>	'igprocess_name',
+				'Energy'		=>	'igprocess_energy,igprocess_name',
+				'Rating'	=>	'igprocess_rating, igprocess_name',
+				'Age'	=>	'last_updated DESC, igprocess_name',
+				'Type'		=>	'igprocess_type, igprocess_name',
+				'Round'		=>	'igprocess_type, igprocess_name'
+			);
+
+			$sby = $_REQUEST['Sortmeby'];
+
+	  		if ( $_REQUEST['Action'] == "Query Recently Updated"
+	  			|| $_REQUEST['Action'] == "List Recently Updated" ) {
+				$recent = "last_updated DESC, ";
+			}
+
+			if (isset ($sby) ) {
+				$sql .= " ORDER BY $recent" . $OrderBy[$sby];
+			}else{
+				$sql .= " ORDER BY $recent igprocess_type, igprocess_name";
+			}
+
+	  		if ( $_REQUEST['Action'] == "Query Recently Updated" 
+	  			|| $_REQUEST['Action'] == "List Recently Updated" ) {
+				$sql .= " LIMIT $IGPCFG[NUMRECENT]";
+			}
+
+			echo "<p class=trace>$sql</p>\n";	// CHECK DEVONLY
+
+			$result = mysql_query($sql);
+			$rowcount = mysql_num_rows( $result );
+	
+			echo "<CENTER>\n";
+
+			//
+			// Blurb
+			//
+			echo "<P class=trace>\n";
+			//echo "I-Group reps, the process author, and access level $IGPCFG[EDITLEVEL] holders may edit.\n";
+			//echo "Click on name link to view.</P>\n"; 
+
+	  		if ( $_REQUEST['Action'] == "Query Recently Updated" 
+	  			|| $_REQUEST['Action'] == "List Recently Updated" ) {
+				echo "List of $IGPCFG[NUMRECENT] most recently updated. ";
+			}else{
+            	echo "Query returned $rowcount rows.";
+			}
+            echo " Click on yellow icon or process name to view.";
+            echo " User rating is 1.0-5.0 with 5=Great.";
+            echo "</P>\n"; 
+
+			echo "<TABLE id=igprocess_query_result BORDER>\n";
+
+			//echo "<TH class=ths>Edit</TH>\n";
+			echo "<TH class=ths>View</TH>\n";
+
+			unset($fields[igprocess_id]);
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]";
+					echo "</TH>\n";
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+                echo "<TD class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?igprocess_id=$row[igprocess_id]&Action=View>";
+                echo "<IMG SRC=/images/smallballs/yellowball.gif></A>";
+                echo "</TD>\n";
+
+				foreach ($ALLFIELD as $f) {
+					$css = "tds";
+
+					// Stripslashes 
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'contributor_id' ) {
+						$display = $row[war_fname] . ' ' . $row[war_lname];
+					}
+					// Make name a link to View
+					if ( $f  == 'igprocess_name' ) {
+						$display = "<A HREF=$_SERVER[PHP_SELF]?igprocess_id=$row[igprocess_id]&Action=View>$row[$f]</A>";
+					}
+
+					if (in_array($f, $SHOW)) {
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+						echo "<TD VALIGN=TOP class=${css}>";
+
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+            if ( $rowcount < 1 ) {
+                echo "<TR><TD class=tdcs COLSPAN=8>No processes found meeting your search criteria.</TD>\n";
+            }
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+
+	  	}//if ($_REQUEST[Action] == "List")) 
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			$menulist = array();
+			caa_connect();
+            $Hint = array();
+            $sql = "SELECT field_name, short_help FROM help WHERE table_name = 'igprocess'";
+            $sql .= " AND help_type = 'Field Entry Hint' ";
+            echo "<P class=trace>$sql</P>\n"; // DEVONLY
+            $Hint = get_menu_array($sql);
+
+            //
+            // Blurb
+            // Help preamble
+            //
+            echo "<P class=trace>Add new I-Group Process. See the ";
+			echo "<A HREF=/help.phpx?table_name=igprocess&field_name=Overview&help_type=Explanation&Action=Help>";
+            echo "overview</A> and the ";
+			echo "<A HREF=/help.phpx?table_name=igprocess&context=New+Entry&help_type=Tutorial&Action=Help>";
+            echo "new entry tutorial</A> for general help. Click on field name link for specific info about that";
+            echo " attribute.";
+            echo "<BR>If you are uncomfortable with HTML, email your process to ";
+            echo "<A HREF=http://igroupportal.mkp.org/warrior.php?war_id=45759&Action=View>Jerry</A> for inclusion.\n";
+            echo "<BR>For the lines with two fields separated by a <B>-OR-</B>, if your desired entry is not ";
+            echo " in the first picklist, add it in second field.";
+            echo "<BR>Right click on the left column field label with your mouse to get help displayed in a new tab or window.\n";
+            echo "</P class=trace>\n";
+            echo "<P class=trace><B>NOTE:</B> Your login session may time out while composing your process.\n";
+			echo "Copy the body of your process to another file prior to hitting submit Insert button.\n";
+            echo "</P>\n";
+
+            //
+            // New Process Form
+            //
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=igprocess_new_form BORDER>\n";
+
+			$fieldlabel = get_field_labels('igprocess','igprocess', $WICCFG['DBNAME']);
+			unset($fieldlabel['igprocess_id']);
+
+            #print_r($Hint); // DEVONLY
+
+			foreach ($NEW as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR>\n";
+
+                //
+				// Label With Help Link
+                //
+				echo "<TD CLASS=tdls>";
+				echo "<A HREF=/help.phpx?table_name=igprocess&field_name=$fieldname&help_type=Explanation&Action=Help>";
+                echo "$val</A>";
+                echo "</TD>\n";
+
+                //
+				// Data Entry
+                //
+				echo "<TD VALIGN=TOP class=tds>";
+				if (array_key_exists($fieldname, $Hint)) {
+                    echo "<P class=trace>$Hint[$fieldname]</P>\n";
+                }
+
+				if (array_key_exists($fieldname, $FieldType)) {
+
+					if ( $FieldType[$fieldname] == "ContactMenu"  ) {
+						$menulist = get_contact_menu();
+						spew_select_hash_menu($fieldname, $_SESSION['war_id'],'',$menulist);
+					}
+
+					if ( $FieldType[$fieldname] == "Menu"  ) {
+						$menusql = $Menu[$fieldname];
+						echo "<p class=trace>Menu: $menusql</P>\n";; // DEVONLY
+						$menulist = get_menu($menusql);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						if (in_array($fieldname, $EXTEND) ) {
+							echo "&nbsp;-OR-&nbsp;";
+							echo "<INPUT TYPE=TEXT NAME=NEW_${fieldname}>\n";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						echo "<p class=trace>MenuArray: $menusql</P>\n";; // DEVONLY
+						$menulist = get_menu_array($menusql);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						if (in_array( $fieldname, $EXTEND) ) {
+							echo "&nbsp;-OR-&nbsp;";
+							echo "<INPUT TYPE=TEXT NAME=NEW_${fieldname}>\n";
+						}
+					}
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=40></TEXTAREA>\n";
+					}
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=50>\n";
+					}
+					if ($FieldType[$fieldname] == "ShortText" ) {
+						echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=6>\n";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT SIZE=30 NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Edit 
+		//----------------------------------------------------------------------
+	  	if (($_REQUEST['Action'] == "Edit")) {
+			$row = array();
+			$contributorlist = array();
+
+			//
+			// If he is the author but has otherwise insufficient access, he may not change state
+			// and 'Release' his own work
+			//
+			//if ( $_SESSION['igp_access'] < $IGPCFG['ADMINLEVEL'] ) {
+			if ( $_SESSION['access'] < $IGPCFG['ADMINLEVEL'] ) {
+				//$NoEdit[] = 'igprocess_state';
+				$NoEdit[] = 'contributor_id';
+				//+----------+
+				//| New      |
+				//| Review   |
+				//| Stale    |
+				//| Released |
+				//+----------+
+				$Menu['igprocess_state'] = "SELECT choice FROM menu WHERE table_name = 'igprocess'";
+				$Menu['igprocess_state'] .= " AND field_name = 'igprocess_state' ";
+				$Menu['igprocess_state'] .= " AND (choice = 'New' OR choice = 'Review')";
+				$Menu['igprocess_state'] .= " ORDER BY choice";
+			}
+
+			if ( array_key_exists('igprocess_id', $_REQUEST)) {
+				$pid = $_REQUEST['igprocess_id'];
+				if ( ! is_numeric($pid) ) {
+					die ("I-Group Process ID ($pid) is not an integer.") ;
+				}
+			}else{
+				die ("No Process ID Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT p.*, w.war_fname, w.war_lname FROM igprocess p, warrior w ";
+			$sql .= " WHERE p.igprocess_id = '$pid' AND p.contributor_id = w.war_id ";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('igprocess','igprocess', $WICCFG['DBNAME']);
+
+            // Blurb
+		    echo "<P class=trace>Help on";
+		    echo "<A HREF=/help.phpx?module=igprocess.php&table_name=igprocess&field_name=Overview&context=New+Entry&Action=Help>";
+            echo " overview</A>\n";
+            echo " or ";
+		    echo "<A HREF=/help.phpx?module=igprocess.php&table_name=igprocess&context=Edit+Entry&Action=Help>";
+            echo " editing an existing entry</A> available.";
+            echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=igprocess_edit_form BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$safe = stripslashes($row[$fieldname]);
+				$display = igroupportal_htmlspecialchars_decode($safe);
+				$label = $fieldlabel[$fieldname];
+
+				if ( $fieldname == 'contributor_id' ){
+					$display = $row['war_fname'] . ' ' . $row['war_lname'];
+				}
+
+				echo "<TR>\n";
+				echo "<TD CLASS=tdls>";
+				echo "<A HREF=/help.phpx?table_name=igprocess&field_name=$fieldname&help_type=Explanation&Action=Help>";
+				echo "$label</TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$display<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "ContactMenu" ) {
+							$menulist = get_contact_menu();
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+							if (in_array($fieldname, $EXTEND) ) {
+								echo "&nbsp;-OR-&nbsp;";
+								echo "<INPUT TYPE=TEXT NAME=NEW_${fieldname}>\n";
+							}
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+							if (in_array($fieldname, $EXTEND) ) {
+								echo "&nbsp;-OR-&nbsp;";
+								echo "<INPUT TYPE=TEXT NAME=NEW_${fieldname}>\n";
+							}
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$display</TEXTAREA>\n";
+						}
+
+						if ($FieldType[$fieldname] == "ShortText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$display\" SIZE=6>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=50 VALUE=\"$display\">\n";
+						}
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$display\"><BR>";
+					}
+					
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=igprocess_id VALUE=$_REQUEST[igprocess_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			if ( $_SESSION['igp_access'] >= $IGPCFG['EDITLEVEL'] || $_SESSION['war_id'] == $row['contributor_id'] ) {
+				// Author can always Edit
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View or View Details of One Process
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View"  
+			||  $_REQUEST['Action'] == "Printable"
+			||  $_REQUEST['Action'] == "View Details" ) {
+
+			global $FMT ;
+			if ( array_key_exists('igprocess_id', $_REQUEST)) {
+				$pid = $_REQUEST[igprocess_id];
+				if ( ! is_numeric($pid) ) {
+					die ("Process ID ($pid) is not an integer.") ;
+				}
+			}else{
+				die ("No Process ID Set") ;
+			}
+
+			caa_connect();
+
+			//
+			// Get info about process and contributor (contributor_id NOT NULL)
+			//
+			$sql = "SELECT i.*, w.war_fname, w.war_lname, war_email FROM igprocess i, warrior w ";
+			$sql .= " WHERE i.igprocess_id = '$pid'";
+			$sql .= " AND w.war_id = i.contributor_id ";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Add I-Group Membership of contributor to credits
+			//
+			$wid = $row['contributor_id'];
+			$sql = "SELECT i.igroup_id, i.igroup_name from igroup i, warrior_igroup x ";
+			$sql .= " WHERE i.igroup_id = x.war_ig_ig ";
+			$sql .= " AND x.war_ig_war = '$wid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$AuthorIgroups = array();
+			$AuthorIgroups = get_menu_array($sql);
+
+			//
+			// For Footer Annotation
+			//
+			$FMT['AUTHOR'] = $row['war_fname'] . ' ' . $war['war_lname'];
+			$FMT['AUTHOREMAIL'] = $row['war_email'];
+
+			$fieldlabel = get_field_labels('igprocess','igprocess', $WICCFG['DBNAME']);
+
+	  		if ( $_REQUEST['Action'] == "View Details" ) {
+				echo "<CENTER>\n";
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<TABLE id=igprocess_view_form_body BORDER>\n";
+	
+				foreach ($ALLFIELD as $fieldname ) {
+
+					// Stripslashes 
+					if (get_magic_quotes_gpc()) { 
+						$display = stripslashes($row[$fieldname]); 
+					}else{
+						$display = $row[$fieldname];
+					}
+
+					if ($fieldname == 'contributor_id') {
+						$cid = $row[$fieldname];
+						$display = "<A  HREF=/warrior.php?war_id=$cid&Action=View>";
+						$display = $row[war_fname] . ' ' . $row[war_lname];
+						$display .= "</A>";
+					}
+					if ($fieldname == 'updated_by') {
+						$lub = $row[$fieldname];
+						if (!empty ( $lub ) ){
+							$WhoLB = array();
+							$lubsql = "SELECT war_fname, war_lname from warrior ";
+							$lubsql .= " WHERE war_id = '$lub'";
+							$WhoLB = get_menu($lubsql);
+							$display = "<A  HREF=/warrior.php?war_id=$lub&Action=View>";
+							$display .= $WhoLB[0] . ' ' . $WhoLB[1];
+							$display .= "</A>";
+						}
+					}
+
+
+					$label = $fieldlabel[$fieldname];
+
+					echo "<TR>\n";
+					echo "<TD class=tdls>";
+					echo "<A HREF=/help.php?table_name=igprocess&field_name=$fieldname";
+					echo "&help_type=Explanation&Action=Help>";
+					echo "$label</A></TD>\n";
+
+					echo "<TD class=tds>";
+					echo "$display<BR>";
+					echo "</TD>\n";
+				}//Endforeach fieldname
+	
+				echo "</TABLE>\n";
+	
+				echo "<INPUT TYPE=HIDDEN NAME=igprocess_id VALUE=$_REQUEST[igprocess_id]>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+
+
+				if ( $_SESSION['igp_access'] >= $IGPCFG['EDITLEVEL'] 
+					|| $row['igprocess_id'] == '1000'       // Special template process to cut and paste content
+					|| $_SESSION['war_id'] == $row['contributor_id'] ) {
+						echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Edit>\n";
+				}
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=View>\n";
+				echo "</FORM>\n";
+
+				echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$_REQUEST[igprocess_id]>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=igprocess>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+				echo "</FORM>\n";
+
+				echo "</CENTER>\n";
+				show_comment_history($pid);
+
+			}else{	// View or Printable
+				echo "<CENTER>\n";
+
+				echo "<TABLE id=igprocess_view_form_header BORDER=0 CELLPADDING=2>\n";
+
+				echo "<TH class=ths>Class</TH>\n";
+				echo "<TH class=ths>Round</TH>\n";
+				echo "<TH class=ths>Energy</TH>\n";
+				echo "<TH class=ths>Level</TH>\n";
+				echo "<TH class=ths>Format</TH>\n";
+				echo "<TH class=ths>Participation</TH>\n";
+				//echo "<TH class=ths>Rating</TH>\n";
+				echo "<TH class=ths>Contributor</TH>\n";
+				//echo "<TH class=ths>Last Updated</TH>\n";
+
+				echo "<TR>\n";
+				//
+				// Class
+				//
+				echo "<TD class=tdsc><A HREF=$_SERVER[PHP_SELF]?igprocess_class=$row[igprocess_class]";
+				echo "&Action=List>";
+				echo "$row[igprocess_class]</A></TD>\n";
+				//
+				// Type
+				//
+				echo "<TD class=tdsc><A HREF=$_SERVER[PHP_SELF]?igprocess_type=$row[igprocess_type]";
+				echo "&Action=List>";
+				echo "$row[igprocess_type]</A></TD>\n";
+				//
+				// Energy
+				//
+				echo "<TD class=tdsc><A HREF=$_SERVER[PHP_SELF]?igprocess_energy=$row[igprocess_energy]";
+				echo "&Action=List>";
+				echo "$row[igprocess_energy]</A></TD>\n";
+				//
+				// Level
+				//
+				echo "<TD class=tdsc><A HREF=$_SERVER[PHP_SELF]?igprocess_level=$row[igprocess_level]";
+				echo "&Action=List>";
+				echo "$row[igprocess_level]</A></TD>\n";
+				//
+				// Format
+				//
+				echo "<TD class=tdsc><A HREF=$_SERVER[PHP_SELF]?igprocess_format=$row[igprocess_format]";
+				echo "&Action=List>";
+				echo "$row[igprocess_format]</A></TD>\n";
+				//
+				// Participation
+				//
+				echo "<TD class=tdsc><A HREF=$_SERVER[PHP_SELF]?igprocess_participation=$row[igprocess_participation]";
+				echo "&Action=List>";
+				echo "$row[igprocess_participation]</A></TD>\n";
+
+
+				//
+				// Rating
+				//
+				//echo "<TD class=tdsc>$row[rating]<BR></TD>\n";
+				//
+
+				//
+				// Author
+				//
+				echo "<TD class=tdsc><A HREF=$WICCFG[WICURL]/warrior.phpx?war_id=$row[contributor_id]&Action=View>";
+				if ( empty ($row[war_nname] ) ) {
+					echo "$row[war_fname] $row[war_lname]</A></TD>\n";
+				}else{
+					echo "$row[war_nname] $row[war_lname]</A></TD>\n";
+				}
+
+				//
+				// Updated
+				//
+				//$showdate = timestamp2display($row['last_updated']);
+				//echo "<TD class=tdsc>$showdate</TD>\n";
+
+
+				echo "</TABLE>\n";
+
+				//
+				// Title and Content
+				//
+				echo "<P>\n";
+
+				echo "<TABLE id=igprocess_view_form_body WIDTH=90% BORDER=0 CELLPADDING=2>\n";
+				echo "<TH>$row[igprocess_name]</TH>\n";
+				echo "<TR><TD class=tdm>";
+				echo "$row[igprocess_description]";
+				echo "</TD>\n";
+				echo "</TABLE>\n";
+
+				echo "</P>\n";
+
+				//
+				// Attribution and what I-Groups contributor belongs to
+				//
+				echo "<HR>\n";
+				echo "<P class=trace>\n";
+				if ( ! empty ($row['igprocess_attribution']) ) {
+					echo "$row[igprocess_attribution]\n";
+				}
+
+				// Provide roster of I-Group(s)
+				if (count($AuthorIgroups) > 0 ){
+					echo "<BR>";
+					echo "(contributor currently belongs to";
+					foreach ($AuthorIgroups as $key => $val){
+						$igline .= " <A HREF=/igroups.phpx?igroup_id=$key&Action=View>$val</A>,";
+						$igcnt++;
+					}
+					$igline = rtrim($igline, ',');
+					if ( $igcnt > 1 ) {
+						echo "$igline I-Groups)";
+					}else{
+						echo "$igline I-Group)";
+					}
+				}
+				echo "</P>\n";
+
+				if ($_REQUEST['Action'] != 'Printable' ) {
+					echo "<HR>\n";
+					echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+					echo "<INPUT TYPE=HIDDEN NAME=igprocess_id VALUE=$_REQUEST[igprocess_id]>\n";
+					//if ( $_SESSION['igp_access'] >= $IGPCFG['EDITLEVEL'] 
+					if ( $_SESSION['access'] >= $IGPCFG['EDITLEVEL'] 
+						|| $_SESSION['war_id'] == $row['contributor_id'] ) {
+							echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Edit>\n";
+					}
+					echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+					echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"View Details\">\n";
+					echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Printable\">\n";
+					echo "</FORM>\n";
+	
+					echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+					echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$_REQUEST[igprocess_id]>\n";
+					echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=igprocess>\n";
+					echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+					echo "</FORM>\n";
+					echo "</CENTER>\n";
+	
+					// Feedback
+					echo "<P class=trace>Feedback: I used/participated in this process and it was: ";
+					echo "<A HREF=/rating.phpx?table_name=igprocess&table_id=$row[igprocess_id]&rating=1&Action=Rate>Underwhelming</A>,&nbsp;"; 
+					echo "<A HREF=/rating.phpx?table_name=igprocess&table_id=$row[igprocess_id]&rating=2&Action=Rate>Fair</A>,&nbsp;"; 
+					echo "<A HREF=/rating.phpx?table_name=igprocess&table_id=$row[igprocess_id]&rating=3&Action=Rate>Average</A>,&nbsp;"; 
+					echo "<A HREF=/rating.phpx?table_name=igprocess&table_id=$row[igprocess_id]&rating=4&Action=Rate>Good</A>,&nbsp;"; 
+					echo "<A HREF=/rating.phpx?table_name=igprocess&table_id=$row[igprocess_id]&rating=5&Action=Rate>Great</A>"; 
+					echo "</P>\n";
+	
+					// Comments
+					//echo "<P class=trace><A HREF=/comment.phpx?table_name=igprocess&table_id=$pid&Action=New>Add Comment</P>\n";
+	
+					$csql = "SELECT count(*) from comment where table_name = 'igprocess' AND table_id = '$pid'";
+					$comment_count = get_value($csql);
+	
+					if ( $comment_count > 0 ) {
+						if ( array_key_exists ('Comment', $_REQUEST ) ) {
+							if ( $_REQUEST['Comment'] == "Summary" ) {
+								show_comment_history($pid);
+							}
+							if ( $_REQUEST['Comment'] == "Detail" ) {
+								show_comment_history($pid);
+							}
+							if ( $_REQUEST['Comment'] == "No" ) {
+								echo "<P class=trace>";
+								echo "<A HREF=/comment.phpx?table_name=igprocess&table_id=$pid&Action=New>Add comment.</A>\n";
+								echo "Show comments in ";
+								echo "<A HREF=\"$_SERVER[PHP_SELF]?igprocess_id=$row[igprocess_id]&Action=View&Comment=Summary\">summary</A>\n";
+								echo "or ";
+								echo "<A HREF=$_SERVER[PHP_SELF]?igprocess_id=$row[igprocess_id]&Action=View+Details&Comment=Detail>detailed</A> view.";
+								echo "</P>\n";
+							}
+						}else{
+							echo "<P class=trace>";
+							echo "Show comments in ";
+							echo "<A HREF=\"$_SERVER[PHP_SELF]?igprocess_id=$row[igprocess_id]&Action=View&Comment=Summary\">summary</A>\n";
+							echo "or ";
+							echo "<A HREF=$_SERVER[PHP_SELF]?igprocess_id=$row[igprocess_id]&Action=View+Details&Comment=Detail>detailed</A> view.";
+							echo "</P>\n";
+						}
+					}else{
+						echo "<P class=trace>No comments for this entry</P>\n"; // DEVONLY
+					}
+				}
+			}
+
+	  	}//if ($_REQUEST[Action] == "View" || "Printable"
+
+	}else{	// No Action Field
+		spew_header($FMT);
+		spew_query_form();
+	}
+	spew_footer($FMT);
+
+	//----------------------------------------------------------------
+	// BEGIN Functions
+	//----------------------------------------------------------------
+
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		caa_connect();
+		global $IGPCFG;
+        $list = array();
+
+        // Help blurb
+		echo "<P class=trace>";
+		echo "You can read an \n";
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=Overview&Action=Help>overview</A>";
+		echo " or specific help on \n";
+
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=igprocess_class&Action=Help>";
+		echo "Class</A>,\n";
+
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=igprocess_type&Action=Help>";
+		echo "Round</A>,\n";
+
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=igprocess_energy&Action=Help>";
+		echo "Energy</A>,\n";
+
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=igprocess_level&Action=Help>";
+		echo "Level</A>,\n";
+
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=contributor_id&Action=Help>";
+		echo "Contributor</A>,\n";
+
+        if ( $_SESSION['access'] >= $IGPCFG['EDITLEVEL'] ) {
+			echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=igprocess_state&Action=Help>";
+			echo "State</A>,\n"; 
+		}
+
+		echo " or ";
+
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?module=igprocess.php&table_name=igprocess&field_name=igprocess_keywords&Action=Help>";
+		echo "Keywords</A>\n";
+
+		echo " to assist you.\n";
+
+        // Help
+        echo "<BR>Choose the type of processes you wish to see (default shows all) and click on ";
+        echo " <I>List</I>";
+        echo " button. ";
+
+        echo "To add new process, click on";
+        echo " <I>New</I>";
+        echo " button.</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=igprocess_query_form BORDER>\n";
+
+		echo "<TH class=ths>Class</TH>\n";
+		echo "<TH class=ths>Round</TH>\n";
+		echo "<TH class=ths>Energy</TH>\n";
+		echo "<TH class=ths>Level</TH>\n";
+		echo "<TH class=ths>Format</TH>\n";
+		echo "<TH class=ths>Participation</TH>\n";
+		echo "<TH class=ths>Contributor</TH>\n";
+        if ( $_SESSION['access'] >= $IGPCFG['EDITLEVEL'] ) {
+		    echo "<TH class=ths>State ";
+			echo "$_SESSION[access] >= $IGPCFG[EDITLEVEL]"; // DEVONLY
+			echo "</TH>\n";
+        }
+		//echo "<TH class=ths>Rating</TH>\n";
+		echo "<TH class=ths>Keywords</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+
+		// Class
+		echo "<TD class=tdsc>\n";
+		$sql = "SELECT DISTINCT igprocess_class from igprocess order by igprocess_class";
+		$list = get_menu($sql);
+		spew_select_menu('igprocess_class','All','All',$list);
+		echo "</TD>\n";
+
+		// Type 
+		echo "<TD class=tdsc>\n";
+		$sql = "SELECT distinct igprocess_type from  igprocess order by igprocess_type" ;
+		$list = get_menu($sql);
+		spew_select_menu('igprocess_type','All','All',$list);
+		echo "</TD>\n";
+
+		// Archetype Energy
+		echo "<TD class=tdsc>\n";
+		$sql = "SELECT distinct igprocess_energy from  igprocess order by igprocess_energy" ;
+		$list = get_menu($sql);
+		spew_select_menu('igprocess_energy','All','All',$list);
+		echo "</TD>\n";
+
+		// Level
+		echo "<TD class=tdsc>\n";
+		$sql = "SELECT distinct igprocess_level from  igprocess order by igprocess_level" ;
+		$list = get_menu($sql);
+		spew_select_menu('igprocess_level','All','All',$list);
+		echo "</TD>\n";
+
+		// Format
+		echo "<TD class=tdsc>\n";
+		$sql = "SELECT distinct igprocess_format from  igprocess order by igprocess_format" ;
+		$list = get_menu($sql);
+		spew_select_menu('igprocess_format','All','All',$list);
+		echo "</TD>\n";
+
+		// Participation
+		echo "<TD class=tdsc>\n";
+		$sql = "SELECT distinct igprocess_participation from  igprocess order by igprocess_participation" ;
+		$list = get_menu($sql);
+		spew_select_menu('igprocess_participation','All','All',$list);
+
+
+		// Contributor
+		    echo "<TD class=tdsc>\n";
+		    $sql = "SELECT distinct w.war_id, w.war_fname, w.war_nname, w. war_lname from warrior w, igprocess i";
+		    $sql .= " WHERE w.war_id = i.contributor_id " ;
+    
+		    $result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+    
+		    $list = array();
+    
+		    while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			    if ( empty ($row[war_nname] ) ) {
+				    $name = $row[war_fname] . ' ' . $row[war_lname];
+			    }else{
+				    $name = $row[war_nname] . ' ' . $row[war_lname];
+			    }
+			    $id = $row[war_id];
+			    $Contlist[$id] = $name;
+		    }
+		    spew_select_hash_menu('contributor_id','All','All',$Contlist);
+		    echo "</TD>\n";
+
+        //
+		// Rating
+        //
+		//$igprocess_rating = array(
+		//  '1 - 2',
+		//  '2 - 3',
+		//  '2 - 4',
+		//  '2 - 5',
+		//  '3 - 4',
+		//  '3 - 5',
+		//  '4 - 5'
+		//  );
+		//echo "<TD class=tds>\n";
+		//spew_select_menu('igprocess_rating','All','All',$igprocess_rating);
+		//echo "</TD>\n";
+
+		//
+		// State
+		//
+        if ( $_SESSION['access'] >= $IGPCFG['EDITLEVEL'] ) {
+		    echo "<TD class=tdsc>\n";
+		    $sql = "SELECT distinct igprocess_state from igprocess order by igprocess_state" ;
+		    $list = get_menu($sql);
+		    spew_select_menu('igprocess_state','Released','All',$list);
+		    echo "</TD>\n";
+        }
+
+		//
+		// Keywords
+		//
+		echo "<TD class=tdsc>\n";
+		echo "<INPUT TYPE=TEXT NAME=igprocess_keywords>\n";
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tdsc>\n";
+		$sortby = array (
+			//'Type',
+			'Round',
+			'Class',
+			'Name',
+			'Level',
+			'Energy',
+			'Age',
+			'Rating'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Name',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Mine\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Recently Updated\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	} //End function spew_query_form()
+
+	//----------------------------------------------------------------
+	// Function Show Comment History
+	//----------------------------------------------------------------
+
+	function show_comment_history ( $pid ) {
+		caa_connect();
+		global $WICCFG;
+
+		$subname = "show_comment_history";
+
+		echo "<P class=trace>Entering $subname in $program</P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"author_id"			=>	"45759",
+			"comment_type"		=>	"Comment",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		//---------------------------------------------
+		// Get List of nicknames for comment authors
+		//---------------------------------------------
+		$Who = array();
+		$sql = "SELECT w.war_id, w.war_fname, w.war_nname, w.war_lname, war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = 'igprocess' AND c.table_id = '$pid' ";
+		echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+		$result =  mysql_query($sql);
+
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			if ( empty ( $row[war_nname] ) ) {
+				$name = $row['war_fname'] . ' ' . $row['war_lname'];
+				//$name = $row['war_fname'];
+				//$name .=  substr($row[war_lname], 0, 1);
+			}else{
+				$name = $row['war_nname'] . ' ' . $row['war_lname'];
+				//$name = $row['war_nname'];
+				//$name .= substr($row[war_lname], 0, 1);
+			}
+
+			$id = $row['war_id'];
+			$Who[$id]  = $name;
+			$AuthorEmail[$id]  = $row['war_email'];
+		}
+
+		//---------------------------------------------
+		// Get List of existing comment types
+		//---------------------------------------------
+		$sql = "SELECT distinct comment_type from comment";
+		$ctypes =  get_menu($sql);
+
+		//--------------------------------------------------------
+		// Generate SQL query
+		//--------------------------------------------------------
+	
+		$cfields =  get_fields('comment','comment');
+	
+		$sql = "SELECT  ";
+		$sql .= " c.comment_id, c.comment_access,  c.author_id, c.date_created, c.comment_type,";
+		$sql .= " c.comment_summary, c.comment_detail"; 
+		$sql .= " FROM comment c WHERE c.table_name = 'igprocess' and c.table_id = '$pid' ";
+
+		if (! isset($_SESSION[war_id] ) ) {
+			$sql .= " AND c.comment_access = 'Public' ";
+			echo "<P class=trace>Following are all public entries. ";
+			echo "Remaining entries visible after <A HREF=/login.phpx>logging in.</A></P>\n";
+		}
+
+		$sql .= " ORDER BY c.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//--------------------------------------------------------
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//--------------------------------------------------------
+
+		$TotalEntries = '0';
+		$result = mysql_query($sql);
+		$Sort = array();
+		$Comment = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Comment History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Comment] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			print "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Comment Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Comment=Summary/', '', $url);
+			print "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">Show Comment Details</P>\n";
+		}
+
+		$count = mysql_num_rows($result);
+		echo "<CENTER>\n";
+		$howmany = "Entries";
+
+		if ( $count == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<TABLE id=igprocess_comment_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Comment'] == "Detail" ) {
+			echo "<TH class=ths>Details of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=commentlist>\n";
+
+		//
+		// Display Comment Entries
+		//
+
+		while ($Comment = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			$ts =  timestamp2display($Comment[date_created]);
+			echo "<LI>";
+			echo "<A HREF=\"/comment.phpx?comment_id=$Comment[comment_id]&Action=View\">";
+			echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0 HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Comment['author_id'];
+
+			//echo "[$author_id]"; // DEVONLY
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">($Who[$author_id]</A>)\n";
+
+			echo "$Comment[comment_summary]\n";
+
+			if ( $_REQUEST[Comment] == "Detail" ) {
+				echo "<UL id=commentlistbody><LI>\n";
+				echo "<PRE>\n";
+				$text = stripslashes($Comment[comment_detail]);
+				$display = wordwrap($text, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		if (! $count) {
+			echo "<LI>No comment entries</LI>\n";
+		}
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+	}// End function show_comment_history
+	//--------------------------------------------------------
+	// Generate contact menu
+	//--------------------------------------------------------
+	function get_contact_menu () {
+		caa_connect();
+		$MyWho = array();
+		$row = array();
+
+		$sql = "SELECT DISTINCT w.war_id, w.war_fname, w.war_mname, w.war_lname ";
+		$sql .= " FROM warrior w, access_password a ";
+		$sql .= " WHERE w.war_id = a.warrior_id ";
+
+		if ($_SESSION['access'] < $IGPCFG['EDITLEVEL'] ) {
+			if (isset ( $_SESSION['center_id'] )) {
+				$cid = $_SESSION['center_id'] ;
+				$sql .= " AND w.war_center = '$cid'";
+			}
+		}
+		$sql .= " ORDER BY w.war_lname, w.war_fname ";
+
+		echo "<P class=trace>GCM: $sql</P>\n"; // DEVONLY
+		$result = mysql_query($sql);
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			$wid = $row['war_id'];
+			#if (! empty ($row[war_nname] ) ) {
+			#	$MyWho[$wid] = $row[war_nname] . ' ' . $row[war_lname];
+			#}else{
+				$MyWho[$wid] = $row[war_fname] . ' ' . $row[war_lname];
+			#}
+		}
+		return($MyWho);
+	}// End function get_contact_menu
+
+
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack ($pid) {
+		global $WICCFG;
+        $today = date('Y-m-d');
+        echo "<P class=trace>Entering send_email_ack: Pid: $pid,</P>\n"; // DEVONLY
+
+        //
+        // Get Process Details
+        //
+        $Process = array();
+        $sql = "SELECT * FROM igprocess WHERE igprocess_id = '$pid'";
+        echo "<P class=trace>$sql</P>\n"; // DEVONLY
+        $result = mysql_query($sql);
+        $Process =  mysql_fetch_array($result, MYSQL_ASSOC);
+
+
+		//
+		// Config parameters for email acknowledgement
+		//
+		$AppMail = array ();
+		$wid = $Process['contributor_id'];
+
+        //
+        // Get Contributor Info
+        //
+        $Contributor = array();
+		if (isset ( $wid ) ) {
+        	$asql = "SELECT war_id, war_fname, war_nname, war_lname, war_email";
+        	$asql .= " FROM warrior WHERE war_id = '$wid'";
+        	$aresult = mysql_query($asql);
+        	$Contributor =  mysql_fetch_array($aresult, MYSQL_ASSOC);
+        	$appname = $Contributor['war_fname']. " " . $Contributor['war_lname'];
+		}else{
+        	echo "<P class=trace>ERROR: Contributor: no wid ($wid)</P>\n"; // DEVONLY
+		}
+
+
+        //
+        // Construct  Email Headerrs
+        //
+		$AppMail['subject'] = "New I-Group Portal I-Group Process: $Process[igprocess_name] ($appname)";
+		$AppMail['fromemail'] = $WICCFG['IGPEDITOR'];
+		$AppMail['toemail']	= $Contributor['war_email'];
+		$AppMail['fromname'] = "UIGP I-Group Process Editor";
+		$AppMail['toname'] = $appname;
+
+		if ( $Contributor['war_email'] ) {
+			echo "<CENTER>\n";
+			echo "<H2>An acknowledgement has been emailed to $Contributor[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';						//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";	//DEBUG DEVONLY
+		echo "AppMail<BR>\n";				//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($AppMail), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';						//DEBUG DEVONLY
+
+		$fd = popen($WICCFG['MAILER'],"w"); 
+
+		fputs($fd, "From: $AppMail[fromname] <$AppMail[fromemail]>\n"); 
+		fputs($fd, "To: $AppMail[toname] <$AppMail[toemail]>\n"); 
+		fputs($fd, "Cc: $AppMail[fromname] <$AppMail[fromemail]>\n"); 
+		fputs($fd, "Bcc: jerbowes@gmail.com\n"); // DEBUG DEVONLY
+		fputs($fd, "Subject: $AppMail[subject]\n\n"); 
+
+		fputs($fd, "Thank you for your I-Group process library contribution.\n");
+		fputs($fd, "Play with it in draft (state = New) mode and if you have any\n");
+		fputs($fd, "questions, respond to this email with details.\n\n");
+
+		fputs($fd, "When it displays as you want it, edit it and change the state to 'Review'\n");
+		fputs($fd, "and send an email and we will do the final edits and release it for view\n");
+		fputs($fd, "to the entire New Warrior community.\n\n");
+
+		fputs($fd, "The direct link to your new process is at the following web link:\n\n");
+		fputs($fd, "$WICCFG[WICURL]/igprocess.php?igprocess_id=$pid&Action=View\n\n");
+
+		fputs($fd, "You can alter whether you receive updates of your process\n"); 
+		fputs($fd, "by logging into the USA I-Group Portal (http://igroupportal.mkp.org),\n");
+		fputs($fd, "clicking on the 'My Preferences' button and updating your preferences.\n");
+		fputs($fd, "You will see one labeled 'Email me when my I-Group processes are edited'\n");
+		fputs($fd, "and you can set that preference to 'Yes' to receive notification of all changes.\n\n");
+
+		fputs($fd, "Your new process will not show up on the main query page until released,\n");
+        fputs($fd, "but you can forward this email with the above link to anyone within the\n");
+        fputs($fd, "New Warrior community for collaboration and feedback.\n\n");
+
+        fputs($fd, "You can always see and edit contributions from the I-Group Process page by\n");
+        fputs($fd, "clicking on the 'List Mine' button.\n\n");
+
+		fputs($fd, "I-Groups Rock!\n\n");
+
+		fputs($fd, "Thank you,\n");
+		fputs($fd, "MKP-USA-IGC I-Group Process Editors\n");
+
+		pclose($fd); 
+	}//End function send_email_ack
+
+	//----------------------------------------------------------------
+	// Function send_email_update
+	//----------------------------------------------------------------
+	function send_email_update ($pid) {
+		global $WICCFG;
+        $today = date('Y-m-d');
+        echo "<P class=trace>Entering send_email_update: Pid: $pid,</P>\n"; // DEVONLY
+
+        //
+        // Get Process Details
+        //
+        $Process = array();
+        $sql = "SELECT * FROM igprocess WHERE igprocess_id = '$pid'";
+        echo "<P class=trace>$sql</P>\n"; // DEVONLY
+        $result = mysql_query($sql);
+        $Process =  mysql_fetch_array($result, MYSQL_ASSOC);
+
+		//
+		// Config parameters for email acknowledgement
+		//
+		$AppMail = array ();
+		$wid = $Process['contributor_id'];
+
+		//
+		// Wait! Does the author really want notifications?
+		//
+		$sql = "SELECT preference_value from warrior_preference";
+		$sql .= " WHERE warrior_id = '$wid' AND preference_id = '205'";
+		$yesno = get_value($sql);
+
+		echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+		if (empty ($yesno) ||  $yesno == 'No' ) {
+			return;
+		}
+
+        //
+        // Get Contributor Info
+        //
+        $Contributor = array();
+		if (isset ( $wid ) ) {
+        	$asql = "SELECT war_id, war_fname, war_nname, war_lname, war_email";
+        	$asql .= " FROM warrior WHERE war_id = '$wid'";
+        	$aresult = mysql_query($asql);
+        	$Contributor =  mysql_fetch_array($aresult, MYSQL_ASSOC);
+        	$appname = $Contributor['war_fname']. " " . $Contributor['war_lname'];
+		}else{
+        	echo "<P class=trace>ERROR: Contributor: no wid ($wid)</P>\n"; // DEVONLY
+		}
+
+        //
+        // Get current updater information
+        //
+		if (isset ( $_SESSION['war_id'] ) ) {
+        	$Editor = array();
+			$eid = $_SESSION['war_id'];
+        	$esql = "SELECT war_id, war_fname, war_nname, war_lname, war_email";
+        	$esql .= " FROM warrior WHERE war_id = '$eid'";
+        	$eresult = mysql_query($esql);
+        	$Editor =  mysql_fetch_array($eresult, MYSQL_ASSOC);
+        	$authname = $Editor['war_fname'] . " " . $Editor['war_lname'];
+		}else{
+        	echo "<P class=trace>ERROR: Editor: no eid ($eid)</P>\n"; // DEVONLY
+		}
+        //
+
+
+        //
+        // Construct  Email Headerrs
+        //
+		$AppMail['subject'] = "Update: I-Group Process: $Process[igprocess_name]";
+		$AppMail['fromemail'] = $WICCFG['IGPEDITOR'];
+		$AppMail['toemail']	= $Contributor['war_email'];
+		$AppMail['fromname'] = "UIGP I-Group Process Editor";
+		$AppMail['toname'] = $appname;
+
+		if ( $Contributor['war_email'] ) {
+			echo "<CENTER>\n";
+			echo "<H2>An update notification has been emailed to the author at $Contributor[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';						//DEBUG DEVONLY
+		echo "ENTERING EMAIL UPDATE<BR>\n";	//DEBUG DEVONLY
+		echo "AppMail<BR>\n";				//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($AppMail), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';						//DEBUG DEVONLY
+
+		$fd = popen($WICCFG['MAILER'],"w"); 
+
+		fputs($fd, "From: $AppMail[fromname] <$AppMail[fromemail]>\n"); 
+		fputs($fd, "To: $AppMail[toname] <$AppMail[toemail]>\n"); 
+		fputs($fd, "Cc: $AppMail[fromname] <$AppMail[fromemail]>\n"); 
+		fputs($fd, "Bcc: jerbowes@gmail.com\n"); // DEBUG DEVONLY
+		fputs($fd, "Subject: $AppMail[subject]\n\n"); 
+
+		fputs($fd, "This is a courtesy notification that your\n");
+		fputs($fd, "I-Group Process ($Process[igprocess_name])\n");
+		fputs($fd, "has been updated by $authname.\n\n");
+
+		fputs($fd, "You can alter whether you receive updates of your process\n"); 
+		fputs($fd, "by logging into the USA I-Group Portal (http://igroupportal.mkp.org),\n");
+		fputs($fd, "clicking on the 'My Preferences' button and updating the preference.\n");
+		fputs($fd, "You will see one labeled 'Email me when my I-Group processes are edited'\n");
+		fputs($fd, "and you can set that preference to 'Yes' to receive notification of all changes.\n\n");
+
+		fputs($fd, "See revised version of your process at the following web link:\n\n");
+		fputs($fd, "$WICCFG[WICURL]/igprocess.php?igprocess_id=$pid&Action=View\n\n");
+		fputs($fd, "You may be able to learn more about the update by clicking on the\n");
+		fputs($fd, "'View Details' button at the bottom of the above view and examine\n");
+		fputs($fd, "the feedback provided by the users.\n\n");
+
+        fputs($fd, "You can always see and edit your contributions from the I-Group Process\n");
+        fputs($fd, "page by clicking on the 'List Mine' button.\n\n");
+
+		fputs($fd, "I-Groups Rock!\n\n");
+
+		fputs($fd, "Thank you,\n");
+		fputs($fd, "MKP-USA-IGC I-Group Process Editors\n");
+
+		pclose($fd); 
+	}//End function send_email_update
+	//--------------------------------------------------------
+	// END Functions
+	//--------------------------------------------------------
+?>

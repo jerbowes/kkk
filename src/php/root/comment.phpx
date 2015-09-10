@@ -1,0 +1,906 @@
+<?php
+	//#==================================================================
+	//# MKP-USA I-Group Portal Comment/Journal
+	//#------------------------------------------------------------------
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Rev$
+	//# $Date: 2012/12/23 23:54:35 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/comment.phpx,v $
+	//# $Id: comment.phpx,v 1.3 2012/12/23 23:54:35 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+    // Look and feel parameters for header/footer
+	$FMT = array (
+		'BANNER'		=>	'My Comments',
+		'MODULENAME'	=>	'comment.phpx',
+		'TITLE'			=>	'My Comments',
+		'NAV1'			=>	'CLOAK'
+	);
+
+	//-----------------------------------------------------------------------
+	// BEGIN Default Query Fields
+	//-----------------------------------------------------------------------
+	$ALLFIELD = array(
+		'comment_id',
+		'table_name',	// Item being commented upon (e.g. warrior Bob Jones)
+		'table_id',		// Item being commented upon	(Bob's war_id)
+		'context_name',	// Context of item	(Bob gave a training, this comment is about bob regarding that training)
+		'context_id',	// Item being commented upon	(Which training (primary key of training table)
+		'author_id',
+		'comment_access',
+		'comment_type',
+		'cc_list',
+		'comment_summary',
+		'date_created',
+		'comment_detail'
+	);
+
+	$EMAILSHOW = array(
+		'author_id',
+		'comment_type',
+		'cc_list',
+		'comment_summary',
+		'comment_detail'
+	);
+
+	$SHOW = array(
+		'comment_id',
+		'table_name',
+		'table_id',
+		'comment_access',
+		'author_id',
+		'comment_type',
+		'cc_list',
+		'comment_summary',
+		'date_created',
+	);
+
+	$VIEW = array(
+		'table_id',
+		'author_id',
+		'comment_type',
+		'cc_list',
+		'date_created',
+		'comment_summary',
+		'comment_detail'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'table_name',
+		'author_id',
+		'comment_access',
+		'comment_type'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+		'null'
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'table_name'		=> 'enter table_name',
+		'table_id'			=> 'enter table_id',
+		'context_name'		=> 'enter context table_name',
+		'context_id'		=> 'enter context table_id',
+		'author_id'			=> 'enter author',
+		'comment_type'		=> 'enter comment entry type',
+		'comment_summary'	=> 'enter summary',
+		'comment_detail'	=> 'enter detail'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		' ',
+		'',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'comment_id'
+	);
+
+	$FieldType = array(
+		'comment_type'	=>		'Menu'
+	);
+
+	$Menu = array(
+		"comment_type" => "SELECT choice from menu where table_name = 'comment' AND field_name = 'comment_type'"
+	);
+
+	// Display exceptions from default tdcs centered display table cell
+	$JustifyCss = array(
+		'summary',	'tds'	// small left justified
+	);
+	//
+	// Mapping from table_name and table_id
+	//
+	$TitleField = array(
+		"igprocess"		=>		"igprocess_name",
+		"prospect"		=>		"pro_fname",
+		"survey"		=>		"survey_name",
+		"surveyquestion"		=>		"surveyquestion_question",
+		"surveyanswer"		=>		"surveyanswer_answer",
+		"warrior"		=>		"war_fname",
+		"igroupportalfaq"		=>		"igroupportalfaq_summary",
+		"program"		=>		"program_name",
+		"project"		=>		"project_name"
+		);
+
+	$PrimaryKey = array(
+		"igprocess"		=>		"igprocess_id",
+		"fulllocation"	=>		"location_id",
+		"location"	    =>		"loc_id",
+		"survey"	    =>		"survey_id",
+		"surveyquestion"	    =>		"surveyquestion_id",
+		"surveyanswer"	    =>		"surveyanswer_id",
+		"warrior"		=>		"war_id",
+		"prospect"		=>		"pro_id",
+		"program"		=>		"program_name",
+		"project"		=>		"project_name"
+	);
+
+	spew_header($FMT);
+
+	if (array_key_exists('Action', $_REQUEST)) {
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Entry" ) {
+
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Insert New Entry Section\n";	// DEBUG DEVONLY
+			print htmlspecialchars(print_r($_REQUEST), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			caa_connect();
+
+			//
+			// Get list of fields and field labels
+			//
+			$fieldlabel = get_field_labels('comment', 'comment');
+			$fields = array_keys($fieldlabel);
+			unset ($_REQUEST['comment_id']);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+			//
+			// If Context not set, set  to table_name/id
+			//
+			if (! isset ( $_REQUEST[context_name] ) ) {
+				$_REQUEST[context_name] = $_REQUEST[table_name];
+			}
+			if (! isset ( $_REQUEST[context_id] ) ) {
+				$_REQUEST[context_id] = $_REQUEST[table_id];
+			}
+
+			//
+			// Required fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sqlwhat = array();
+			foreach ($fields as $f) {
+				if ( isset ( $_REQUEST[$f]) ) {
+					$sqlwhat[] = $f;
+				}
+			}
+
+			$sqlval = array();
+			foreach ($fields as $f) {
+				if ( isset ( $_REQUEST[$f]) ) {
+					$safeval = igroupportal_htmlspecialchars($_REQUEST[$f]);
+					$val = mysql_real_escape_string($safeval);
+					$sqlval[] = "'" . $val . "'";
+				}
+			}
+		
+			$sql = 'INSERT INTO comment (';
+			$sql .= implode(',', $sqlwhat) .  ') VALUES (' .  implode(',', $sqlval) . ')';
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<CENTER>\n";
+			echo "<H2>Comment successfully added.</H2>\n";
+			echo "</CENTER>\n";
+			now_what();
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+			if (! array_key_exists('comment_id', $_REQUEST)) {
+				die ("No Item Id Set") ;
+			}
+			caa_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('comment','comment');
+			$fields = array_keys($fieldlabel);
+
+			print '<pre>';	// DEBUG DEVONLY
+			echo "Update Fields\n"; // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	// DEBUG DEVONLY
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'UPDATE comment SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sqlx =   $f . " = '" . $val . "'";
+				array_push($sqlentry, $sqlx);
+			}
+			$sql .= implode (',', $sqlentry);
+			$sql .= " WHERE comment_id = '$_REQUEST[comment_id]'";
+			echo "<p class=trace>$sql</p>\n";	//DEBUG
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<H3>Update successful</H3>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query or Full Query
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Query" || $_REQUEST[Action] == "Full Query") {
+			//spew_query_form();
+			caa_connect();
+			$fieldlabel = get_field_labels('comment','comment');
+			$fields = array_keys($fieldlabel);
+
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			$validentries = array();
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($param, $val) = explode( '=', $entry);	
+				if ( $val ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($param, $ALLFIELD) ) {
+							$parameters[$param] = $val;
+						}
+					}
+				}
+			}
+			// Uniquify for duplicate entries
+			foreach ($parameters as $key => $val ) {
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+			// Must end with '&'
+			$drilldown .= '&';
+
+			$sql = 'SELECT * FROM comment ';
+			$where = array();
+			foreach ($fields as $f) {
+				//echo "<BR>Field: $f\n";	//DEBUG
+				if (array_key_exists($f, $_REQUEST)) { 
+					//echo "<BR>found $f\n";	//DEBUG
+
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( $val ) {
+						$sqlw = $f . "='" . $val . "'" ;
+						array_push($where, $sqlw);
+					}
+				}
+			}
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			if ( $_REQUEST[Sortmeby] == 'City') {
+				$sql .= ' ORDER BY comment_city ';
+			}
+
+			echo "<p class=trace>$sql</p>\n";	//DEBUG
+			$result = mysql_query($sql);
+	
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<TABLE id=comment_query_results BORDER>\n";
+			echo "<TH class=ths>Edit</TH><TH class=ths>View</TH>\n";
+			unset($fields[comment_id]);
+			foreach ($fields as $f) {
+
+				if ($_REQUEST[Action] == "Full Query" ) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}else{
+					if (in_array($f, $SHOW)) {
+						echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+					}
+				}
+			}
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?comment_id=$row[comment_id]";
+				echo "&Action=Edit>";
+				echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A></TD>\n";
+	
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?comment_id=$row[comment_id]";
+				echo "&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A></TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$display = stripslashes($row[$f]);
+					// Display Exceptions (lookup)
+					if ( $f  == 'bar' ) {
+						$display = 'bar';
+					}
+					if ($_REQUEST[Action] == "Full Query" ) {
+							$css = "tdcs";
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								echo "$f=$row[$f]&"; 
+								echo "$drilldown";
+								echo "Action=$_REQUEST[Action]>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+					}else{
+						if (in_array($f, $SHOW)) {
+							$css = "tdcs";
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								echo "$f=$row[$f]&"; 
+								echo "$drilldown";
+								echo "Action=$_REQUEST[Action]>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+						}
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "New" || $_REQUEST[Action] == "Add Comment Entry" || $_REQUEST[Action] == "Add Comment" ) {
+			print '<pre>';	// DEBUG DEVONLY
+			echo "New or Add Comment Entry\n";//DEBUG DEVONLY
+			print htmlspecialchars(print_r($_REQUEST), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	// DEBUG DEVONLY
+			spew_new_form();
+			spew_footer($FMT);
+			exit;
+		}
+
+		//----------------------------------------------------------------------
+		// Quick New Entry
+		//----------------------------------------------------------------------
+
+	  	if ($_REQUEST[Action] == "Quick New" ) {
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=comment_new_form_long BORDER>\n";
+
+			$fieldlabel = get_field_labels('comment','comment');
+			unset($fieldlabel['comment_id']);
+			foreach ($fieldlabel as $fieldname => $val) {
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = get_menu($menusql);
+						sort($menuitems);
+						spew_select_menu($fieldname, $val,'All',$menuitems);
+				    	if (in_array($fieldname, $EXTEND)) {
+						    echo "-OR- <INPUT TYPE=TEXT NAME=NEW_$fieldname>";
+					    }
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = mysql_fetch_array($result, MYSQL_ASSOC);
+						ksort($menuitems);
+						spew_select_hash_menu($fieldname, '$val','All',$menulist);
+				    	if (in_array($fieldname, $EXTEND)) {
+						    echo "-OR- <INPUT TYPE=TEXT NAME=NEW_$fieldname>";
+					    }
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Edit or View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Edit") {
+			if (! array_key_exists('comment_id', $_REQUEST)) {
+				die ("No Item Id Set") ;
+			}
+			caa_connect();
+
+			// Get Comment Record
+			$sql = "SELECT * FROM comment WHERE comment_id = '$_REQUEST[comment_id]'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=comment_edit_form BORDER>\n";
+
+			$fieldlabel = get_field_labels('comment', 'comment');
+			foreach ($fieldlabel as $fieldname => $val) {
+				echo "<TR><TD class=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = get_menu($menusql);
+						sort($menuitems);
+						//print_r($menuitems);//DEBUG
+						spew_select_menu($fieldname, $val,'All',$menuitems);
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						//echo "<BR>$menusql\n";//DEBUG
+						$result = mysql_query($menusql);
+						$menuitems = mysql_fetch_array($result, MYSQL_ASSOC);
+						ksort($menuitems);
+						//print_r($menuitems);//DEBUG
+						spew_select_hash_menu($fieldname, '$val','All',$menulist);
+					}
+				}else{
+					if (in_array($fieldname, $NoEdit)) {
+						echo "$row[$fieldname]<BR>";
+					}else{
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+				}
+				echo "</TD>\n";
+			}
+
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=comment_id VALUE=$_REQUEST[comment_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View" ) {
+			global $WICCFG;
+
+			if (! array_key_exists('comment_id', $_REQUEST)) {
+				die ("No Comment Id Set") ;
+			}else{
+				$comment_id = $cid = $_REQUEST['comment_id'];
+			}
+			caa_connect();
+
+			//
+			// Get Comment Record
+			//
+			$Comment = array();
+			$sql = "SELECT * FROM comment WHERE comment_id = '$comment_id'";
+			$result = mysql_query($sql);
+			$Comment = mysql_fetch_array($result, MYSQL_ASSOC) ;
+			$table_id = $Comment['table_id'];
+			$table_name = $Comment['table_name'];
+
+			//
+			// Author Map
+			//
+			$Who = array();
+			$aid = $Comment['author_id'];
+			$asql = "SELECT war_id, war_fname, war_lname, war_email FROM warrior WHERE war_id = '$aid'";
+			$aresult = mysql_query($asql);
+			$Who = mysql_fetch_array($aresult, MYSQL_ASSOC) ;
+			$Name = $Who['war_fname'] . ' ' . $Who['war_lname'];
+			$Email = $Who['war_email'];
+
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=comment_edit_form BORDER>\n";
+
+			$fieldlabel = get_field_labels('comment', 'comment', $WICCFG['DBNAME']);
+			foreach ($fieldlabel as $fieldname => $val) {
+				if (in_array($fieldname, $VIEW)) {
+					if (! empty( $Comment[$fieldname]) ) {
+						$display = stripslashes($Comment[$fieldname]);
+						if ( $fieldname == "author_id" ) {
+							$aid = $Comment[$fieldname];
+							$display = "<A HREF=mailto:$Email>$Name</A>\n";
+						}
+						if ( $fieldname == "table_id" ) {
+							$display = "<A HREF=\"/$Comment[table_name].phpx?$Comment[table_name]_id=$Comment[table_id]";
+							$display .= "&Action=View\">$table_name # $table_id";
+							$sqltitle = "SELECT $TitleField[$table_name] FROM $table_name WHERE $PrimaryKey[$table_name] = '$table_id'";
+							echo "<P class=trace>$sqltitle</P>\n";	// DEVONLY
+							$title = get_value($sqltitle);
+							if (!empty ($title)){
+								$display .= " : $title";
+							}
+							$display .= "</A>";
+						}
+						echo "<TR>\n";
+						echo "<TD class=tdls>";
+						echo "<A HREF=/help.phpx?table_name=comment&field_name=$fieldname&Action=Help>";
+						echo "$val</A></TD>\n";
+						echo "<TD VALIGN=TOP class=tds>";
+						echo "$display<BR>";
+						echo "</TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "View"))
+
+		//----------------------------------------------------------------------
+		// END Processing Options
+		//----------------------------------------------------------------------
+
+	}else{
+		//spew_query_form();
+		spew_new_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function now_what
+	//----------------------------------------------------------------
+	function now_what() {
+		global $PrimaryKey;
+		global $TitleField;
+
+		$tablename = $_REQUEST['table_name'];
+
+		$sql = "SELECT short_message from message where table_name = '$tablename'";
+		$sql .= " AND message_type = 'Table Label' ";
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+		$tablelabel = get_value($sql);
+
+		$TableMap = array(
+			'igprocess'		=>	'I-Group Process',
+			'trainings'		=>	'Training Event',
+			'igvisit'		=>	'I-Group Visit',
+			'preference'	=>	'Preference',
+			'zipdata'		=>	'Zipcode Map',
+			'calendar'		=>	'Calendar',
+			'fulllocation'	=>	'Location',
+			'training'		=>	'Training Type',
+			'warrior'		=>	'Warrior'
+			);
+
+		if (  empty ($tablelabel) ) {
+			$tablelabel = $TableMap[$tablename];
+		}
+
+		$handler = "/" . $_REQUEST[table_name] . '.phpx';
+		$what = ucfirst($_REQUEST[table_name]);
+		echo "<P class=trace>\n";
+		echo "[ &nbsp;";
+
+		echo "<A HREF=$handler?$PrimaryKey[$tablename]";
+		echo "=$_REQUEST[table_id]&Action=Query>Query associated ";
+		echo "$tablelabel</A>\n"; 
+
+		echo "&nbsp; | &nbsp;";
+
+		echo "<A HREF=$handler?$PrimaryKey[$tablename]";
+		echo "=$_REQUEST[table_id]&Action=Edit>Edit associated ";
+		echo "$tablelabel</A>\n"; 
+
+		echo "&nbsp; | &nbsp;";
+
+		echo "<A HREF=$handler?$PrimaryKey[$tablename]";
+		echo "=$_REQUEST[table_id]&Action=View>View associated ";
+		echo "$tablelabel</A>\n"; 
+
+		echo "&nbsp;]";
+		echo "</P>\n";
+	}// Endsub now_what
+
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		caa_connect();
+		echo "<CENTER>\n";
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=comment_query_form BORDER>\n";
+		echo "<TH class=ths>ID</TH>\n";
+		echo "<TH class=ths>Source Table</TH>\n";
+		echo "<TH class=ths>Source ID</TH>\n";
+		echo "<TH class=ths>Author</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		// ID
+		echo "<TR><TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=comment_id SIZE=6>\n";
+		echo "</TD>\n";
+
+		// Source Table
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct table_name from comment order by table_name";
+		$srclist = array();
+		$srclist = get_menu($sql);
+		spew_select_menu('table_name','','All',$srclist);
+		echo "</TD>\n";
+
+		// Source ID
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=table_id SIZE=6>\n";
+		echo "</TD>\n";
+
+		// Author
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT w.war_id,  w.war_lname ";
+		$sql .= " FROM warrior w, comment c";
+		$sql .= " WHERE c.author_id = w.war_id ORDER BY w.war_lname";
+		$wholist = array();
+		$wholist = get_menu_array($sql);
+		spew_select_hash_menu('author_id','','All',$wholist);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Author',
+			'Table Name'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Table Name',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+	}
+	//----------------------------------------------------------------
+	// Function spew_new_form
+	//----------------------------------------------------------------
+	function spew_new_form() {
+		global $WICCFG;
+		global $PrimaryKey;
+		global $TitleField;
+		caa_connect();
+
+		$fieldlabel = get_field_labels('comment','comment');
+		unset($fieldlabel['comment_id']);
+
+		$EmailList = array();
+
+		$Required = array(
+			"comment_summary"	=>	"must have summary",
+			"author_id"			=>	"must have author_id",
+			"table_name"		=>	"must have source table",
+			"table_id"			=>	"must have source id"
+		);
+
+		$Default = array ( 
+			'priority'	=>	'P3: Routine'
+		);
+	
+		foreach ( $Default as $f => $val) {
+			if (!empty( $_REQUEST[$f] )) {
+				$_REQUEST[$f] = $Default[$f] ;
+			}
+		}
+
+		$sqlfield = $_REQUEST['table_name'];
+		$sqlid = $_REQUEST['table_id'];
+		$sqlt = "SELECT $TitleField[$sqlfield] FROM $sqlfield";
+		$sqlt .= " WHERE $PrimaryKey[$sqlfield] = '$sqlid'";
+
+		echo "<P class=trace>$sqlt</P>\n"; // DEBUG DEVONLY
+		$result = mysql_query($sqlt) or die('Error, query failed: $sqlt' . mysql_error() );
+		$title_row = array();
+		$title_row = mysql_fetch_row($result);
+		$title = $title_row[0];
+		
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+
+		echo "<CENTER>\n";
+		echo "<H3>Adding comment entry for $_REQUEST[table_name] entry ";
+        echo "( $_REQUEST[table_id] )"; // DEVONLY
+        echo "<BR><I>$title</I></H3>\n";
+		echo "<P class=trace>Details will display as html. If you want to enter formatted text, ";
+		echo "place between &lt;PRE&gt; and &lt;/PRE&gt; tags";
+        echo "<BR>For more information, see <A HREF=/help.phpx?table_name=comment&field_name=Overview&Action=Help>";
+        echo " overview</A> or ";
+        echo "<A HREF=/help.php?topic=Content+Management&subtopic=HTML+Editing&help_type=Tutorial&Action=Help>";
+        echo " HTML editing help</A>.\n";
+        echo "</P>\n";
+
+		echo "<TABLE id=comment_entry_form BORDER CELLSPACING=3 CELLPADDING=3>\n";
+	
+		// ---- Access and Summary --------------------------
+		echo "<TH COLSPAN=1 class=ths>Access</TH>\n";
+		echo "<TH COLSPAN=3 class=ths>Summary</TH>\n";
+
+		echo "<TR>\n";
+		echo "<TD class=tdcs COLSPAN=1>\n";
+			$sql = "SELECT choice FROM menu WHERE table_name = 'comment' and field_name = 'comment_access'";
+			$comment_accesslist = array();
+			$comment_accesslist = get_menu($sql);
+			spew_select_menu('comment_access','Public','Public',$comment_accesslist);
+		echo "</TD>\n";
+
+		echo "<TD class=tdcs COLSPAN=3>\n";
+				echo "<INPUT TYPE=TEXT size=70 NAME=comment_summary>\n";
+		echo "</TD>\n";
+	
+	
+		// ---- Details --------------------------
+		echo "<TR><TH COLSPAN=4 class=ths>Details</TH>\n";
+		echo "<TR>\n";
+		echo "<TD class=tdcs COLSPAN=4>\n";
+			echo "<TEXTAREA COLS=70 ROWS=20 NAME=comment_detail>";
+			echo "</TEXTAREA>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+		echo "<INPUT TYPE=HIDDEN NAME=author_id VALUE=\"$_SESSION[war_id]\">\n";
+		echo "<INPUT TYPE=HIDDEN NAME=comment_type VALUE=\"Comment\">\n";
+		echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=\"$_REQUEST[table_id]\">\n";
+		echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=\"$_REQUEST[table_name]\">\n";
+		echo "<INPUT TYPE=HIDDEN NAME=context_id VALUE=\"$_REQUEST[context_id]\">\n";
+		echo "<INPUT TYPE=HIDDEN NAME=context_name VALUE=\"$_REQUEST[context_name]\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+	
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}//End function spew_new_form
+
+?>

@@ -1,0 +1,1455 @@
+<?php
+	//#==================================================================
+	//# Kkk journal
+	//#------------------------------------------------------------------
+	//# $Source: /home/jbowes/kkk/src/php/root/RCS/journal.phpx,v $
+	//# $Id: journal.phpx,v 1.5 2015/08/16 20:01:52 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# Jerry Bowes, jerbowes@yahoo.com
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no people_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+    if (session_status() !== PHP_SESSION_ACTIVE) {session_start();}
+
+	if ( ! isset ( $_SESSION['people_id'] )) {
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			//if ($_REQUEST['Action'] == 'Update' || $_REQUEST['Action'] == 'Insert New Entry' ) {
+			if ($_REQUEST['Action'] == 'Update' ) {
+				$param = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+				$returl =  $_SERVER['PHP_SELF'] . '?' .  $param;
+				header("Location: $KKKCFG[BASEURL]/login.phpx?RetUrl=$returl");;
+				exit;
+			}
+		//}else{
+			//$returl =  $_SERVER['PHP_SELF'];
+			//header("Location: $KKKCFG[BASEURL]/login.phpx?RetUrl=$returl");;
+		}
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"Journal Comments",
+		'TITLE'			=>	"Journal Comments",
+		'MODULENAME'	=>	"journal.phpx",
+		'NAV1'			=>	"INFO"	// Level 1 menu navigation group
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$JOURNALCFG = array (
+		'EDITLEVEL'		=>	'1'			// Access level to get edit screen
+	);
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+
+	$ALLFIELD = array(
+		'journal_id',
+		'source_table',
+		'source_id',
+		'author_id',
+		'journal_type',
+		'journal_access',
+		'cc_list',
+		'journal_summary',
+		'notification',
+		'date_created',
+		'follow_up',
+		'reference_url',
+		'journal_detail'
+	);
+
+	$SHOW = array(
+		'journal_id',
+		'source_table',
+		'source_id',
+		'author_id',
+		'journal_type',
+		'notification',
+		'cc_list',
+		'journal_summary',
+		'date_created',
+		'follow_up',
+		'reference_url',
+		'journal_detail',
+	);
+
+	$NEWFIELD = array(
+		'journal_summary',
+		'author_id',
+		'journal_type',
+		'date_created',
+		'cc_list',
+		'notification',
+		'follow_up',
+		'reference_url',
+		'journal_detail'
+	);
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'source_table',
+		'author_id',
+		'notification',
+		'journal_type'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'source_table'	  => 'enter source_table',
+		'source_id'		 => 'enter source_id',
+		'notification'	  => 'select notification option',
+		'author_id'		 => 'select author',
+		'journal_type'	  => 'enter journal entry type',
+		'journal_summary'	=> 'enter summary',
+		'journal_detail'			=> 'enter detail'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		' ',
+		'',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'journal_id'
+	);
+
+	$FieldType = array(
+		'journal_type'	 	 =>  'Menu',
+		'cc_list'			=>  'LongText',
+		'reference_url'		=>  'LongText',
+		'date_created'		=>  'Date',
+		'follow_up'			=>  'Menu',
+		'author_id'			=>  'People',
+		'notification'	  	=>  'Menu',
+		'journal_summary'	=>  'LongText',
+		'journal_detail'		=>  'TextArea'
+	);
+
+	$Base = "SELECT choice FROM menu WHERE table_name = 'journal' AND ";
+	$Menu = array(
+		"journal_type" => "$Base field_name = 'journal_type' ORDER BY choice",
+		"notification" => "$Base field_name = 'notification' ORDER BY choice",
+		"follow_up" => "$Base field_name = 'follow_up' ORDER BY choice"
+	);
+
+	// 
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'journal_name'		=>	'tds'	// small left justified
+	);
+	//
+	// Map of Name to whatever override for $(table)_name
+	//
+	$NameMap = array (
+		'incident'		=>	'incident_summary',
+		'problem'		=>	'problem_summary',
+		'task'			=>	'task_summary',
+		'people'		=>	'nickname'
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+
+	if (array_key_exists('Action', $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+
+			$dbh = kkk_pdo_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('journal','journal',$KKKCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			// Define default values
+			$Default = array (
+				'notification'	 =>  'Opslog',
+				'journal_state'	 =>  'New'
+			);
+
+			// Setup default values
+			foreach ($Default as $key => $val ) {
+				if ( ! isset ( $_REQUEST[$key]) ) {
+					$_REQUEST[$key] = $val;
+				}
+			}
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['journal_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO journal (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $dbh->quote($_REQUEST[$f]);
+					$sql2 .=  $val . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = $dbh->query($finalsql);
+
+ 			$_REQUEST['journal_id'] = $dbh->lastInsertId() ;
+
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+
+			send_auth_email_ack($_REQUEST);
+			//send_email_ack($_REQUEST);
+
+			now_what();
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update" ) {
+
+			if ( array_key_exists('journal_id', $_REQUEST)) {
+				$journal_id = $_REQUEST[journal_id];
+				if (! is_numeric( $journal_id ) ) {
+					die ("ERROR: Attempt to update requires journal_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Journal Id Set") ;
+			}
+
+			$dbh = kkk_pdo_connect();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM journal WHERE journal_id = '$journal_id'";
+
+			$result = $dbh->query($sql);
+
+			$Original = $result->fetch(PDO::FETCH_ASSOC);
+
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('journal','aaaaaaaaaa',$KKKCFG['DBNAME']);
+
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n";   // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE journal SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = $dbh->quote($_REQUEST[$f]);
+						$sqlentry[] = $f . " = " . $val;
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE journal_id = '$journal_id'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = $dbh->query($sql);
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST['Action'] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query ... not normal
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query" 
+	  		|| $_REQUEST['Action'] == "List" ) {
+
+			spew_query_form();
+			$dbh = kkk_pdo_connect();
+			$fieldlabel = array();
+
+			$fieldlabel = get_field_labels('journal','journal',$KKKCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$validentries[] = $key . '=' . $val;
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$What = array(
+				'j.*'
+			);
+			$Where = array(
+			);
+			$From = array(
+				'journal'	=>	'j'
+			);
+
+			//
+			// Construct where clause into an array
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$val = $dbh->quote($_REQUEST[$f]);
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+
+					if ( ! empty($val) ) {	// DEV: Can we populate an entry with a blank, e.g. reset?
+						if ( preg_match('/%/', $val)) { 
+							$Where[] = 'j.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$Where[] =  'j.' . $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT DISTINCT " . implode(',', $what);
+
+			$Fromsql = array();
+
+			foreach ($From as $table => $abbr) {
+				$Fromsql[] = $table . ' ' . $abbr;
+			}
+			$Fromsql = array_unique($Fromsql);
+
+			$sql .= ' FROM ' . implode(', ', $Fromsql);
+
+			if ( count($Where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $Where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Name'		=>	'j.journal_summary',
+				'Type'		=>	'j.journal_type, j.journal_summary'
+			);
+
+			$sortby = $_REQUEST['Sortmeby'];
+			$sby = $OrderBy[$sortby];
+
+			if (empty ($sby)){
+				$sql .= ' ORDER BY j.journal_summary';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = $dbh->query($sql);
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access_level'] >= $JOURNALCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+
+			unset($fields[journal_id]);
+
+			foreach ($ALLFIELD as $f) {
+
+				if ($_REQUEST[Action] == "Full Query" ) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}else{
+					if (in_array($f, $SHOW)) {
+						echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+					}
+				}
+			}
+
+
+			while ($row = $result->fetch(PDO::FETCH_ASSOC)){
+				echo "<TR>\n";
+
+				// Edit if authorized
+				// SECURITY
+				if ($_SESSION['access_level'] >= $JOURNALCFG['EDITLEVEL'] ) {	
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?journal_id=$row[journal_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// View for everyone
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?journal_id=$row[journal_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'journal_id' ) {
+						$display = $row[journal_name];
+					}
+
+					if ($_REQUEST[Action] == "Full Query" ) {
+					// Full Query
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								$url = preg_replace('/\s+/', '+', $row[$f]);
+								echo "$f=$url"; 
+								echo "&${drilldown}>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+					}else{
+					// NOT Full Query
+						if (in_array($f, $SHOW)) {
+
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								$url = preg_replace('/\s+/', '+', $row[$f]);
+								echo "$f=${url}"; 
+								echo "&${drilldown}>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+						}
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" 
+	  		|| $_REQUEST['Action'] == "Add Journal"
+	  		|| $_REQUEST['Action'] == "Add Journal Entry"
+	  		|| $_REQUEST['Action'] == "Add"
+	  		 ) {
+
+			global $NameMap;
+			$today = date('Y-m-d');
+			$Default = array (
+				'notification'	 =>  'Opslog',
+				'date_created' =>	"$today",
+				'author_id'		=>	"$_SESSION[people_id]",
+				'journal_type' =>	"Incident Note"
+			);
+
+			foreach ( $Default as $key => $val ) {
+				if (! isset( $_REQUEST[$key] ) ) {
+					$_REQUEST[$key] = $val;
+				}
+			}
+
+			// Verify source table and source id present
+			if ( ! isset ($_REQUEST['source_id'])){
+				die("No source_id\n");
+			}
+
+			if ( ! isset ($_REQUEST['source_table'])){
+				die("No source_table\n");
+			}
+
+			$dbh = kkk_pdo_connect();
+
+			$NoEdit[] = 'source_table';
+			$NoEdit[] = 'source_id';
+
+			$tid = $_REQUEST['source_id'];
+			$tname =  $_REQUEST['source_table'];
+
+			$name = $tname . '_name';
+
+			if (isset($NameMap[$tname])){
+				echo "<P class=trace>Table Name $tname is in Name Map $NameMap[$tname]</P>\n";   // DEVONLY
+				$name = $NameMap[$tname];
+			}else{
+				echo "<P class=trace>Table Name $tname NOT in Name Map $NameMap[$tname]</P>\n";   // DEVONLY
+			}
+
+			$sql = "SELECT $name FROM $tname WHERE ${tname}_id = '$tid'";
+			$name_value = get_value($sql);
+			echo "<P class=trace>$sql : $name_value</P>\n";   // DEVONLY
+			
+			//
+			// Get People Array
+			//
+			$People = array();
+			$sql = "SELECT p.people_id, p.full_name FROM people p";
+			//$sql .= " WHERE people_id > 96";
+			$sql .= " ORDER BY p.first_name, p.last_name";
+			echo "<P class=trace>$sql</P>\n";   // DEVONLY
+			$People = get_menu_array($sql);
+
+			echo "<PRE>\n";		// DEVONLY
+			print_r($People);   // DEVONLY
+			echo "</PRE>\n";	// DEVONLY
+
+			$me = $_SESSION['people_id'];
+			echo "<P class=trace>ME: $me</P>\n";   // DEVONLY
+			$menulist = array();
+			$fieldlabel = array();
+			$table = 'journal';
+			$now = date('Y-m-d h:m:s');
+
+			echo "<CENTER>\n";
+			echo "<H3>Append journal for $tname $tid : $name_value</H3>\n";
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabel = get_field_labels('journal','journal',$KKKCFG['DBNAME']);
+
+			foreach ($NEWFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR>\n";
+				echo "<TD CLASS=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$val</A></TD>\n";
+
+				echo "<TD class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						asort($menulist);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+					}
+
+					if ( $FieldType[$fieldname] == "People" ) {
+						spew_select_hash_menu($fieldname, $_REQUEST['author_id'], $_SESSION['people_id'], $People);
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA COLS=70 ROWS=20 NAME=$fieldname></TEXTAREA>\n";
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=70 NAME=$fieldname>";
+					}
+
+					if ($FieldType[$fieldname] == "Date" ) {
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$now\">";
+					}
+
+
+				}else{
+					if (in_array($fieldname, $NoEdit)){
+						$name = $_REQUEST['source_table'];
+						if (in_array($fieldname, $NameMap)){
+							$name = $NameMap[$fieldname];
+						}
+						if ($fieldname == 'source_id') {
+							$display = "$tid : $name_value";
+						}
+						if ($fieldname == 'source_table') {
+							$display =  $_REQUEST['source_table'];
+						}
+						echo "$display<BR>\n";
+					}else{
+						echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+					}
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_table VALUE=\"$_REQUEST[source_table]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_id VALUE=\"$_REQUEST[source_id]\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}//End if ($_REQUEST['Action'] == "New" ) 
+
+		//----------------------------------------------------------------------
+	  	// Edit 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+			$table='journal';
+
+			if ( array_key_exists('journal_id', $_REQUEST)) {
+				if ( isset ($_REQUEST['journal_id'] ) ) {
+					$journal_id = stripslashes( $_REQUEST['journal_id']);
+				}else{
+					die ("NO Journal ID in edit function.") ;
+				}
+				if ( ! is_numeric($journal_id) ) {
+					die ("Journal ID ($journal_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Journal Id Set") ;
+			}
+
+			$dbh = kkk_pdo_connect();
+
+			//
+			// Get People Array
+			//
+			$People = array();
+			$sql = "SELECT p.people_id, p.first_name, p.last_name FROM people p";
+			$sql .= " WHERE people_id > 96";
+			$sql .= " ORDER by p.first_name, p.last_name";
+			$result = $dbh->query($sql);
+			$row = array();
+			while ($row = $result->fetch(PDO::FETCH_ASSOC)){
+				$pid = $row['people_id'];
+				$People[$pid] = $row['first_name'] . ' ' . $row['last_name'];
+			}
+			print_r($People); 	// DEVONLY
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM journal WHERE journal_id = '$journal_id'";
+			$result = $dbh->query($sql);
+			$row = $result->fetch(PDO::FETCH_ASSOC);
+			echo "<PRE>\n";	// DEVONLY
+			print_r($row);		// DEVONLY
+			echo "</PRE>\n";	// DEVONLY
+
+			$fieldlabel = get_field_labels('journal','journal',$KKKCFG['DBNAME']);
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD VALIGN=TOP class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>";
+				echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+				//echo "<P class=trace>FieldType for $fieldname is $FieldType[$fieldname]</P>\n"; // DEVONLY
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "People" ) {
+							spew_select_hash_menu($fieldname, $row[$fieldname],'', $People);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=70 ROWS=20>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=70 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=journal_id VALUE=$_REQUEST[journal_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			// SECURITY
+			if ( $_SESSION['access_level'] >= $JOURNALCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View" ) {
+
+			$dbh = kkk_pdo_connect();
+
+			$table = 'journal';
+
+			if ( array_key_exists('journal_id', $_REQUEST)) {
+				if ( isset ( $_REQUEST['journal_id'] ) ) {
+					$journal_id = $_REQUEST['journal_id'];
+				}else{
+					die ("No Journal ID in view function") ;
+				}
+				if ( ! is_numeric($journal_id) ) {
+					die ("Journal ID ($journal_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Journal Id Set") ;
+			}
+			$table_id = $journal_id;
+
+
+			$menulist = array();
+			$row = array();
+
+			$sql = "SELECT * FROM journal WHERE journal_id = '$journal_id'";
+
+			$result = $dbh->query($sql);
+			$row = $result->fetch(PDO::FETCH_ASSOC);
+
+			$fieldlabel = get_field_labels('journal','journal',$KKKCFG['DBNAME']);
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD class=tds>";
+
+				$display = stripslashes($row[$fieldname]);
+
+				//
+				// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				//
+				//if ( $fieldname == "source_id" ) {
+				// Get Title from Primary Key of source table
+				//}
+				if ( $fieldname == "author_id" ) {
+					if (! empty ($row['author_id'] ) ){
+						$aid = $row['author_id'];
+						$sql = "SELECT p.full_name FROM people p";
+						$sql .= " WHERE p.people_id = '$aid'";
+						$display = get_value($sql);
+					}
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			echo "</FORM>\n";
+
+			//
+			// Show Journal History
+			//
+			echo "<FORM ACTION=/journal.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_id VALUE=$source_id>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_table VALUE=$source_table>\n";
+			if ( $_SESSION['access_level'] >= $JOURNALCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=HIDDEN NAME=journal_id VALUE=$journal_id>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit\">\n";
+			}
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Journal Entry\">\n";
+			echo "</FORM>\n";
+
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "View")
+
+		//----------------------------------------------------------------------
+		// END 'Action' Processing Options
+		//----------------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function now_what
+	//----------------------------------------------------------------
+	function now_what() {
+		global $PrimaryKey;
+		global $KKKCFG;
+		global $TitleField;
+
+		echo "<CENTER>\n";
+		echo "<H3>Now What</H3>\n";	// DEVONLY
+		echo "<PRE>\n";				// DEVONLY
+		print_r($_REQUEST);			// DEVONLY
+		echo "</PRE>\n";			// DEVONLY
+		echo "</CENTER>\n";
+
+		$tablename = $_REQUEST['source_table'];
+
+		$sql = "SELECT short_message from message where table_name = '$tablename'";
+		$sql .= " AND message_type = 'Table Label' ";
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+		$tablelabel = get_value($sql);
+
+		$TableMap = array(
+			'incident'		=>	'Incident'
+		);
+		$Handler = array(
+			'incident'		=>	'incident.phpx'
+		);
+		$PrimaryKey = array(
+			'incident'		=>	'incident_id'
+		);
+
+
+		if (  empty ($tablelabel) ) {
+			$tablelabel = $TableMap[$tablename];
+		}
+
+		$handler = "/" . $_REQUEST[source_table] . '.phpx';
+		$what = ucfirst($_REQUEST[source_table]);
+		echo "<P class=trace>\n";
+		echo "[ &nbsp;";
+
+		//echo "<A HREF=$handler?$PrimaryKey[$tablename]";
+		//echo "=$_REQUEST[source_id]&Action=Query>Query associated ";
+		//echo "$tablelabel</A>\n"; 
+		//echo "&nbsp; | &nbsp;";
+
+		echo "<A HREF=$handler?$PrimaryKey[$tablename]";
+		echo "=$_REQUEST[source_id]&Action=View>View associated ";
+		echo "$tablelabel</A>\n"; 
+
+
+		echo "&nbsp; | &nbsp;";
+
+		echo "<A HREF=$handler?$PrimaryKey[$tablename]";
+		echo "=$_REQUEST[source_id]&Action=Edit>Edit associated ";
+		echo "$tablelabel</A>\n"; 
+
+		echo "&nbsp;]";
+		echo "</P>\n";
+	}// Endsub now_what
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack ( array $Data ) {
+		global $KKKCFG;
+		echo "<P class=trace>Entering send_email_ack</P>\n"; // DEVONLY
+		foreach ($Data as $key => $val){
+			echo "<BR>[$key] : [$val]\n";	// DEVONLY
+		}
+
+		$dbh = kkk_pdo_connect();
+
+		$pid = $Data['author_id'];
+		$sql = "SELECT full_name from people where people_id = '$pid'";
+		echo "<P class=trace>$sql</P>\n";	// DEVONLY
+		$Data['full_name'] = get_value($sql);
+
+		//
+		// Config parameters for email acknowledgement
+		//
+		$subject = "Appended note for $Data[source_table] #$Data[source_id]";
+
+		$JRNEMAIL = array (
+			'subject'		=>	"$subject", 
+			'fromemail'		=>	"devops@$KKKCFG[DOMAIN]",
+			'toemail'		=>	"jbowes@$KKKCFG[DOMAIN]",	// DEVONLY
+			'toemail'		=>	"incidents@$KKKCFG[DOMAIN]",	// LIVEONLY
+			'fromname'		=>	"Kkk Admin" 
+		);
+
+		echo "<PRE>\n";								// DEVONLY
+		echo "<B>Entering send_email_ack</B>\n";	// DEVONLY
+		echo "<B>Incoming DATA</B>\n";				// DEVONLY
+		print_r($Data);								// DEVONLY
+		echo "<B>Internal Configuration</B>\n";		// DEVONLY
+		print_r($JRNEMAIL);							// DEVONLY
+		echo "</PRE>\n";							// DEVONLY
+
+		if (isset( $Data['email_1']) ) {
+			$JRNEMAIL['toemail'] .= ' ' .  $Data['email_1'];
+		}
+
+		$fd = popen($KKKCFG['MAILER'],"w"); 
+		echo "<BR><B> Sending email to $KKKCFG[MAILER] </B>\n";		// DEVONLY
+		//
+		// Construct Mail Headers
+		//
+		fputs($fd, "From: $JRNEMAIL[fromname] <$JRNEMAIL[fromemail]>\n"); 
+		fputs($fd, "To: $JRNEMAIL[toname] <$JRNEMAIL[toemail]>\n"); 
+
+		if ( $Data[cc_list] ) {
+			fputs($fd, "Cc: $Data[cc_list]\n"); 
+		}
+		//
+		// Subject
+		//
+		fputs($fd, "Subject: $JRNEMAIL[subject]\n\n"); 
+
+		//
+		// Body
+		//
+		fputs($fd, "Additional information has been added to $Data[source_table] #$Data[source_id].\n");
+		fputs($fd, "Author: $Data[full_name]\n");
+		fputs($fd, "Comment Type: $Data[journal_type]\n");
+		fputs($fd, "Summary: $Data[journal_summary]\n");
+		fputs($fd, "Details at following link.\n\n"); 
+		fputs($fd, "$KKKCFG[BASEURL]/journal.phpx?journal_id=$Data[journal_id]&Action=View\n\n");
+		fputs($fd, "Do not reply to this email.\n");
+
+		pclose($fd); 
+	}//End function send_email_ack
+
+	//----------------------------------------------------------------
+	// Function send_auth_email_ack
+	//----------------------------------------------------------------
+	function send_auth_email_ack ( array $Data ) {
+		global $KKKCFG;
+		echo "<P class=trace>Entering send_auth_email_ack</P>\n"; // DEVONLY
+
+		foreach ($Data as $key => $val){
+			echo "<BR>[$key] : [$val]\n";	// DEVONLY
+		}
+
+		$dbh = kkk_pdo_connect();
+
+		$pid = $Data['author_id'];
+		$sql = "SELECT full_name from people where people_id = '$pid'";
+		echo "<P class=trace>$sql</P>\n";	// DEVONLY
+		$Data['full_name'] = get_value($sql);
+
+		//
+		// Config parameters for email acknowledgement
+		//
+		$subject = "Appended note for $Data[source_table] #$Data[source_id]";
+
+		$JRNEMAIL = array (
+			'subject'		=>	"$subject", 
+			'fromemail'		=>	"kkk@$KKKCFG[DOMAIN]",
+			'toname'		=>	"Incident Journal",
+			'toemail'		=>	"jbowes@$KKKCFG[DOMAIN]",	// DEVONLY
+			'toemail'		=>	"opslog@$KKKCFG[DOMAIN]",	// LIVEONLY
+			'fromname'		=>	"Production Operations" 
+		);
+
+		if (isset( $Data['email_1']) ) {
+			$JRNEMAIL['cc'] = $Data['email_1'];
+		}
+
+
+		if ( $Data['notification'] == 'Incidents' ) {
+			$JRNMAIL['toemail']	=	"incidents@$KKKCFG[DOMAIN]";
+		}
+
+		echo "<PRE>\n";								// DEVONLY
+		echo "<B>Entering send_email_ack</B>\n";	// DEVONLY
+		echo "<B>Incoming DATA</B>\n";				// DEVONLY
+		print_r($Data);								// DEVONLY
+		echo "<B>Internal Configuration</B>\n";		// DEVONLY
+		print_r($JRNEMAIL);							// DEVONLY
+		echo "</PRE>\n";							// DEVONLY
+
+
+	
+		//apt-get install php-pear 
+		//pear install mail 
+		//pear install Net_SMTP 
+		//pear install Auth_SASL 
+		//pear install mail_mime  
+		//apt-get install postfix
+		//require_once "Mail.php";
+		// -OR-
+		// http://php.net/manual/en/function.mail.php
+		// bool mail ( string $to , string $subject , string $message [, string $additional_headers [, string $additional_parameters ]] )
+		 
+		$from = 'Operations <kkk@$KKKCFG[DOMAIN]>';
+		$to = 'Incidents' . '  <' . $JRNEMAIL['toemail'] . '>';
+
+		 
+		//
+		// Body
+		//
+		$body = "Additional information has been added to $Data[source_table] #$Data[source_id].\n\n";
+		$body .= "Summary: $Data[journal_summary]\n";
+		$body .= "Author: $Data[full_name]\n";
+		$body .= "Comment Type: $Data[journal_type]\n";
+		$body .= "Details at following link.\n\n"; 
+		$body .= "$KKKCFG[BASEURL]/journal.phpx?journal_id=$Data[journal_id]&Action=View\n\n";
+		$body .= "Do not reply to this email.\n";
+
+		 
+		$headers = array (
+			'From'		=> $from,
+			'To'		=> $to,
+			'Subject'	=>	$subject
+		);
+		
+		//$smtp = Mail::factory('smtp',
+			//array (
+				//'host' => $host,
+				//'auth' => true,
+				//'username' => $username,
+				//'password' => $password
+			//)
+		//);
+		 
+		//$mail = $smtp->send($to, $headers, $body);
+		 
+		//if (PEAR::isError($mail)) {
+			//echo("<p>" . $mail->getMessage() . "</p>");
+		//} else {
+			//echo("<p>Message successfully sent!</p>");
+		//}
+		
+		// http://www.w3schools.com/php/func_mail_mail.asp
+		// the message
+		// $msg = "First line of text\nSecond line of text";
+
+		// use wordwrap() if lines are longer than 70 characters
+		// $msg = wordwrap($msg,70);
+
+		// send email
+		// mail("someone@example.com","My subject",$msg);
+
+
+		
+	}//End function send_auth_email_ack
+
+
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		$dbh = kkk_pdo_connect();
+		global $KKKCFG;
+		$list = array();
+
+		echo "<CENTER>\n";
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>ID</TH>\n";
+		echo "<TH class=ths>Source</TH>\n";
+		echo "<TH class=ths>Source ID</TH>\n";
+		echo "<TH class=ths>Author</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+
+		// Col 1
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=journal_id SIZE=6>\n";
+		echo "</TD>\n";
+
+		// Source Table
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct soure_table from journal order by source_table";
+		$list = get_menu($sql);
+		spew_select_menu('source_table','','All',$list);
+		echo "</TD>\n";
+
+		// Source ID
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=source_id SIZE=6>\n";
+		echo "</TD>\n";
+
+		// Author
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT p.people_id, p.nickname FROM people p, journal j";
+		$sql .= " WHERE j.author_id = p.people_id ORDER BY p.nickname";
+		$list = get_menu_array($sql);
+		spew_select_menu('author_id','','All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Type',
+			'Table'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Table',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function spew_new_form
+	//----------------------------------------------------------------
+	function spew_new_form() {
+		global $KKKCFG;
+		$dbh = kkk_pdo_connect();
+
+		$fieldlabel = get_field_labels('journal','journal');
+		unset($fieldlabel['journal_id']);
+
+		$EmailList = array();
+		//$EmailList = get_email_list($_REQUEST);
+
+		$Required = array(
+			"journal_summary"	=>	"must have summary",
+			"author_id"			=>	"must have author_id",
+			"source_table"		=>	"must have source type (ticket, agent, site)",
+			"source_id"			=>	"must have source id"
+		);
+
+		$Default = array ( 
+			'notification'	 =>  'Opslog',
+			'priority'		=>	'P3: Routine'
+		);
+	
+		foreach ( $Default as $f => $val) {
+			if (! $_REQUEST[$f] ) {
+				$_REQUEST[$f] = $Default[$f] ;
+			}
+		}
+
+		$TitleField = array(
+			"task"			=>		"summary",
+			"helpdesk"		=>		"summary",
+			"people"		=>		"full_name",
+			"faq"			=>		"summary",
+			"journal"		=>		"journal_summary",
+			"incident"		=>		"incident_summary",
+			"agent"			=>		"nickname",
+			"program"		=>		"program_name",
+			"project"		=>		"project_name"
+			);
+	
+		$sqlfield = $_REQUEST['source_table'];
+		$sqlt = "SELECT $TitleField[$sqlfield] FROM $_REQUEST[source_table]";
+		$sqlt .= " WHERE $_REQUEST[source_table]_id = '$_REQUEST[source_id]'";
+
+		echo "<P class=trace>$sqlt</P>\n"; // DEBUG DEVONLY
+		$title = get_value($sqlt);
+		
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+
+		echo "<CENTER>\n";
+		echo "<H3>Adding journal entry for $_REQUEST[source_table] entry $_REQUEST[source_id]<BR><I>$title</I></H3>\n";
+		echo "<P class=trace>Details will display as html. If you want to enter formatted text, ";
+		echo "place between &lt;PRE&gt; and &lt;/PRE&gt; tags</P>\n";
+
+
+		echo "<TABLE BORDER CELLSPACING=3 CELLPADDING=3>\n";
+		echo "<TH class=ths>Author</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		echo "<TH class=ths COLSPAN=2>Email Cc List</TH>\n";
+		echo "<TR>\n";
+	
+		echo "</TD>\n";
+	
+	
+		// ---- Type --------------------------
+		echo "<TD class=tdcs>\n";
+			$sql = "SELECT choice FROM menu WHERE table_name = 'journal' AND field_name = 'journal_type' ";
+			$jtype = array();
+			$jtype = get_menu($sql);
+			sort( $jtype );
+			spew_select_menu(journal_type, $_REQUEST[journal_type], '', $jtype);
+		echo "</TD>\n";
+	
+		// ---- CC List --------------------------
+		echo "<TD class=tdcs COLSPAN=2>\n";
+			echo "<INPUT TYPE=TEXT NAME=cc_list>\n";
+		echo "</TD>\n";
+	
+		// ---- Notification --------------------------
+		echo "<TR>\n";
+		echo "<TH class=ths>Email Owner/<BR>Assignee</TH>\n";
+		echo "<TH class=ths>Email CC List</TH>\n";
+		//echo "<TH class=ths>Email Subscribers</TH>\n";
+		echo "<TH class=ths>Email List</TH>\n";
+		echo "<TH class=ths>Email Ops";
+		echo "</TH>\n";
+	
+		echo "<TR>\n";
+	
+		//----------- Requester/Owner Z44 -----------------------
+		echo "<TD class=tdcs VALIGN=TOP>\n";
+			echo "Yes <INPUT TYPE=CHECKBOX NAME=email_requester> ";
+			if ( $EmailList[sendto_requester] ) {
+				$x =  $EmailList[sendto_requester];
+				echo "<BR><HR>$x\n";
+			}else{
+				echo "<BR><HR><BR>\n";
+			}
+		echo "</TD>\n";
+	
+		//----------- Case CC -------------------------
+		echo "<TD class=tdcs VALIGN=TOP>\n";
+			echo "Yes <INPUT TYPE=CHECKBOX NAME=email_case_cc> ";
+			if ( $EmailList[sendto_case_cc] ) {
+				$x =  $EmailList[sendto_case_cc];
+				echo "<BR><HR>$x\n";
+			}else{
+				echo "<BR><HR><BR>\n";
+			}
+		echo "</TD>\n";
+	
+		//----------- Subscribers ---------------------
+		//echo "<TD class=tdcs VALIGN=TOP>\n";
+			//echo "Yes <INPUT TYPE=CHECKBOX NAME=email_subscribers CHECKED> ";
+			//if ( $EmailList[sendto_subscribers] ) {
+				//$x =  $EmailList[sendto_subscribers];
+				////$x =~ s/\,/<BR>/g;
+				//echo "<BR><HR>$x\n";
+			//}else{
+				//echo "<BR><HR><BR>\n";
+			//}
+		//echo "</TD>\n";
+
+		//----------- Mailman List ---------------------
+		echo "<TD class=tdcs VALIGN=TOP>\n";
+		$mailmanlist = array (
+			'ops'
+		);
+		sort($mailmanlist);
+		spew_select_menu(sendto_list, $_REQUEST[sendto_list], '', $mailmanlist);
+		echo "</TD>\n";
+	
+		//----------- Admin Group  ------------------------
+		echo "<TD class=tdcs VALIGN=TOP>\n";
+			echo "Yes <INPUT TYPE=CHECKBOX NAME=email_support CHECKED> ";
+			if ( $EmailList[sendto_admingroup] ) {
+				$x =  $EmailList[sendto_admingroup];
+				//$x =~ s/\,/<BR>/g;
+				echo "<BR><HR>$x\n";
+			}else{
+				echo "<BR><HR><BR>\n";
+			}
+		echo "</TD>\n";
+	
+	
+		// ---- Summary --------------------------
+		echo "<TR><TH COLSPAN=4 class=ths>Summary</TH>\n";
+		echo "<TR>\n";
+		echo "<TD class=tdcs COLSPAN=4>\n";
+				echo "<INPUT TYPE=TEXT size=70 NAME=journal_summary>\n";
+		echo "</TD>\n";
+	
+	
+		// ---- Details --------------------------
+		echo "<TR><TH COLSPAN=4 class=ths>Details</TH>\n";
+		echo "<TR>\n";
+		echo "<TD class=tdcs COLSPAN=4>\n";
+			echo "<TEXTAREA COLS=70 ROWS=20 NAME=journal_detail>";
+			echo "</TEXTAREA>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+		echo "<INPUT TYPE=HIDDEN NAME=source_id VALUE=\"$_REQUEST[source_id]\">\n";
+		echo "<INPUT TYPE=HIDDEN NAME=source_table VALUE=\"$_REQUEST[source_table]\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+	
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}//End function spew_new_form
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>

@@ -1,0 +1,2012 @@
+<?php
+	//#==================================================================
+	//# Legacy CAA trainings table manager
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Rev$
+	//# $Date: 2013/04/08 03:41:25 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/trainings.phpx,v $
+	//# $Id: trainings.phpx,v 1.6 2013/04/08 03:41:25 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	//#------------------------------------------------------------------
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"Training Events",
+		'TITLE'			=>	"Training Events",
+		'NAV'			=>	"INFO",
+		'NAV2'			=>	"IGT",
+		'MODULENAME'	=>	"trainings.phpx"
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$TRAININGCFG = array (
+		'EDITLEVEL'		=>	'4',			// Access level to get edit screen
+		'ADMINLEVEL'	=>	'5',			// Access level to delete training
+		'MTA'			=>	'mail'			// PHP mail function
+		//'MTA'			=>	'sendmail'		// write to filehandle directly to sendmail
+	);
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		//'trg_id',
+		'trg_name',
+		'trg_date',
+		'trg_loc',
+		'trg_city',
+		'trg_state',
+		'trg_center',
+		'trg_country',
+		'trg_capacity',
+		'training_id',
+		'registrar_id',
+		'brochure_url',
+		'payment_url',
+		'location_id'
+	);
+
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+		'trg_id',
+		'trg_name',
+		'trg_date',
+		'trg_loc',
+		'trg_capacity',
+		'trg_city',
+		'trg_state',
+		'trg_center',
+		'trg_country',
+		'training_id',
+		'location_id'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'trg_date',
+		'trg_city',
+		'trg_state',
+		'trg_center',
+		'trg_country',
+		'training_id',
+		'location_id'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'trg_name'			=>	'enter name of training',
+		'training_id'		=>  'choose type from picklist',
+		'trg_capacity'      =>  'enter maximum availble openings for training',
+		'registrar_id'		=>  'choose registrar from picklist',
+		'location_id'		=>  'choose location from picklist'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'trg_id'
+	);
+
+	$Menu = array(
+		"trg_center"	=>	"SELECT center_id, center_name from center order by center_name",
+		"location_id"	=>	"SELECT location_id, location_name from fulllocation order by location_name",
+		"training_id"	=>	"SELECT training_id, training_abbreviation from training order by training_abbreviation"
+		//"training_id"	=>	"SELECT training_id, training_name from training",
+	);
+
+	$FieldType = array(
+		'trg_center'	=>	'MenuArray',
+		'training_id'	=>	'MenuArray',
+		'brochure_url'	=>	'LongText',
+		'payment_url'	=>	'LongText',
+		'location_id'	=>	'MenuArray'
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'trg_name'		=>	'tds',
+		'trg_loc'		=>	'tds'
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+	if (! array_key_exists('Action', $_REQUEST)) {
+        $_REQUEST['Action'] = "List Future";
+    }
+	if (array_key_exists(Action, $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+		// Remove from Roster
+		//----------------------------------------------------------------------
+
+		//mysql> desc warrior_trainings;
+		//+--------------------+------------------+------+-----+---------+----------------+
+		//| Field              | Type             | Null | Key | Default | Extra          |
+		//+--------------------+------------------+------+-----+---------+----------------+
+		//| wartrg_id          | int(11) unsigned | NO   | PRI | NULL    | auto_increment |
+		//| wartrg_war_id      | int(11) unsigned | NO   | MUL | 0       |                |
+		//| wartrg_training_id | int(11) unsigned | NO   | MUL | 0       |                |
+		//| wartrg_role        | varchar(20)      | NO   | MUL |'Attendee'|                |
+		//+--------------------+------------------+------+-----+---------+----------------+
+	  	if ( $_REQUEST['Action'] == "Remove" ) {
+			caa_connect();
+			$wtid = $_REQUEST['wartrg_id'];
+			//
+			// Must have wartrg_id
+			//
+			if ( empty ($wtid) ){
+				echo "<H2>No Warrior Training primary Sent to Remove from Roster function, ";
+                echo "contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			$sql = "DELETE FROM warrior_trainings WHERE wartrg_id = '$wtid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+			$_REQUEST['Action'] = "View";
+		}
+		//----------------------------------------------------------------------
+		// Update Confirmation Date
+		//----------------------------------------------------------------------
+	  	if ( $_REQUEST['Action'] == "Update Date" ) {
+			caa_connect();
+			$wtid = $_REQUEST['wartrg_id'];
+			if (! is_numeric ($wtid)) {
+				echo "<H2>ERROR: wartrg_id sent to Delete function is non-numeric. ";
+                echo "Contact administrator.</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			if (empty ($wtid)) {
+				echo "<H2>ERROR: No wartrg_id sent to Delete function. Contact administrator.</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			$confdate = $_REQUEST['confirmation_date'];
+			$ermsg = "Please enter confirmation date in YYYY-MM-DD (e.g. 2011-03-05) format";
+			//validate_date($confdate, $ermsg);
+			$sql = "UPDATE warrior_trainings set confirmation_date = '$confdate' WHERE wartrg_id = '$wtid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+			$_REQUEST['Action'] = "View";
+		}
+		//----------------------------------------------------------------------
+		// Delete
+		//----------------------------------------------------------------------
+	  	if ( $_REQUEST['Action'] == "Delete Training" ) {
+			caa_connect();
+			$tid = $_REQUEST['trg_id'];
+			//
+			// Must have trg_id
+			//
+			if ( empty ($tid) ){
+				echo "<H2>No Training ID Sent to Delete Training Function, contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Get email addresses of those registered
+			//
+			$sql = "SELECT war_email from warrior w, warrior_trainings t";
+			$sql .= " WHERE w.war_id = t.wartrg_war_id AND t.wartrg_training_id = '$tid'";
+			$Emails = array();
+			$Emails = get_menu($sql);
+
+			$sql = "DELETE FROM trainings where trg_id = '$tid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+
+			$sql = "DELETE FROM warrior_trainings where war_training_id = '$tid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+
+			echo "<CENTER>\n";
+			echo "<TABLE>\n";
+			echo "<TH class=ths>Please inform following who were registered</TH>\n";
+			echo "<TR><TD>\n";
+			foreach ($Emails as $e){
+				echo "<BR>$e\n";
+			}
+			echo "</TD></TR>\n";
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+		}
+		//----------------------------------------------------------------------
+		// Add New Applicant from New Applicant Query
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Add Applicant" ) {
+			caa_connect();
+			$wid = $_REQUEST['warrior_id'];
+			$tid = $_REQUEST['trg_id'];
+			$role = $_REQUEST['attendee_role'];
+			if ( empty ($role)) {
+                $role = 'Attendee';
+            }
+			if ( empty ($wid)) {
+				echo "<H2>ERROR: No warrior ID provided, contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			if ( empty ($tid)) {
+				echo "<H2>ERROR: No Training ID provided, contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			$today = date('Y-m-d');
+
+			//mysql> desc warrior_trainings;
+			//+--------------------+------------------+------+-----+---------+----------------+
+			//| Field              | Type             | Null | Key | Default | Extra          |
+			//+--------------------+------------------+------+-----+---------+----------------+
+			//| wartrg_id          | int(11) unsigned | NO   | PRI | NULL    | auto_increment |
+			//| wartrg_war_id      | int(11) unsigned | NO   | MUL | 0       |                |
+			//| wartrg_training_id | int(11) unsigned | NO   | MUL | 0       |                |
+			//| attendee_role        | int(11) unsigned | NO   | MUL | 0       |                |
+			//+--------------------+------------------+------+-----+---------+----------------+
+
+			$sql = "INSERT INTO warrior_trainings(wartrg_war_id, wartrg_training_id, application_date, attendee_role";
+			$sql .= ") VALUES ( '$wid','$tid','$today','$role')";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+            echo "<CENTER>\n";
+			echo "<H2>Applicant registered.</H2>\n";
+            echo "</CENTER>\n";
+            send_email_ack();
+
+			$_REQUEST['Action'] = "View";
+		}
+		//----------------------------------------------------------------------
+		// Query for New Applicant
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New Applicant" || $_REQUEST['Action'] == "Sign Me Up" ) {
+			caa_connect();
+			$where = array(
+                'c.center_id = w.war_center'
+            );
+			$Fieldlabel = array();
+
+			$wid = $_SESSION['war_id'];
+			$tid = $_REQUEST['trg_id'];
+
+			//
+			// Get details of training to which you are applying
+			//
+			$sql = "SELECT * from trainings where trg_id = '$tid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			$Training = array();
+			$Training = mysql_fetch_array($result, MYSQL_ASSOC);
+			$name = $Training['trg_name'];
+
+			//
+			// Get Warrior Info
+			//
+			$Fieldlabel = get_field_labels('warrior','war');
+
+			$sql = "SELECT w.war_id, w.war_fname, w.war_aname, w.war_lname, w.war_city, w.war_state, c.center_abbr";
+            $sql .= " FROM warrior w, center c";
+
+			foreach ($Fieldlabel as $field => $label ) {
+				if ( isset ($_REQUEST[$field]) ) {
+					$val = mysql_real_escape_string($_REQUEST[$field]);
+					$val = preg_replace("/\\\'/", "''", $val);
+					if ( ! empty ($val)) {
+                        $fieldx = 'w.' . $field;
+						$where[] = "$fieldx = '$val'";
+					}
+				}
+			}
+
+			$cnt = count($where);
+			if ($cnt > 0 ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			$sql .= " ORDER BY w.war_lname, w.war_fname ";
+
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+		    $numrecords = mysql_num_rows($result);
+	
+			echo "<CENTER>\n";
+			echo "<H2>Register for Training:  $name</H2>\n";
+
+            echo "<P class=trace>";
+            if ( $numrecords >= 1 ) {
+                echo "Click on link under role to register attendee in that role.\n";
+				echo " For more information on roles, see ";
+				echo "<A HREF=/help.phpx?table_name=warrior_trainings&field_name=attendee_role&Action=Help>help</A>.\n";
+                echo "<BR>Use <A HREF=/trainings.phpx?trg_id=$_REQUEST[trg_id]&Action=View>this link</A> to add others.";
+            }else{
+                echo "No records found that matched.";
+                echo " Please <A HREF=/trainings.phpx?trg_id=$_REQUEST[trg_id]&Action=View>return</A> and try again.";
+            }
+            echo " (<B>Do not hit the back button on your browser</B>).";
+            echo "</P>\n";
+
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths COLSPAN=5 CELLSPACING=2>Register in Role Of</TH>\n";
+			echo "<TH class=ths>First Name</TH>\n";
+			echo "<TH class=ths>Last Name</TH>\n";
+			echo "<TH class=ths>Animal Name</TH>\n";
+			echo "<TH class=ths>Center</TH>\n";
+			echo "<TH class=ths>City</TH>\n";
+			echo "<TH class=ths>State</TH>\n";
+	
+			while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+				$BGC='#FFFFFF';
+				$wid = $row['war_id'];
+
+				echo "<TR>\n";
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?trg_id=$tid&registrar_id=$Training[registrar_id]&warrior_id=$wid&";
+                echo "attendee_role=Attendee&Action=Add+Applicant>";
+				echo "&nbsp;<B>Attendee</B>&nbsp;</A>\n";
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?trg_id=$tid&registrar_id=$Training[registrar_id]&warrior_id=$wid&";
+                echo "attendee_role=Student&Action=Add+Applicant>";
+				echo "&nbsp;<B>Student</B>&nbsp;</A>\n";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?trg_id=$tid&registrar_id=$Training[registrar_id]&warrior_id=$wid&";
+                echo "attendee_role=Leader&Action=Add+Applicant>";
+				echo "&nbsp;<B>Leader</B>&nbsp;</A>\n";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?trg_id=$tid&registrar_id=$Training[registrar_id]&warrior_id=$wid&";
+                echo "attendee_role=Presenter&Action=Add+Applicant>";
+				echo "&nbsp;<B>Presenter</B>&nbsp;</A>\n";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?trg_id=$tid&registrar_id=$Training[registrar_id]&warrior_id=$wid&";
+                echo "attendee_role=Staff&Action=Add+Applicant>";
+				echo "&nbsp;<B>Staff</B>&nbsp;</A>\n";
+				echo "</TD>\n";
+
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_fname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_lname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_aname]";	
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[center_abbr]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_city]";	
+				echo "</TD>\n";
+				
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_state]";	
+				echo "</TD>\n";
+	
+			}
+            if ( $numrecords < 1 ) {
+                echo "<TR><TD class=tdcs COLSPAN=10>";
+                echo "No warrior records found that matched.";
+                echo " Please <A HREF=/trainings.phpx?trg_id=$_REQUEST[trg_id]&Action=View>return</A> and try again.";
+                echo "<BR>(Do not hit the back button on your browser).";
+                echo "</TD>\n";
+            }
+			echo "</TABLE>\n";
+			echo "<CENTER>\n";
+			spew_footer($FMT);
+			exit;
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Entry" ) {
+			caa_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('trainings','trainings');
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+			//
+			// Unset auto_increment primary keys
+			//
+			unset ($_REQUEST['trg_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				echo "<p class=trace>Verifying $key exists with message $val</P>\n"; // DEVONLY
+				if (! isset($_REQUEST[$key])) {
+					echo "<p class=trace>No Joy $key $_REQUEST[$key]</P>\n"; // DEVONLY
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}else{
+					echo "<p class=trace>OK: $key $_REQUEST[$key]</P>\n"; // DEVONLY
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TH class=ths>Incomplete Information</TH>\n";
+				echo "<TR><TD class=tds><UL>$err</UL></TD>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO trainings (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$val = preg_replace("/\\\'/", "''", $val);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+			if ( array_key_exists('trg_id', $_REQUEST)) {
+				$tid = $_REQUEST[trg_id];
+				if (! is_numeric( $tid ) ) {
+					die ("ERROR: Attempt to update requires trg_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Trainingn Event Id Set") ;
+			}
+
+			caa_connect();
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM trainings WHERE trg_id = '$tid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('trainings','trainings');
+
+			print '<pre>';	// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n"; // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$sql = 'UPDATE trainings SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$val = preg_replace("/\\\'/", "''", $val);
+						$sqlx =   $f . " = '" . $val . "'";
+						array_push($sqlentry, $sqlx);
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE trg_id = '$tid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3><CENTER>Update successful</H3></CENTER>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST[Action] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query or Query Future or Query Trainings
+	  	// List or List Future or List Trainings
+		//----------------------------------------------------------------------
+	  	if (	$_REQUEST['Action'] == "Query" 
+			||	$_REQUEST['Action'] == "List" 
+			||	$_REQUEST['Action'] == "List Future" 
+			||	$_REQUEST['Action'] == "List Trainings" 
+			||	$_REQUEST['Action'] == "Query Future" 
+			||	$_REQUEST['Action'] == "Query Trainings" ) {
+
+			caa_connect();
+
+			//mysql> desc training;
+			//+-----------------------+------------------+------+-----+---------+----------------+
+			//| Field                 | Type             | Null | Key | Default | Extra          |
+			//+-----------------------+------------------+------+-----+---------+----------------+
+			//| training_id           | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+			//| training_name         | varchar(80)      | YES  |     | NULL    |                |
+			//| training_abbreviation | varchar(14)      | YES  |     | NULL    |                |
+			//| training_class        | varchar(30)      | YES  |     | NULL    |                |
+			//| training_type         | varchar(30)      | YES  |     | NULL    |                |
+			//| training_description  | text             | YES  |     | NULL    |                |
+			//| syllabus_url          | varchar(200)     | YES  |     | NULL    |                |
+			//+-----------------------+------------------+------+-----+---------+----------------+
+			//
+			// Training Type Abbreviation to training_id Map
+			//
+			$sql = "SELECT training_id, training_abbreviation from training";
+			$TrainingType = array();
+			$TrainingType = get_menu_array($sql);
+
+			$fieldlabel = get_field_labels('trainings','trg');
+			$fieldlabel['training_id'] = "Family";
+			$fieldlabel['location_id'] = "Map, Etc.";
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$sql = "SELECT DISTINCT t.*, c.center_abbr FROM trainings t, center c";
+
+			//
+			// Construct where clause into an array
+			//
+			$where = array(
+				't.trg_center = c.center_id'
+			);
+			//
+			// If Future, constrain date to be in future
+			//
+			if ( $_REQUEST['Action'] == 'Query Future' 
+				|| $_REQUEST['Action'] == 'List Future' ){
+				$today = date('Y-m-d');
+				$where[] = "t.trg_date >= '$today'";
+				echo "<CENTER>\n";
+				echo "<H3>Future trainings open for registration</H3>\n";
+				echo "</CENTER>\n";
+			}
+
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$val = preg_replace("/\\\'/", "''", $val);
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if (!empty( $val) ) {
+						if ( preg_match('/%/', $val)) { 
+							$where[] =  't.' . $f . " LIKE '" . $val . "'" ;
+						}else{
+							$where[] =  't.' . $f . " ='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+                $sql_loc = "SELECT DISTINCT l.* FROM trainings t, center c, fulllocation f";
+				$sql_loc .= ' WHERE ' . implode(' AND ', $where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Date'		=>	't.trg_date, t.trg_name',
+				'City'		=>	't.trg_city, t.trg_name',
+				'Center'	=> 	't.trg_center,t.trg_name',
+				'Name'		=>	't.trg_name',
+				'State'		=>	't.trg_state, t.trg_city,t.trg_name'
+			);
+			$sortby = $_REQUEST[Sortmeby];
+			if ( empty ($OrderBy[$sortby] ) ) {
+				$sql .= ' ORDER BY  t.trg_name';
+			}else{
+				$sql .= ' ORDER BY ' . $OrderBy[$sortby];
+			}
+
+            //
+            // Base Trainings Query/List
+            //
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY
+			$result = mysql_query($sql);
+		    $numtrainings = mysql_num_rows($result);
+
+            //
+            // Augmented Trainings Query Join with Fulllocations table
+            // (In Perfect Land, all Trainings will have location_id)
+            //
+			//echo "<p class=trace>$sql_loc</p>\n";	// DEVONLY
+			//$loc_result = mysql_query($loc_sql);
+			//while ($row = mysql_fetch_array($loc_result, MYSQL_ASSOC) ) {
+                //$lid = $row['location_id'];
+            //}
+	
+            echo "<P class=trace>";
+            echo "List of $numtrainings";
+            if ( $_REQUEST['Action'] == "Query Future"
+            	|| $_REQUEST['Action'] == "List Future" ) {
+                echo " future";
+            }
+            echo " trainings. ";
+            echo "Click on training name link to see training details, view current roster, and to register.";
+            echo "<BR>Yellow icon shows location details. \n";
+            echo "Blue icon shows detailed brochure. Purple icon links to payment form.\n";
+            echo " Other links &quot;drill down&quot; and narrow search .\n";
+            echo "</P>\n";
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ((integer) $_SESSION['access'] >= (integer) $TRAININGCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";
+			}
+
+			unset($fields[training_id]);
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+				if ((integer) $_SESSION['access'] >= (integer) $TRAININGCFG['EDITLEVEL'] ) {
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?trg_id=$row[trg_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$val = $row[$f];
+					$display = $row[$f];
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'trg_center' ) {
+						$display = $row['center_abbr'];
+					}
+					if ( $f  == 'trg_name' ) {
+						$display = "<A HREF=$_SERVER[PHP_SELF]?trg_id=$row[trg_id]&Action=View>";
+						$display .= $row[$f];
+					    $display .= "</A>";
+					}
+
+					//
+					// Hmm... drilldown or point to training
+					//
+					if ( $f  == 'training_id' ) {
+						$display = $TrainingType[$val];
+					}
+					//
+					// Later we can make map GMAP
+					//
+					if ( $f  == 'location_id' ) {
+						if ( ! empty ($val)) {
+							$display = "<A HREF=/fulllocation.phpx?location_id=$val&Action=View>";
+							$display .= "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+						//}else{
+                            // Google MAP
+                            //$geo = abs($row['location_latitude']) + abs($row['location_longitude']);
+                            //if ($geo > 0 ) {
+                                //$addr = $row['location_latitude'] .',+' . $row['location_longitude'] . ',';
+                            //}else{
+                                //$addr = '';
+                            //}
+                            //if (isset ($row[location_street]) && isset ($row[location_city]) && isset ($row[location_state])) {
+                                //$addr .= $row['location_street'] . ',' . $row['location_city'] . ',' . $row['location_state'];
+                                //$addr .= ',' . $row['location_country'] ;
+                            //}
+                            //$addr .= '+(' . $row[location_name] . ')&iwloc=A&hl=en';
+                            //$addurl = preg_replace('/\s+/', '+', $addr);
+                            //$display =  "<A HREF=\"http://maps.google.com/maps?q=$addurl&sensor=false\">";
+                            //$display .= "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+                        }
+						if ( ! empty ($row['brochure_url'])) {
+							$display .= "&nbsp;";
+							if (preg_match('/^http/', $row['brochure_url'] )) {
+								$display .= "<A HREF=$row[brochure_url]>";
+							}else{
+								$display .= "<A HREF=http://$row[brochure_url]>";
+							}
+							$display .= "<IMG SRC=/images/smallballs/blueball.gif BORDER=0></A>";
+						}
+						if ( ! empty ($row['payment_url'])) {
+							$display .= "&nbsp;";
+							if (preg_match('/^http/', $row['payment_url'] )) {
+								$display .= "<A HREF=$row[payment_url]>";
+							}else{
+								$display .= "<A HREF=http://$row[payment_url]>";
+							}
+							$display .= "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+						}
+					}
+
+
+					if (in_array($f, $SHOW)) {
+
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+
+						echo "<TD VALIGN=TOP class=${css}>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query" || "List")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			$menulist = array();
+			$typelist = array();
+			$row = array();
+
+			unset ($FieldType['trg_state']);
+			unset ($FieldType['trg_city']);
+			if (! isset($_REQUEST['center_id'])){
+				$_REQUEST['center_id'] = $_SESSION['center_id'];
+			}
+
+			caa_connect();
+
+			$fieldlabel = get_field_labels('trainings','trg');
+			$fieldlabel['training_id'] = "Type";
+			$fieldlabel['training_name'] = "Training Name";
+			$fieldlabel['trg_loc'] = "Where";
+			$fieldlabel['location_id'] = "Location";
+			unset($fieldlabel['trg_id']);
+
+			$FieldType['training_id'] = "TrainingType";
+			//
+			// Custom training type menu
+			//
+			$sql = "SELECT training_id, training_name, training_abbreviation from training";
+			echo "<p class=trace>$finalsql</p>\n";	//DEVONLY
+			$result = mysql_query($sql);
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$tid = $row['training_id'];
+				$typelist[$tid] = $row['training_name'] . ' (' . $row['training_abbreviation'] . ')';
+			}
+
+			//
+			// Generate Registrar List
+			//
+			$FieldType['registrar_id'] = 'Registrar';
+			$rsql = "SELECT distinct w.war_id, w.war_fname, w.war_nname, war_lname, war_center";
+            $rsql .= " FROM warrior w, access_password a";
+			$rsql .= " WHERE w.war_id = a.warrior_id ";
+			if (isset ( $_SESSION['center_id'] )) {
+				$cid = $_SESSION['center_id'];
+				$rsql .= " AND w.war_center = '$cid'";
+			}
+			$rsql .= " ORDER BY w.war_lname, w.war_fname";
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+			$rresult = mysql_query($rsql);
+			$registrar = array();
+
+			while ($row = mysql_fetch_array($rresult, MYSQL_ASSOC) ) {
+				$rid = $row['war_id'];
+				if (!empty ($row['war_nname'] )) {
+					$registrar[$rid] = $row['war_nname'];
+				}else{
+					$registrar[$rid] = $row['war_fname'];
+				}
+				$registrar[$rid] .= " " . $row['war_lname'];
+			}
+
+			echo "<CENTER>\n";
+			echo "<H2>Enter new training</H2>\n";
+
+			echo "<P class=trace>";
+            echo "Complete form and click on <I>Insert New Entry</I> to register new training.\n";
+            echo " If the location is not in the picklist, ";
+			echo "<A HREF=/fulllocation.phpx?Action=New>set up new location</A> first.\n";
+            echo "<BR>\n";
+            echo "For help, see";
+            echo " <A HREF=/help.phpx?table_name=trainings&field_name=Overview&Action=Help>";
+            echo " overview</A>";
+            echo " or right click on the left column field label with your mouse";
+            echo " to get help about that field displayed in a new tab or window.\n";
+            echo "</P>\n";
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR>\n";
+				echo "<TD VALIGN=TOP CLASS=tdls>";
+                echo "<A HREF=/help.phpx?table_name=trainings&field_name=${fieldname}";
+				echo "&help_type=Explanation&Action=Help>";
+                echo "$val</A></TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+					// If Menu type of Menu
+					if ( $FieldType[$fieldname] == "Menu"  ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+
+					}
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						asort($menulist);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "TrainingType" ) {
+						asort($typelist);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$typelist);
+					}
+
+					if ($FieldType[$fieldname] == "Registrar" ) {
+						spew_select_hash_menu($fieldname, $_SESSION['war_id'],'',$registrar);
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname>";
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname></TEXTAREA>";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+		}// End Action = New
+
+		//----------------------------------------------------------------------
+	  	// Edit
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Edit") {
+
+			if ( array_key_exists('trg_id', $_REQUEST)) {
+				$tid = $_REQUEST['trg_id'];
+				if ( empty ($tid )) {
+					die ("Training ID ($tid) is NULl") ;
+				}
+				if ( ! is_numeric($tid) ) {
+					die ("Training ID ($tid) is not an integer.") ;
+				}
+			}else{
+				die ("No Training Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+			$row = array();
+			$Training = array();
+			$fieldlabel = array();
+			$registrar = array();
+			//
+			// Generate Registrar List, Currently all men who have logged into Portal
+			//
+			$FieldType['registrar_id'] = 'Registrar';
+			$rsql = "SELECT distinct w.war_id, w.war_fname, w.war_nname, war_lname, war_center";
+            $rsql .= " FROM warrior w, access_password a";
+			$rsql .= " WHERE w.war_id = a.warrior_id ";
+			if ((integer) $_SESSION['access'] < (integer) $TRAININGCFG['ADMINLEVEL'] ) {
+				if (isset ( $_SESSION['center_id'] )) {
+					$cid = $_SESSION['center_id'];
+					$rsql .= " AND w.war_center = '$cid'";
+				}
+			}
+			$rsql .= " ORDER BY w.war_lname, w.war_fname";
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+			$rresult = mysql_query($rsql);
+
+			while ($row = mysql_fetch_array($rresult, MYSQL_ASSOC) ) {
+				$rid = $row['war_id'];
+				if (!empty ($row['war_nname']) ) {
+					$registrar[$rid] = $row['war_nname'];
+				}else{
+					$registrar[$rid] = $row['war_fname'];
+				}
+				$registrar[$rid] .= " " . $row['war_lname'];
+			}
+
+			asort($registrar);	// Assort by value
+	
+            //
+            // Edit Training
+            //
+
+			$sql = "SELECT * FROM trainings WHERE trg_id = '$tid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('trainings','trg');
+			$fieldlabel['location_id'] = "Location";
+			$fieldlabel['training_id'] = "Type";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=trainings&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "Registrar" ) {
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$registrar);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+					
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=trg_id VALUE=$_REQUEST[trg_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "View" ) {
+			$row = array();
+
+			if ( array_key_exists('trg_id', $_REQUEST)) {
+				$tid = $_REQUEST['trg_id'];
+				if ( ! is_numeric($tid) ) {
+					die ("Training ID ($tid) is not an integer.") ;
+				}
+			}else{
+				die ("No Training Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			//
+			// Get everything about this training event
+			//
+			$sql = "SELECT * FROM trainings WHERE trg_id = '$tid'";
+            echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get everything about the registrar
+			//
+			$Who = array();
+			$rid = $row['registrar_id'];
+			$sqlw = "SELECT war_id, war_fname, war_nname, war_lname, war_email, war_hphone, war_cphone";
+			$sqlw .= " FROM warrior";
+			$sqlw .= " WHERE war_id = '$rid'";
+            echo "<P class=trace>$sqlw</P>\n"; // DEVONLY
+			$wresult = mysql_query($sqlw);
+			$Who = mysql_fetch_array($wresult, MYSQL_ASSOC) ;
+
+			//
+			// Get everything about the Full Location
+			//
+            $Location = array();
+			if (! empty ($row['location_id'] )) {
+				$lid = $row['location_id'];
+				$sqll = "SELECT location_name, location_city, location_state ";
+                $sqll .= " FROM fulllocation " ;
+				$sqll .= " WHERE location_id = '$lid'";
+                echo "<P class=trace>$sql</P>\n"; // DEVONLY
+				$lresult = mysql_query($sqll);
+				$Location = mysql_fetch_array($lresult, MYSQL_ASSOC) ;
+			}
+
+			$fieldlabel = get_field_labels('trainings','trg');
+
+			echo "<CENTER>\n";
+			//
+			// Quick Links
+			//
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths>Regarding this training...</TH>\n";
+			echo "<TR><TD class=tds>\n";
+			echo "<UL>\n";
+			echo "<LI><A HREF=/warrior.phpx?trg_id=$tid";
+
+            //DATA INTEGRITY OF training_id in trainings table
+			//echo "<LI><A HREF=/warrior.phpx?trg_id=$tid&is_trained=Yes";
+            echo "&Action=Query>Show full warrior roster of attendees</A></LI>\n";
+			echo "</UL>\n";
+			echo "</TD></TR>\n";
+			echo "</TABLE>\n";
+			//
+			// View Form
+			//
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<P>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=trainings&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD class=tds>";
+				//
+				// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				//
+				$display = $row[$fieldname];
+				if ( $fieldname == "training_id" ) {
+					$trid = $row['training_id'];
+					$sql = "SELECT training_name from training where training_id = '$trid'";
+					$name = get_value($sql);
+					$display = "<A HREF=/training.phpx?training_id=$trid&Action=View>$name</A>";
+				}
+				if ( $fieldname == "trg_center") {
+                    $sql = "SELECT center_name from center where center_id = '$row[$fieldname]'";
+                    $display = get_value($sql);
+                }
+				if ( $fieldname == "location_id" ) {
+					$name = $Location['location_name'];
+					$display = "<A HREF=/fulllocation.phpx?location_id=$lid&Action=View>$name</A>";
+				}
+				if ( $fieldname == "brochure_url" || $fieldname == "payment_url" ) {
+					if (preg_match('/^http/', $row[$fieldname])) {
+						$display = "<A HREF=$row[$fieldname]>$row[$fieldname]</A>";
+					}else{
+						$display = "<A HREF=http://$row[$fieldname]>$row[$fieldname]</A>";
+					}
+				}
+
+				if ( $fieldname == "registrar_id" ) {
+					$name = $Who['war_fname'] . ' ' . $Who['war_lname'] ;
+					$display = "<A HREF=/warrior.phpx?war_id=$row[registrar_id]&Action=View>$name</A>";
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=trg_id VALUE=$tid>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+
+			if ( (integer) $_SESSION['access'] >= (integer) $TRAININGCFG['ADMINLEVEL'] 
+				|| (integer) $_SESSION['access'] >= (integer) $TRAININGCFG['EDITLEVEL'] 
+				|| (integer) $_SESSION['war_id'] == (integer) $row['registrar_id'] 
+				){
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Edit>\n";
+			}
+
+			if ( (integer) $_SESSION['access'] >= (integer) $TRAININGCFG['ADMINLEVEL'] 
+				|| (integer) $_SESSION['war_id'] == (integer) $row['registrar_id'] 
+				){
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Delete Training\">\n";
+			}
+			echo "</FORM>\n";
+			echo "</P>\n";
+			echo "</CENTER>\n";
+			echo "<P class=trace>( Edits require access level of $TRAININGCFG[EDITLEVEL])</P>\n";
+
+			print_roster($tid);
+	  	}//if ($_REQUEST[Action] == "View")
+
+	//----------------------------------------------------------------
+	// END Action options
+	//----------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+
+	//----------------------------------------------------------------
+	// Function print_roster
+	//----------------------------------------------------------------
+	function print_roster($tid) {
+		global $TRAININGCFG;
+		$list = array();
+		$row = array();
+		$today = date('Y-m-d');
+		$mywid = $_SESSION['war_id'];
+
+		if (empty ($tid)){
+			echo "<CENTER>\n";
+			echo  "<H2>ERROR: No trainings ID sent to print_roster.\n";
+			echo  "<BR>Contact administrator</H2>\n";
+			echo "</CENTER>\n";
+			spew_footer($FMT);
+			exit;
+		}
+
+		caa_connect();
+
+		//
+		// Get all info from training
+		//
+
+		//mysql> desc trainings;
+		//+--------------+------------------+------+-----+------------+----------------+
+		//| Field        | Type             | Null | Key | Default    | Extra          |
+		//+--------------+------------------+------+-----+------------+----------------+
+		//| trg_id       | int(11) unsigned | NO   | PRI | NULL       | auto_increment |
+		//| trg_name     | char(60)         | NO   |     | NULL       |                |
+		//| trg_date     | date             | NO   |     | 0000-00-00 |                |
+		//| trg_loc      | char(50)         | NO   |     | NULL       |                |
+		//| trg_city     | char(40)         | NO   |     |            |                |
+		//| trg_state    | char(2)          | NO   |     | CA         |                |
+		//| trg_center   | int(11) unsigned | NO   |     | 37         |                |
+		//| trg_country  | char(2)          | NO   |     | NULL       |                |
+		//| training_id  | int(10) unsigned | YES  |     | NULL       |                |
+		//| location_id  | int(10) unsigned | YES  |     | NULL       |                |
+		//| registrar_id | int(10) unsigned | YES  |     | NULL       |                |
+		//| trg_capacity | int(10) unsigned | YES  |     | NULL       |                |
+		//+--------------+------------------+------+-----+------------+----------------+
+
+		$Training = array();
+		$sqlt = "SELECT * FROM trainings WHERE trg_id = '$tid'";
+		echo "<p class=trace>$sqlt</p>\n";	//DEBUG DEVONLY
+		$tresult = mysql_query($sqlt);
+		$Training = mysql_fetch_array($tresult, MYSQL_ASSOC);
+
+		//
+		// Identify training admin privilege
+		//
+		if ((integer) $_SESSION['access'] >= (integer) $TRAININGCFG['ADMINLEVEL'] 
+			|| (integer) $Training['registrar_id'] == (integer) $_SESSION['war_id']) {
+
+			if ((integer) $_SESSION['access'] >= (integer) $TRAININGCFG['ADMINLEVEL'] ) {
+				echo "<P class=trace>Session access of $_SESSION[access] is "; // DEVONLY
+                echo " ge Admin level $TRAININGCFG[ADMINLEVEL]</P>\n"; // DEVONLY
+			}
+			if ((integer) $Training['registrar_id'] == (integer) $_SESSION['war_id']) {
+				echo "<P class=trace>Registrar ID $Training[registrar_id] is eq "; // DEVONLY
+                echo " war_id $_SESSION[war_id]</P>\n"; // DEVONLY
+			}
+
+			echo "<P class=trace>Setting MayUpdate to True</P>\n"; // DEVONLY
+			$MayUpdate = "True";
+		}
+
+		//
+		// Assemble Roster
+		//
+
+		$sql = "SELECT w.war_id, w.war_fname, w.war_lname, w.war_center, w.war_city, w.war_state, ";
+		$sql .= " c.center_abbr, ";
+        $sql .= " t.wartrg_id, t.wartrg_war_id, t.attendee_role, t.application_date, t.confirmation_date";
+		$sql .= " FROM warrior w, warrior_trainings t, center c ";
+		$sql .= " WHERE t.wartrg_war_id = w.war_id ";
+		$sql .= " AND t.wartrg_training_id = '$tid'";
+		$sql .= " AND w.war_center = c.center_id";
+		//
+		// Alphabetic if historic admin maintenance
+		//
+		if ( $Training['trg_date'] >= $today ) {
+			$sql .= " ORDER BY t.application_date, w.war_lname, w.war_fname";
+		}else{
+			$sql .= " ORDER BY w.war_lname, w.war_fname";
+		}
+		echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+		$rresult = mysql_query($sql);
+
+		$numrecords = mysql_num_rows($rresult);
+		$numslots = $Training['trg_capacity'];
+
+        echo "<P class=trace>Staff are highlighted in blue.";
+
+        if ( $numrecords > $numslots ) {
+            echo " Applicants on waiting list (more applicants than capacity) are highlighted in yellow.";
+        }
+        echo "</P>\n";
+
+		$numcols=8;
+
+		echo "<CENTER>\n";
+		if ( $Training['trg_date'] > $today ) {
+			echo "<H2>Applicants ($numrecords)</H2>\n";
+		}else{
+			echo "<H2>Attendees ($numrecords)</H2>\n";
+		}
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Remove</TH>\n";
+		echo "<TH class=ths>View</TH>\n";
+		echo "<TH class=ths>First</TH>\n";
+		echo "<TH class=ths>Last</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Role</TH>\n";
+
+		if ( $Training['trg_date'] >= $today ) {
+			$numcols += 2;
+			echo "<TH class=ths>Application Date</TH>\n";
+			echo "<TH class=ths>Confirmation Date</TH>\n";
+
+			//
+			// Only training coordinator or registrar entitled to do this
+			//
+			if (! empty ($MayUpdate)) {
+			    $numcols += 1;
+				echo "<TH class=ths>Update Conf Date (YYYY-MM-DD)</TH>\n";
+			}
+		}
+
+		//mysql> desc warrior_trainings;
+		//+--------------------+------------------+------+-----+---------+----------------+
+		//| Field              | Type             | Null | Key | Default | Extra          |
+		//+--------------------+------------------+------+-----+---------+----------------+
+		//| wartrg_id          | int(11) unsigned | NO   | PRI | NULL    | auto_increment |
+		//| wartrg_war_id      | int(11) unsigned | NO   | MUL | 0       |                |
+		//| wartrg_training_id | int(11) unsigned | NO   | MUL | 0       |                |
+		//| attendee_role | varchar(20) | NO   | MUL | 0       |                |
+		//| application_date | date| NO   | MUL | 0       |                |
+		//| confirmation_date | date| NO   | MUL | 0       |                |
+		//+--------------------+------------------+------+-----+---------+----------------+
+
+		//mysql> desc trainings;
+		//+-------------+------------------+------+-----+------------+----------------+
+		//| Field       | Type             | Null | Key | Default    | Extra          |
+		//+-------------+------------------+------+-----+------------+----------------+
+		//| trg_id      | int(11) unsigned | NO   | PRI | NULL       | auto_increment |
+		//| trg_name    | char(60)         | NO   |     | NULL       |                |
+		//| trg_date    | date             | NO   |     | 0000-00-00 |                |
+		//| trg_loc     | char(50)         | NO   |     | NULL       |                |
+		//| trg_city    | char(40)         | NO   |     |            |                |
+		//| trg_state   | char(2)          | NO   |     | CA         |                |
+		//| trg_center  | int(11) unsigned | NO   |     | 37         |                |
+		//| trg_country | char(2)          | NO   |     | NULL       |                |
+		//| training_id | int(11)          | YES  |     | NULL       |                |
+		//| registrar_id  | int(11)          | YES  |     | NULL       |                |
+		//| location_id | int(11)          | YES  |     | NULL       |                |
+		//+-------------+------------------+------+-----+------------+----------------+
+
+
+		if ( empty ($numrecords) ) {
+			echo "<TR>\n";
+			echo "<TD class=tdcs COLSPAN=$numcols>No one is currently registered</TD>\n";
+		}else{
+			while ($row = mysql_fetch_array($rresult, MYSQL_ASSOC) ) {
+                $numdisplay++;
+                if ( $numdisplay > $numslots) {
+                    $BGC="#FFFFAA";	// Waiting List Yellow
+                }else{
+                    // Default Staff
+                    $BGC="#AAFFFF"; // Staff Blue/teal
+                    if ( $row['attendee_role'] == 'Attendee' || $row['attendee_role'] == 'Student' ) {
+                        $BGC="#FFFFFF";	
+                    }
+                }
+				$wtrgid = $row['wartrg_id'];
+	
+				echo "<TR>\n";
+				//
+				// Remove/withdraw
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+
+				if (! empty ($MayUpdate)) {
+					echo "<A HREF=$_SERVER[PHP_SELF]?wartrg_id=$wtrgid&trg_id=$tid&Action=Remove>Remove</A>";
+				}elseif ( $row['wartrg_war_id'] == $_SESSION['war_id'] ) {
+					echo "<A HREF=$_SERVER[PHP_SELF]?wartrg_id=$wtrgid&trg_id=$tid&Action=Remove>Withdraw</A>";
+				}else{
+					echo "<BR>";
+				}
+				echo "</TD>\n";
+	
+				//
+				// View
+				//
+				echo "<TD class=tdsc BGCOLOR=$BGC>\n";
+				echo "<A HREF=/warrior.phpx?war_id=$row[war_id]&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+				//
+				// First
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+				echo "$row[war_fname]";
+				echo "</TD>\n";
+	
+				//
+				// Last
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+				echo "$row[war_lname]";
+				echo "</TD>\n";
+	
+				//
+				// Center
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+				echo "$row[center_abbr]";
+				echo "</TD>\n";
+	
+				//
+				// City
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+				echo "$row[war_city]";
+				echo "</TD>\n";
+	
+				//
+				// State
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+				echo "$row[war_state]";
+				echo "</TD>\n";
+				//
+				// Role
+				//
+				echo "<TD class=tds BGCOLOR=$BGC>\n";
+				echo "$row[attendee_role]";
+				echo "</TD>\n";
+	
+				if ( $Training['trg_date'] >= $today ) {
+	
+					// Application DAte
+				    echo "<TD class=tdcs BGCOLOR=$BGC>\n";
+					echo "$row[application_date]";
+					echo "<BR></TD>\n";
+	
+					// Confirmation Date
+				    echo "<TD class=tdcs BGCOLOR=$BGC>\n";
+					echo "$row[confirmation_date]";
+					echo "<BR></TD>\n";
+
+					// Update Confirmation Date
+					if (! empty ($MayUpdate)) {
+				        echo "<TD class=tdcs BGCOLOR=$BGC>\n";
+						echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+						echo "<INPUT TYPE=TEXT NAME=confirmation_date SIZE=10 VALUE=\"$today\">\n";
+						echo "<INPUT TYPE=HIDDEN NAME=trg_id VALUE=${tid}>\n";
+						echo "<INPUT TYPE=HIDDEN NAME=wartrg_id VALUE=${wtrgid}>\n";
+						echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Update Date\">\n";
+						echo "</FORM>\n";
+						echo "</TD>\n";
+					}
+				}
+	
+			}// Endwhle
+		}//Endif no records
+
+		// End Table
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+        //
+        // If training is in the future, sign me up for it
+        //
+		if ( $Training['trg_date'] >= $today ) {
+		    echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		    echo "<INPUT TYPE=HIDDEN NAME=trg_id VALUE=${tid}>\n";
+		    echo "<INPUT TYPE=HIDDEN NAME=war_id VALUE=${mywid}>\n";
+		    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Sign Me Up\">\n";
+		    echo "</FORM>\n";
+        }
+
+		//
+		// Print form to get query list for adding new applicant
+		//
+		if ( $Training['trg_date'] >= $today || $_SESSION['access'] >= $TRAININGCFG['ADMINLEVEL']) {
+
+			echo "<P>\n";
+			echo "<TABLE>\n";
+            echo "<P class=trace>Enter last name and/or email and click on <I>New Applicant</I> button.";
+            echo "</P>\n";
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER=3 id=register_new_applicant>\n";
+			echo "<TH COLSPAN=2 class=ths>Register New Applicant </TH>\n";
+
+			//echo "<TR><TD class=tdls>\n";
+			//echo "First Name";
+			//echo "</TD><TD> \n";
+			//echo "<INPUT TYPE=TEXT NAME=war_fname>";
+			//echo "</TD> \n";
+	
+			echo "<TR><TD class=tdls>\n";
+			echo "Last Name";
+			echo "</TD><TD class=tds> \n";
+			echo "<INPUT TYPE=TEXT NAME=war_lname>";
+			echo "</TD> \n";
+	
+			echo "<TR><TD class=tdls>\n";
+			echo "Email";
+			echo "</TD><TD class=tds> \n";
+			echo "<INPUT TYPE=TEXT NAME=war_email>";
+			echo "</TD> \n";
+	
+			echo "</TABLE>\n";
+	
+			echo "<INPUT TYPE=HIDDEN NAME=trg_id VALUE=${tid}>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New Applicant\">\n";
+			echo "</FORM>\n";
+
+			echo "</P>\n";
+
+		}// Endif $Training[trg_date] >= $today
+
+		//
+		// For Everyone, You can Sign Up
+		//
+
+
+		echo "</CENTER>\n";
+
+	}// End print_roster
+
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		$list = array();
+		caa_connect();
+
+        echo "<P class=trace>";
+        echo "Choose optional type, date, center, and/or location and click on <I>List</I>";
+        echo " or <I>List Future</I> button. To schedule new training, hit <I>New</I>.\n";
+        echo "Read \n";
+        echo "<A HREF=$WICCFG[WICURL]/help.phpx?table_name=trainings&field_name=Overview&Action=Help>";
+        echo " overview</A> to learn more.";
+        echo "<BR>For training types, you can see the <A HREF=/training.phpx>query/display</A> tool";
+        echo " or read the <A HREF=/help.phpx?table_name=training&field_name=";
+            echo "Overview&help_type=Explanation&Action=Help>";
+        echo " help overview</A>.\n";
+        echo "</P>\n";
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Training Type</TH>\n";
+		echo "<TH class=ths>Date</TH>\n";
+		//echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>Location</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+		echo "<TR>\n";
+
+		// Training Type
+		echo "<TD class=tdcs>\n";
+		$sql = "SELECT distinct t.training_id, t.training_abbreviation, t.training_name ";
+        $sql .= " FROM training t, trainings s";
+        $sql .= " WHERE t.training_id = s.training_id ORDER BY t.training_name";
+        $result = mysql_query($sql);
+        $list = array();
+        $row = array();
+		while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+            $id = $row['training_id'];
+            $list[$id] = $row['training_name'] . ' (' . $row['training_abbreviation'] . ')';
+        }
+		spew_select_hash_menu('training_id','All','All',$list);
+		echo "</TD>\n";
+
+		// Date
+		echo "<TD class=tdcs>\n";
+		$sql = "SELECT distinct trg_date from trainings order by trg_date ";
+		$list = get_menu($sql);
+		$datelist = array();
+		foreach ($list as $tdate) {
+			list($yr,$mo,$day) = explode('-', $tdate);
+			$yrkey = $yr . '%';
+			$datelist[$yrkey] = $yr;
+			$mokey = $yr . '-' . $mo . '%';
+			$datelist[$mokey] = $yr . '-'.  $mo ;
+			$datelist[$tdate] = $tdate;
+		}
+		array_unique($datelist);
+		ksort($datelist);
+		spew_select_hash_menu('trg_date','All','All',$datelist);
+		echo "</TD>\n";
+
+		// City
+		//echo "<TD class=tdcs>\n";
+		//$sql = "SELECT distinct trg_city from trainings order by trg_city ";
+		//$list = get_menu($sql);
+		//spew_select_menu('trg_city','All','All',$list);
+		//echo "</TD>\n";
+
+		// State
+		//echo "<TD class=tdcs>\n";
+		//$sql = "SELECT DISTINCT trg_state FROM trainings order by trg_state";
+		//$list = get_menu($sql);
+		//spew_select_menu('trg_state','All','All',$list);
+		//echo "</TD>\n";
+
+		// Center
+		echo "<TD class=tdcs>\n";
+		$sql = "SELECT center_id, center_name from center order by center_name";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('trg_center',$_SESSION[center_id],'All',$list);
+		echo "</TD>\n";
+
+		// Location
+		echo "<TD class=tdcs>\n";
+		$sql = "SELECT DISTINCT f.location_id, f.location_name ";
+        $sql .= " FROM fulllocation f, trainings t";
+        $sql .= " WHERE f.location_id = t.location_id";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('location_id',$_SESSION[center_id],'All',$list);
+		echo "</TD>\n";
+
+
+		// Sort By
+		echo "<TD class=tdcs>\n";
+		$sortby = array (
+			'Name',
+			'City',
+			'State',
+			'Date',
+			'Center'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Date',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Query Future\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Future\">\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+	}
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack () {
+		global $WICCFG;
+        $rid = $_REQUEST['registrar_id'];
+        $tid = $_REQUEST['trg_id'];
+        $wid = $_REQUEST['warrior_id'];
+        $role = $_REQUEST['attendee_role'];
+        $today = date('Y-m-d');
+        echo "<P class=trace>Entering send_email_ack: Rid: $rid, Tid: $tid, Wid: $wid</P>\n"; // DEVONLY
+
+        //
+        // Get Training Details
+        //
+        $Training = array();
+        $tsql = "SELECT * FROM trainings WHERE trg_id = '$tid'";
+        echo "<P class=trace>Trainings: $tsql</P>\n"; // DEVONLY
+        $tresult = mysql_query($tsql);
+        $Training =  mysql_fetch_array($tresult, MYSQL_ASSOC);
+
+        echo "<P class=trace>Comparing Training Date of $Training[trg_date] with today: $today</P>\n"; // DEVONLY
+        if ( $Training['trg_date'] < $today ) {
+            echo "<P class=trace>Training is over, no email acknowledgement sent.</P>\n";
+            return;
+        }else{
+            echo "<P class=trace>Sending email acknowledgement.</P>\n"; 
+        }
+
+		//
+		// Config parameters for email acknowledgement
+		//
+		$AppMail = array ();
+
+        //
+        // Get Applicant Info
+        //
+        $Applicant = array();
+        $asql = "SELECT war_id, war_fname, war_nname, war_lname, war_email, war_email2";
+        $asql .= " FROM warrior WHERE war_id = '$wid'";
+        echo "<P class=trace>Applicant: $asql</P>\n"; // DEVONLY
+        $aresult = mysql_query($asql);
+        $Applicant =  mysql_fetch_array($aresult, MYSQL_ASSOC);
+		echo "<PRE>\n";			// DEVONLY
+		print_r($Applicant);	// DEVONLY
+		echo "</PRE>\n";		// DEVONLY
+
+        if (isset ( $Applicant['war_nname'])) {
+            $appname = $Applicant['war_nname'];
+        }else{
+            $appname = $Applicant['war_fname'];
+        }
+        $appname .= " " . $Applicant['war_lname'];
+
+        //
+        // Get Registrar Info
+        //
+        $Registrar = array();
+        $rsql = "SELECT war_id, war_fname, war_nname, war_lname, war_email";
+        $rsql .= " FROM warrior WHERE war_id = '$rid'";
+        echo "<P class=trace>Registrar: $rsql</P>\n"; // DEVONLY
+        $rresult = mysql_query($rsql);
+        $Registrar =  mysql_fetch_array($rresult, MYSQL_ASSOC);
+
+        if (! empty ( $Registrar['war_nname'])) {
+            $regname = $Registrar['war_nname'];
+        }else{
+            $regname = $Registrar['war_fname'];
+        }
+        $regname .= " " . $Registrar['war_lname'];
+
+        //
+        // Roster details and status
+        //
+        //+--------------------+------------------+------+-----+----------+----------------+
+        //| Field              | Type             | Null | Key | Default  | Extra          |
+        //+--------------------+------------------+------+-----+----------+----------------+
+        //| wartrg_id          | int(11) unsigned | NO   | PRI | NULL     | auto_increment |
+        //| wartrg_war_id      | int(11) unsigned | NO   | MUL | 0        |                |
+        //| wartrg_training_id | int(11) unsigned | NO   | MUL | 0        |                |
+        //| application_date   | date             | YES  |     | NULL     |                |
+        //| confirmation_date  | date             | YES  |     | NULL     |                |
+        //| attendee_role      | varchar(20)      | YES  |     | Attendee |                |
+        //+--------------------+------------------+------+-----+----------+----------------+
+
+        $rsql = "SELECT count(*) FROM warrior_trainings ";
+        $rsql .= " WHERE wartrg_war_id = '$wid' ";
+        $rsql .= " AND wartrg_training_id = '$tid' ";
+        $rsql .= " AND (attendee_role = 'Student' OR attendee_role = 'Attendee' )";
+        echo "<P class=trace>Roster Count: $rsql</P>\n"; // DEVONLY
+        $slotstaken = get_value($rsql);
+
+        //
+        // Construct Application Email Headerrs
+        //
+		$AppMail['subject'] = "MKP Training Application ($Training[trg_name]): $appname";
+		$AppMail['fromemail'] = $Registrar['war_email'];
+		$AppMail['toemail']	= $Applicant['war_email'];
+		$AppMail['fromname'] = $regname;
+		$AppMail['toname'] = $appname;
+
+		if (isset ( $Applicant['war_email'] )) {
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $Applicant[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "AppMail<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($AppMail), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		if ($TRAININGCFG['MTA'] == 'sendmail') {
+			$fd = popen($WICCFG['MAILER'],"w"); 
+			fputs($fd, "From: $AppMail[fromname] <$AppMail[fromemail]>\n"); 
+			fputs($fd, "To: $AppMail[toname] <$AppMail[toemail]>\n"); 
+			fputs($fd, "Cc: $AppMail[fromname] <$AppMail[fromemail]>\n"); 
+			fputs($fd, "Bcc: jerbowes@yahoo.com\n"); // DEBUG
+	
+			fputs($fd, "Subject: $AppMail[subject]\n\n"); 
+			fputs($fd, "Your application has been received for the MKP training $Training[trg_name]\n");
+			fputs($fd, " scheduled for $Training[trg_date] in the role of ${role}.\n");
+	
+        	if ( $slotstaken > $Training['trg_capacity'] ) {
+		    	fputs($fd, "The number of men who have applied has exceeded the available openings.\n");
+		    	fputs($fd, "You are currently on the waiting list.\n");
+		    	fputs($fd, "The registrar will contact you if there is a cancelation.\n\n");
+        	}else{
+		    	fputs($fd, "Your registration will be confirmed upon receipt of the deposit or full payment by the registrar, $regname.\n");
+        	}
+	
+			fputs($fd, "You can see the status of the training course and current registration at the following web link:\n\n");
+			fputs($fd, "$WICCFG[WICURL]/trainings.php?trg_id=$tid&Action=View\n\n");
+	
+			fputs($fd, "For answers to any questions you have, please contact the registrar, $regname.\n");
+        	fputs($fd, "You can get all of his contact information at the following url\n\n");
+			fputs($fd, "$WICCFG[WICURL]/warrior.php?war_id=$rid&Action=View\n\n");
+	
+			fputs($fd, "Thank you,\n");
+			pclose($fd); 
+		}else{
+			$from = "$AppMail[fromname] <$AppMail[fromemail]>";
+			$to = "$AppMail[toname] <$AppMail[toemail]>"; 
+	
+			$subject =  $AppMail['subject'];
+			$msg =  "Your application has been received for the $Training[trg_name]";
+			$msg .= " scheduled for $Training[trg_date] in the role of ${role}";
+			$msg .= "\n";
+	
+        	if ( $slotstaken > $Training['trg_capacity'] ) {
+		    	$msg .= "The number of men who have applied has exceeded the available openings.";
+				$msg .= "\n";
+		    	$msg .= " You are currently on the waiting list.";
+		    	$msg .= " The registrar will contact you if there is a cancelation.";
+				$msg .= "\n";
+        	}else{
+		    	$msg .= " Your registration will be confirmed upon receipt of the";
+				$msg .= " deposit or full payment by the registrar, $regname.";
+				$msg .= "\n";
+        	}
+	
+			$msg .= " You can see the status of the training course and current registration";
+			$msg .= " at the following web link:\n\n";
+			$msg .= " $WICCFG[WICURL]/trainings.php?trg_id=$tid&Action=View\n\n";
+	
+			$msg .= " For answers to any questions you have, please contact the registrar, $regname.\n";
+        	$msg .= "You can get all of his contact information at the following url\n\n";
+			$msg .= "$WICCFG[WICURL]/warrior.php?war_id=$rid&Action=View\n\n";
+	
+			$msg .= "Thank you,\n";
+			$msg .= "MKP-USA-IGC Training Committee\n";
+	
+			$headers = "From: $AppMail[fromname] <$AppMail[fromemail]>" . "\r\n" .
+				"Cc: $AppMail[fromname] <$AppMail[fromemail]>" . "\r\n" .
+				"Bcc: jerbowes@gmail.com" . "\r\n" .		// DEBUG DEVONLY
+		    	"Reply-To: $AppMail[fromname] <$AppMail[fromemail]>" . "\r\n" .
+			    "X-Mailer: PHP/" . phpversion();
+				mail($to, $subject, $msg, $headers);
+		}
+
+
+
+
+	}//End function send_email_ack
+
+?>

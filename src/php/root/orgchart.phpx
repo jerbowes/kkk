@@ -1,0 +1,3286 @@
+<?php
+	//#==================================================================
+	//# Orgchart
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2013/01/16 05:54:00 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/orgchart.phpx,v $
+	//# $Id: orgchart.phpx,v 1.8 2013/01/16 05:54:00 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no war_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+	session_start();
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$param = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl =  $_SERVER['PHP_SELF'] . '?' .  $param;
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}else{
+			$returl =  $_SERVER['PHP_SELF'];
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"MKP Org Chart",
+		'TITLE'			=>	"MKP Org Chart",
+		'MODULENAME'	=>	"orgchart.phpx",
+		'NAV1'			=>	"INFO"	// Level 1 menu navigation group
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$ORGCFG = array (
+		'ADMINLEVEL'			=>	'6',	// What access can Delete
+		'ROLEEDITLEVEL'			=>	'5',	// What access can add or edit
+		'EDITLEVEL'				=>	'3',	// What access can add or edit
+		'MAXDISPLAYROWS'		=>	'60',	// Throttle 
+		'MINQUERYCRITERIA'		=>	'1'		// Number of query qualifications
+	);
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+
+	$ORG = array (
+		'org_longname',
+		'org_id',
+		'org_tier',
+		'org_name',
+		'org_abbreviation',
+		'org_shortname',
+		'reports_to_org',
+		'org_description'
+	);
+
+	$ORGSHOW = array (
+		'org_tier',
+		'org_name',
+		'org_abbreviation',
+		'org_shortname',
+		'org_longname',
+		'reports_to_org'
+	);
+
+	$ORGROLE = array (
+		'orgrole_longname',
+		'orgrole_id',
+		'org_id',
+		'orgrole_name',
+		'orgrole_abbreviation',
+		'reports_to_orgrole',
+		'orgrole_term',
+		'orgrole_emailsuffix',
+		'orgrole_description'
+	);
+
+	$ORGROLESHOW = array (
+		'org_tier',
+		'org_id',
+		'orgrole_name',
+		'orgrole_abbreviation',
+		'orgrole_term',
+		'orgrole_longname',
+		'reports_to_orgrole',
+		'orgrole_emailsuffix'
+	);
+
+	$HOLDER = array (
+		'orgroleholder_id',
+		'orgrole_id',
+		'which_id',
+		'warrior_id',
+		'start_date',
+		'end_date',
+		'orgroleholder_alias',
+		'orgroleholder_email',
+		'orgroleholder_url',
+		'orgroleholder_notes'
+	);
+
+	$ORGREP = array (
+		'orgrep_id',
+		'warrior_id',
+		'from_orgrole_id',
+		'to_orgrole_id',
+		'notes'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'org_tier',
+		'org_name',
+		'orgrole_name',
+	);
+
+	$JustifyCss = array (
+		'org_abbreviation'		=>	'tdcs',
+		'orgrole_abbreviation'	=>	'tdcs',
+		'orgrole_term'			=>	'tdcs',
+		'orgrole_name'			=>	'tds',
+		'orgrole_longname'		=>	'tds',
+		'org_longname'			=>	'tds',
+		'reports_to_org'		=>	'tds'
+	);
+
+	//
+	// Required for New Entry into orgroleholder
+	//
+	$Required = array(
+		'warrior_id'		=>	'No warrior id Provided',
+		'which_id'			=>	'No specific organization specified',
+		'from_id'			=>	'No specific representing organization specified',
+		'orgrole_id'		=>	'No role or position id provided',
+		'start_date'		=>	'No beginning of service date provided',
+		'end_date'			=>	'No end of service date provided'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'organization_id',
+		'org_id',
+		'orgrep_id',
+		'org_longname',
+		'orgrole_longname',
+		'orgrole_id'
+	);
+
+	$FieldType = array(
+		//'org_id'	   			=>	'MenuArray',	// Handled locally
+		//'orgrole_id'	   		=>	'MenuArray',	// Handled locally
+		//'org_name'	   			=>	'Menu',
+		//'orgrole_name'	   		=>	'Menu',
+		'reports_to_org'	   	=>	'MenuArray',
+		'reports_to_orgrole'	=>	'MenuArray',
+		'org_tier'				=>	'Menu',
+		'org_description'		=>	'TextArea',
+		'orgroleholder_notes'		=>	'TextArea',
+		'orgroleholder_alias'		=>	'LongText',
+		'orgrole_description'	=>	'TextArea'
+	);
+
+	$Menu = array(
+		'reports_to_org'	=> "SELECT org_id, org_longname from org order by org_longname",
+		'reports_to_orgrole'	=> "SELECT orgrole_id, orgrole_longname from orgrole order by orgrole_longname",
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+	//
+	// Blurb
+	//
+	echo "<P class=trace>See also legacy <A HREF=/caaorg.phpx>CAA board position holders</A>.";
+	echo "</P>\n";
+
+	//
+	// Same script will be query and admin, enable admin functions if
+	// we are in the admin directory path
+	//
+	if ( preg_match('/admin/', $_SERVER['REQUEST_URI'] )) {
+		echo "<P class=trace>Enabling Admin Functionality</P>\n"; // DEVONLY
+		$ORGCFG['ISADMIN'] = 'Yes';	// LIVEONLY
+	}
+	$ORGCFG['ISADMIN'] = 'Yes';	// DEVONLY
+
+	if ($_SESSION['access'] >= 7 ) {
+		$ORGCFG['ISADMIN'] = 'Yes';
+	}
+
+	//
+	// Set Default of Initial Presentation
+	//
+	if (!array_key_exists(Action, $_REQUEST)) {
+		$_REQUEST['Action'] = 'My Center';
+	}
+
+	if (array_key_exists(Action, $_REQUEST)) {
+
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+	  	// Derole Man from Position: Delete Entry in orgroleholder table
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Deroll" ) {
+			caa_connect();
+			$oid = mysql_real_escape_string($_REQUEST['orgroleholder_id']);
+
+			if ( isset ( $oid ) ) {
+				$sql = "DELETE FROM orgroleholder WHERE orgroleholder_id = '$oid' ";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+				if ( $_SESSION['access'] >= $ORGCFG['ADMINLEVEL'] ) {
+					mysql_query($sql);
+					echo "<CENTER>\n";
+					echo "<H2>Position Holder Derolled</H2>\n";
+					echo "</CENTER>\n";
+					$_REQUEST['Action'] = 'List Current Holders';
+				}else{
+					echo "<CENTER>\n";
+					echo "<H2>You do not have admin privileges required to deroll a man from a position.</H2>\n";
+					echo "</CENTER>\n";
+				}
+			}else{
+				echo "<CENTER>\n";
+				echo "<H1>Error</H1>\n";
+				echo "<BR>\n";
+				print_r($_REQUEST);
+				echo "</CENTER>\n";
+				die("No orgroleholder_id given to delete function, contact administrator");
+			}
+		}
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			$list = array();
+
+			echo "<P class=trace>";
+			echo "Enter tier, group, position, start date, end date, and last name of man and hit";
+			echo " <I>Show Candidates</I> button to see list of matching Warriors.";
+			echo "<BR>You can enter a partial name with a percent sign wild card (e.g. Prit%). For more information, see ";
+			echo " <A HREF=/help.phpx?topic=Orgchart&field_name=Overview&Action=Help>";
+			echo " Overview</A>\n";
+			echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			// Domain
+			echo "<TR><TD class=tdls>";
+			echo "Organization Tier";
+			echo "</TD>\n";
+			echo "<TD class=tdsc>\n";
+				$sql = "SELECT DISTINCT org_tier from org order by org_tier";
+				$list = get_menu($sql);
+				spew_select_menu('org_tier',$_REQUEST['org_tier'],$_REQUEST['org_tier'],$list);
+			echo "</TD>\n";
+
+			// Org 
+			echo "<TR><TD class=tdls>";
+			echo "Council or Group";
+			echo "</TD>\n";
+			echo "<TD class=tdsc>\n";
+				$sql = "SELECT distinct org_name from org order by org_name" ;
+				$list = get_menu($sql);
+				spew_select_menu('org_name',$_REQUEST['org_name'],$_REQUEST['org_name'],$list);
+			echo "</TD>\n";
+
+			// Org Role
+			echo "<TR><TD class=tdls>";
+			echo "Role or Position";
+			echo "</TD>\n";
+			echo "<TD class=tdsc>\n";
+				$sql = "SELECT distinct orgrole_name from orgrole order by orgrole_name" ;
+				$list = get_menu($sql);
+				spew_select_menu('orgrole_name',$_REQUEST['orgrole_name'],$_REQUEST['orgrole_name'],$list);
+			echo "</TD>\n";
+
+			$today = date('Y-m-d');
+			$thisyear = date('Y');
+			$newyear = $thisyear . '-01-01';
+			$yearend = $thisyear . '-12-31';
+
+			// Start Date
+			echo "<TR><TD class=tdls>";
+			echo "Start Date (YYYY-MM-DD)";
+			echo "</TD>\n";
+			echo "<TD class=tdsc>\n";
+				echo "<INPUT TYPE=TEXT NAME=start_date VALUE=$newyear>";
+			echo "</TD>\n";
+
+			// End Date
+			echo "<TR><TD class=tdls>";
+			echo "End Date (YYYY-MM-DD)";
+			echo "</TD>\n";
+			echo "<TD class=tdsc>\n";
+				echo "<INPUT TYPE=TEXT NAME=end_date VALUE=$yearend>";
+			echo "</TD>\n";
+
+			// Last Name
+			echo "<TR><TD class=tdls>";
+			echo "Candidate Last Name";
+			echo "</TD>\n";
+			echo "<TD class=tdsc>\n";
+				echo "<INPUT TYPE=TEXT NAME=war_lname>";
+			echo "</TD>\n";
+
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Show Candidates\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Edit Role 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Role") {
+
+			if ( array_key_exists('orgrole_id', $_REQUEST)) {
+				$rid = $_REQUEST['orgrole_id'];
+				if ( ! is_numeric($rid) ) {
+					die ("Org Role ID ($rid) is not an integer.") ;
+				}
+			}else{
+				die ("No org role Id set") ;
+			}
+			$NoEdit[] = 'orgrole_name';
+			$NoEdit[] = 'orgrole_abbreviation';
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM orgrole WHERE orgrole_id = '$rid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('orgrole','orgrole');
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ORGROLE as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=orgrole&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=orgrole_id VALUE=$_REQUEST[orgrole_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=View>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			// SECURITY: Could double check here
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			//show_comment_history($rid, orgrole);
+
+	  	}//if ($_REQUEST['Action'] == "Edit Role") 
+
+		//----------------------------------------------------------------------
+	  	// Edit Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Group") {
+
+			echo "<P class=trace>Entering Edit Group</P>\n"; 	// DEVONLY
+			if ( array_key_exists('org_id', $_REQUEST)) {
+				$oid = $_REQUEST[org_id];
+				if ( ! is_numeric($oid) ) {
+					die ("Org Group ID ($rid) is not an integer.") ;
+				}
+			}else{
+				die ("No Org Group Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM org WHERE org_id = '$oid'";
+			$result = mysql_query($sql);
+			echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('org','org',$WICCFG['DBNAME']);
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<CENTER>";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ORG as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=org&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>";
+				echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=org_id VALUE=$_REQUEST[org_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Groupss\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"View Group\">\n";
+			// SECURITY: Could double check here
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Update Group\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			//show_comment_history($oid, 'org');
+
+	  	}//if ($_REQUEST['Action'] == "Edit Group") 
+
+		//----------------------------------------------------------------------
+	  	// Edit Holder
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Holder") {
+
+			if ( array_key_exists('orgroleholder_id', $_REQUEST)) {
+				$hid = $_REQUEST[orgroleholder_id];
+				if ( ! is_numeric($hid) ) {
+					die ("Org Role Holder ID ($hid) is not an integer.") ;
+				}
+			}else{
+				die ("No Org Role Holder Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$Holder = array();
+			$sql = "SELECT h.*, r.orgrole_longname, w.war_fname, w.war_lname ";
+			$sql .= " FROM orgroleholder h, orgrole r, warrior w";
+			$sql .= " WHERE h.orgroleholder_id = '$hid' AND r.orgrole_id = h.orgrole_id";
+			$sql .= " AND h.warrior_id = w.war_id ";
+			$result = mysql_query($sql);
+			$Holder = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('orgroleholder','orgroleholder',$WICCFG['DBNAME']);
+
+			//
+			// Help Blurb
+			//
+			echo "<P class=trace>\n";
+			echo "Add/change specifics of this leadership term of service and click on <I>Update</I> button at bottom of form.";
+			echo "<BR>Full details of this term of service are shown in the table at bottom of page.\n";
+			echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$SHORT = array(
+				'start_date',
+				'end_date',
+				'orgroleholder_alias',
+				'orgroleholder_notes'
+			);
+
+
+			// Role Name
+			echo "<TR><TD class=tdls>";
+			echo "<A HREF=/help.phpx?table_name=orgroleholder&field_name=orgrole_id&Action=Help>";
+			echo "Role Name";
+			echo "</A>";
+			echo "</TD>\n";
+			echo "<TD VALIGN=TOP class=tds>";
+			echo "$Holder[orgrole_longname]";
+			echo "</TD>\n";
+
+			// Holder Name
+			echo "<TR><TD class=tdls>";
+			echo "<A HREF=/help.phpx?table_name=orgroleholder&field_name=warrior_id&Action=Help>";
+			echo "Man Serving";
+			echo "</A>";
+			echo "</TD>\n";
+			echo "<TD VALIGN=TOP class=tds>";
+			echo "$Holder[war_fname] $Holder[war_lname]";
+			echo "</TD>\n";
+
+			foreach ($SHORT as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=orgroleholder&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>";
+				echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$Holder[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $Holder[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $Holder[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$Holder[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$Holder[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$Holder[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=orgroleholder_id VALUE=$_REQUEST[orgroleholder_id]>\n";
+			if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {	// SECURITY
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Update Holder\">\n";
+			}else{
+				echo "<P class=trace>You must have access level of $ORGCFG[EDITLEVEL] to edit.</P>\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			//show_comment_history($oid, 'org');
+
+			$_REQUEST['Action'] = "View Holder";
+	  	}//if ($_REQUEST['Action'] == "Edit Holder") 
+
+		//----------------------------------------------------------------------
+	  	// Add Relationship: Insert New Entry into orgrep table
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Add Relationship" ) {
+			caa_connect();
+			echo "<P class=trace>Entering Add Relationship</P>\n"; 	// DEVONLY
+
+			ksort($_REQUEST);
+			echo "<PRE>\n";			// DEVONLY
+			print_r($_REQUEST);		// DEVONLY
+			echo "</PRE>\n";		// DEVONLY
+
+			//
+			// List of fields for this orgroleholder
+			//
+			$fields = array (
+				'from_orgrole_id',
+				'from_name',
+				'to_org_name'
+			);
+			$FromOrg = array();
+			$ToOrg = array();
+			$FromOrgrole = array();
+			$ToOrgrole = array();
+
+			$from_org_id = mysql_real_escape_string($_REQUEST['from_org_id']);
+		
+			//
+			// Lookup to_org_id
+			//
+			if ( isset ($_REQUEST['to_org_name']) && isset ( $_REQUEST['to_tier'] ) ) {
+				$sql = "SELECT org_id, org_name, org_tier from org WHERE org_name = '";
+				$sql .= mysql_real_escape_string($_REQUEST['to_org_name']);
+				$sql .= "' AND org_tier ='";
+				$sql .= mysql_real_escape_string($_REQUEST['to_tier']);
+				$sql .= "'";
+				echo "<P class=trace>To_org_id : $sql</P>\n";	// DEVONLY
+				$result = mysql_query($sql);
+				$ToOrg = mysql_fetch_array($result, MYSQL_ASSOC) ;
+				$to_org_id = $ToOrg['org_id'];
+				$_REQUEST['to_org_id'] = $ToOrg['org_id'];
+				echo "<P class=trace>Setting request [ to_org_id ] to $_REQUEST[to_org_id]</P>\n"; // DEVONLY
+			}
+		
+			//
+			// Lookup to_orgrole_id
+			//
+			if ( isset ($_REQUEST['to_orgrole_name']) && isset ( $_REQUEST['to_tier'] ) ) {
+				$sql = "SELECT orgrole_id, orgrole_name from orgrole WHERE orgrole_name = '";
+				$sql .= mysql_real_escape_string($_REQUEST['to_orgrole_name']);
+				$sql .= "' AND org_id = '$to_org_id'";
+				echo "<P class=trace>To_orgrole_id : $sql</P>\n";	// DEVONLY
+				$result = mysql_query($sql);
+				$ToOrgrole = mysql_fetch_array($result, MYSQL_ASSOC) ;
+				$_REQUEST['to_orgrole_id'] = $ToOrgrole['orgrole_id'];
+				echo "<P class=trace>Setting request [ to_orgrole_id ] to $_REQUEST[to_orgrole_id]</P>\n"; // DEVONLY
+			}
+
+			if ($_REQUEST['from_tier'] == "Center" ) {
+				$sql = "SELECT center_abbr from center where center_id = $_REQUEST[from_which_id]";
+				$fromwhich = get_value($sql);
+				echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+	
+			}
+			if ($_REQUEST['from_tier'] == "GeoRegion" ) {
+				$sql = "SELECT georegion_shortname from georegion where georegion_id = $_REQUEST[from_which_id]";
+				$fromwhich = get_value($sql);
+				echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+			}
+			if ($_REQUEST['from_tier'] == "I-Group Region" ) {
+				$sql = "SELECT igrpreg_name from igroup_regions where igrpreg_id = $_REQUEST[from_which_id]";
+				$fromwhich = get_value($sql);
+				echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+			}
+
+			if ( $_REQUEST['from_orgrole_name'] == 'Envoy' ) {
+				$_REQUEST['from_name'] = "Envoy from  $fromwhich $_REQUEST[from_tier] $_REQUEST[from_org_name]";
+			}
+
+			if ( $_REQUEST['from_orgrole_name'] == 'Representative' ) {
+				$_REQUEST['from_name'] = "Representative to $fromwhich $_REQUEST[from_tier] $_REQUEST[from_org_name]";
+			}
+
+			ksort($_REQUEST);
+			echo "<PRE>\n";		// DEVONLY
+			echo "<B>After lookups</B>\n";	// DEVONLY
+			print_r($_REQUEST);	// DEVONLY
+			echo "</PRE>\n";	// DEVONLY
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if ( !isset ( $_REQUEST[$f] ) ) {
+					$err .= "<LI>Value of $f not set.</LI>";
+				}
+			}
+
+			if (isset ($err) ) {
+				echo "<CENTER>\n";
+				echo "<TABLE>\n";
+				echo "<TH class=ths>Error in Adding Relationship</TH>\n";
+				echo "<TR><TD>\n";
+				echo "<UL>$err</UL>";
+				echo "</TD>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Elicit to_which_id for representative record
+			//
+			//mysql> desc orgroleholder;
+			//+------------------+------------------+------+-----+---------+----------------+
+			//| Field            | Type             | Null | Key | Default | Extra          |
+			//+------------------+------------------+------+-----+---------+----------------+
+			//| orgroleholder_id | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+			//| org_id           | int(10) unsigned | NO   |     | NULL    |                |
+			//| orgrole_id       | int(10) unsigned | NO   |     | NULL    |                |
+			//| warrior_id       | int(10) unsigned | NO   |     | NULL    |                |
+			//| which_id         | int(10) unsigned | NO   |     | NULL    |                |
+			//| start_date       | date             | NO   |     | NULL    |                |
+			//| end_date         | date             | YES  |     | NULL    |                |
+			//+------------------+------------------+------+-----+---------+----------------+
+			$Which = array();
+
+			if ( $_REQUEST['to_tier'] == 'GeoRegion') {
+				$sql = 'SELECT georegion_id, georegion_name from georegion order by georegion_name';
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				$Which = get_menu_array($sql);
+			}
+
+			if ( $_REQUEST['to_tier'] == 'Center') {
+				$sql = 'SELECT center_id, center_name from center order by center_name';
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				$Which = get_menu_array($sql);
+			}
+
+			if ( $_REQUEST['to_tier'] == 'I-Group Region') {
+				$sql = "SELECT r.igrpreg_id, concat(c.center_abbr, ': ', r.igrpreg_name) AS name ";
+				$sql .= " FROM igroup_regions r, center c";
+				$sql .= " WHERE r.igrpreg_cen = c.center_id";
+				$sql .= " ORDER BY name";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				$Which = get_menu_array($sql);
+			}
+
+			if ( $_REQUEST['to_tier'] == 'MKPI') {
+				$Which = array(
+					'99'	=>	'MKPI'
+				);
+			}
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths>Which $_REQUEST[to_tier] $_REQUEST[to_org_name]</TH>\n";
+			echo "<TR><TD class=tdcs>\n";
+				spew_select_hash_menu('to_which_id','','',$Which);
+			echo "</TD>\n";
+			// TODO: Add options for orgroleholder_alias
+			echo "</TABLE>\n";
+
+			echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_name VALUE=\"$_REQUEST[from_orgrole_name]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_id VALUE=\"$_REQUEST[from_orgrole_id]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=from_name VALUE=\"$_REQUEST[from_name]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=from_which_id VALUE=\"$_REQUEST[from_which_id]\">\n";
+
+			echo "<INPUT TYPE=HIDDEN NAME=to_tier VALUE=\"$_REQUEST[to_tier]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=to_orgrole_id VALUE=\"$_REQUEST[to_orgrole_id]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=to_orgrole_name VALUE=\"$_REQUEST[to_orgrole_name]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=to_org_name VALUE=\"$_REQUEST[to_org_name]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=warrior_id VALUE=\"$_REQUEST[warrior_id]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=start_date VALUE=\"$_REQUEST[start_date]\">\n";
+			echo "<INPUT TYPE=HIDDEN NAME=end_date VALUE=\"$_REQUEST[end_date]\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Finalize Relationship\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+		//----------------------------------------------------------------------
+	  	// Finalize Relationship: Insert New Entry into orgrep table
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Finalize Relationship" ) {
+			caa_connect();
+			echo "<P class=trace>Entering Finalize Relationship</P>\n"; 	// DEVONLY
+			echo "<PRE>\n";			// DEVONLY
+			print_r($_REQUEST);		// DEVONLY
+			echo "</PRE>\n";		// DEVONLY
+
+			// TODO Required Field Check
+
+
+			//
+			// If Envoy or Representative, Enter this and counterpart
+			//
+			//
+			// Insert record into orgrep for this relationship
+			//
+			if ( $_REQUEST['from_orgrole_name'] == 'Envoy' ) {
+
+				//-------------------------------------------------------
+				// Insert Envoy record into orgrep 
+				//-------------------------------------------------------
+
+				if ($_REQUEST['to_tier'] == "Center" ) {
+					$sql = "SELECT center_abbr from center where center_id = $_REQUEST[to_which_id]";
+					$towhich = get_value($sql);
+					echo "<P class=trace> $sql : $towhich</P>\n";	// DEVONLY
+				}
+				if ($_REQUEST['to_tier'] == "GeoRegion" ) {
+					$sql = "SELECT georegion_abbreviation from georegion where georegion_id = $_REQUEST[to_which_id]";
+					$towhich = get_value($sql);
+					echo "<P class=trace> $sql : $towhich</P>\n";	// DEVONLY
+				}
+	
+				if ($_REQUEST['to_tier'] == "I-Group Region" ) {
+					$sql = "SELECT igrpreg_name from igroup_regions where igrpreg_id = $_REQUEST[to_which_id]";
+					$towhich = get_value($sql);
+					echo "<P class=trace> $sql : $towhich</P>\n";	// DEVONLY
+				}
+
+				$_REQUEST['to_name'] = "Representative to $towhich $_REQUEST[to_tier] $_REQUEST[to_org_name]";
+
+				//
+				$sql = "INSERT INTO orgrep (warrior_id, from_orgrole_id, from_name, to_orgrole_id, to_name) VALUES (";
+				$sql .= $_REQUEST['warrior_id'] . ", ";
+				$sql .= $_REQUEST['from_orgrole_id'] . ", ";
+				$sql .= "'" . mysql_real_escape_string($_REQUEST[from_name]) . "', ";
+				$sql .= $_REQUEST['to_orgrole_id'] . ", ";
+				$sql .= "'" . mysql_real_escape_string($_REQUEST[to_name]) . "'";
+				$sql .= ")";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				mysql_query($sql);
+
+				//
+				//-------------------------------------------------------
+				// Insert Envoy orgrepholder FROM 
+				//-------------------------------------------------------
+
+				$sql = "INSERT INTO orgroleholder ( orgrole_id, warrior_id, which_id, start_date, end_date";
+				//$sql .= " , orgroleholder_alias, orgroleholder_notes, orgroleholder_email, orgroleholder_url";
+				$sql .= ") VALUES (";
+				$sql .= "$_REQUEST[from_orgrole_id],";	//orgrole_id
+				$sql .= "$_REQUEST[warrior_id],";		//warrior_id,
+				$sql .= "$_REQUEST[from_which_id],";		//which_id,
+				$sql .= "'$_REQUEST[start_date]',";		//start_date,
+				$sql .= "'$_REQUEST[end_date]'";		//end_date,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_alias,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_notes,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_email,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_url
+				$sql .= ")";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				mysql_query($sql);
+
+				//-------------------------------------------------------
+				// Insert Representative orgrepholder TO
+				//-------------------------------------------------------
+
+				$sql = "INSERT INTO orgroleholder ( orgrole_id, warrior_id, which_id, start_date, end_date";
+				////$sql .= " , orgroleholder_alias, orgroleholder_notes, orgroleholder_email, orgroleholder_url";
+				$sql .= ") VALUES (";
+				$sql .= "$_REQUEST[to_orgrole_id],";	//orgrole_id
+				$sql .= "$_REQUEST[warrior_id],";		//warrior_id,
+				$sql .= "$_REQUEST[to_which_id],";		//which_id,
+				$sql .= "'$_REQUEST[start_date]',";		//start_date,
+				$sql .= "'$_REQUEST[end_date]'";		//end_date,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_alias,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_notes,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_email,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_url
+				$sql .= ")";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				mysql_query($sql);
+
+
+			} elseif ( $_REQUEST['from_orgrole_name'] == 'Representative' ) {
+
+				if ($_REQUEST['to_tier'] == "Center" ) {
+					$sql = "SELECT center_abbr from center where center_id = $_REQUEST[to_which_id]";
+					$towhich = get_value($sql);
+					echo "<P class=trace> $sql : $towhich</P>\n";	// DEVONLY
+				}
+				if ($_REQUEST['to_tier'] == "GeoRegion" ) {
+					$sql = "SELECT georegion_abbreviation from georegion where georegion_id = $_REQUEST[to_which_id]";
+					$towhich = get_value($sql);
+					echo "<P class=trace> $sql : $towhich</P>\n";	// DEVONLY
+				}
+				if ($_REQUEST['to_tier'] == "I-Group Region" ) {
+					$sql = "SELECT igrpreg_name from igroup_regions where igrpreg_id = $_REQUEST[to_which_id]";
+					$towhich = get_value($sql);
+					echo "<P class=trace> $sql : $towhich</P>\n";	// DEVONLY
+				}
+
+				$_REQUEST['to_name'] = "Envoy from $towhich $_REQUEST[to_tier] $_REQUEST[to_org_name]";
+
+				//
+				// Insert Representative record into orgrep 
+				// INVERTED as this is the destination of the Envoy -> Representative Relationship
+				//
+				$sql = "INSERT INTO orgrep (warrior_id, from_orgrole_id, from_name, to_orgrole_id, to_name) VALUES (";
+				$sql .= $_REQUEST['warrior_id'] . ", ";
+				$sql .= $_REQUEST['to_orgrole_id'] . ", ";
+				$sql .= "'" . mysql_real_escape_string($_REQUEST[to_name]) . "', ";
+				$sql .= $_REQUEST['from_orgrole_id'] . ", ";
+				$sql .= "'" . mysql_real_escape_string($_REQUEST[from_name]) . "'";
+				$sql .= ")";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				mysql_query($sql);
+
+
+				//-------------------------------------------------------
+				// Insert core Representative orgrepholder FROM 
+				//-------------------------------------------------------
+
+				$sql = "INSERT INTO orgroleholder ( orgrole_id, warrior_id, which_id, start_date, end_date";
+				//$sql .= " , orgroleholder_alias, orgroleholder_notes, orgroleholder_email, orgroleholder_url";
+				$sql .= ") VALUES (";
+				$sql .= "$_REQUEST[from_orgrole_id],";	//orgrole_id
+				$sql .= "$_REQUEST[warrior_id],";		//warrior_id,
+				$sql .= "$_REQUEST[from_which_id],";		//which_id,
+				$sql .= "'$_REQUEST[start_date]',";		//start_date,
+				$sql .= "'$_REQUEST[end_date]'";		//end_date,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_alias,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_notes,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_email,
+				//$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_url
+				$sql .= ")";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				mysql_query($sql);
+
+				//-------------------------------------------------------
+				// Insert core Envoy orgrepholder TO
+				//-------------------------------------------------------
+
+				$sql = "INSERT INTO orgroleholder ( orgrole_id, warrior_id, which_id, start_date, end_date";
+				////$sql .= " , orgroleholder_alias, orgroleholder_notes, orgroleholder_email, orgroleholder_url";
+				$sql .= ") VALUES (";
+				$sql .= "$_REQUEST[to_orgrole_id],";	//orgrole_id
+				$sql .= "$_REQUEST[warrior_id],";		//warrior_id,
+				$sql .= "$_REQUEST[to_which_id],";		//which_id,
+				$sql .= "'$_REQUEST[start_date]',";		//start_date,
+				$sql .= "'$_REQUEST[end_date]'";		//end_date,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_alias,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_notes,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_email,
+				////$sql .= "$_REQUEST[warrior_id],";		//orgroleholder_url
+				$sql .= ")";
+				echo "<P class=trace>$sql</P>\n"; 	// DEVONLY
+				mysql_query($sql);
+
+			}else{
+				echo "<P class=trace>ERROR: Finalize Relationship with role neither Representative nor Envoy.";
+				echo "Contact administrator</P>\n";
+				print_r($_REQUEST);
+				spew_footer($FMT);
+				exit;
+			}
+
+			$_REQUEST['Action'] = 'List Current Holders';
+
+			// TODO: Prevent back clone
+			//echo "<CENTER>\n";
+			//echo "<H3>DO NOT hit back button of browser.<BR> Navigate by clicking on buttons within this page.</H3>\n";
+			//echo "</CENTER>\n";
+
+		}
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry, Enroll man in tier/org/orgrole position
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Enroll" ) {
+			caa_connect();
+			$fields = array();
+			$fields = array_keys($Required);
+
+			echo "<P class=trace>Entering Enroll function</P>\n"; // DEVONLY
+
+			echo "<PRE>\n"; 		// DEVONLY
+			echo "<H3>Request Data Into Enroll Function</H3>\n";	// DEVONLY
+			print_r($_REQUEST);		// DEVONLY
+			echo "</PRE>\n"; 		// DEVONLY
+
+			//
+			// Incoming is orgrole_name, Tier, and Org... need to get orgrole_id
+			//
+			if ( isset ( $_REQUEST['orgrole_id'] ) ) {
+				echo "<P class=trace>Assuming orgrole_id sent is good : $_REQUEST[orgrole_id]</P>\n"; // DEVONLY
+			}else{
+				echo "<P class=trace>No orgrole_id sent querying based on org_tier, orgrole_name, and org_id</P>\n"; // DEVONLY
+				echo "<H3>Error: Contact administrator</H3>\n";
+				print_r($_REQUEST);
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Eliminate all keys that have invalid values
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+
+			//
+			// Required info gauntlet
+			//
+			foreach ($Required as $field => $msg) {
+				if (! isset( $_REQUEST[$field] ) ) {
+					$err . '<LI>' . $msg . '</LI>';
+				}
+			}
+
+			if ( isset ($err) ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Generate sql
+			//
+			unset ($_REQUEST['orgroleholder_id']);
+
+			$sql = 'INSERT INTO orgroleholder (';
+
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+
+			//
+			// Special Case for Dual Roles of Envoy or Representative
+			//
+
+			if ( $_REQUEST['orgrole_name'] == 'Envoy' ) {
+				// Generate Representative Entrance Form
+
+				$Tier = array();
+				$sql = "SELECT DISTINCT org_tier FROM org ORDER BY org_tier";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+				$Tier = get_menu($sql);
+
+				$Orglist = array();
+				$sql = "SELECT org_name FROM org ORDER by org_name";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+				$Orglist = get_menu($sql);
+
+				if ($_REQUEST['org_tier'] == "Center" ) {
+					$sql = "SELECT center_abbr from center where center_id = $_REQUEST[which_id]";
+					$fromwhich = get_value($sql);
+					echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+		
+				}
+				if ($_REQUEST['org_tier'] == "GeoRegion" ) {
+					$sql = "SELECT georegion_shortname from georegion where georegion_id = $_REQUEST[which_id]";
+					$fromwhich = get_value($sql);
+					echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+				}
+				if ($_REQUEST['org_tier'] == "I-Group Region" ) {
+					$sql = "SELECT igrpreg_name from igroup_regions where igrpreg_id = $_REQUEST[which_id]";
+					$fromwhich = get_value($sql);
+					echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+				}
+
+				echo "<CENTER>\n";
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TH class=ths COLSPAN=2>";
+				echo "Envoy From $fromwhich $_REQUEST[org_tier] $_REQUEST[org_name]";
+				echo "<BR>";
+				echo "Sitting in what group as Representative";
+				echo "</TH>\n";
+
+				// To Tier name
+				echo "<TR>\n";
+				echo "<TD class=tdls>Tier</TD>\n";
+				echo "<TD class=tds>\n";
+					spew_select_menu('to_tier',$_REQUEST['org_tier'],$_REQUEST['org_tier'],$Tier);
+				echo "</TD>\n";
+
+				// To Org/Group Name
+				echo "<TR>\n";
+				echo "<TD class=tdls>Group</TD>\n";
+				echo "<TD class=tds>\n";
+					spew_select_menu('to_org_name',$_REQUEST['org_name'],$_REQUEST['org_name'],$Orglist);
+				echo "</TD>\n";
+
+				echo "</TABLE>\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=from_org_id VALUE=\"$_REQUEST[org_id]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_org_name VALUE=\"$_REQUEST[org_name]\">\n";
+
+				//echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_name VALUE=Envoy>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_name VALUE=\"$_REQUEST[orgrole_name]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_id VALUE=\"$_REQUEST[orgrole_id]\">\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=from_which_id VALUE=$_REQUEST[which_id]>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_which_id VALUE=\"$_REQUEST[which_id]\">\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=from_tier VALUE=\"$_REQUEST[org_tier]\">\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=start_date VALUE=$_REQUEST[start_date]>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=end_date VALUE=$_REQUEST[end_date]>\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=warrior_id VALUE=$_REQUEST[warrior_id]>\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=to_orgrole_name VALUE=Representative>\n";
+
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Relationship\">\n";
+				echo "</FORM>\n";
+				echo "</CENTER>\n";
+
+				spew_footer($FMT);
+				exit;
+
+
+			} elseif ( $_REQUEST['orgrole_name'] == 'Representative' ) {
+				// Generate Envoy Entrance Form
+				$Tier = array();
+				$sql = "SELECT DISTINCT org_tier FROM org ORDER BY org_tier";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+				$Tier = get_menu($sql);
+
+				$Orglist = array();
+				$sql = "SELECT org_name FROM org ORDER by org_name";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+				$Orglist = get_menu($sql);
+
+				if ($_REQUEST['org_tier'] == "Center" ) {
+					$sql = "SELECT center_abbr from center where center_id = $_REQUEST[which_id]";
+					$fromwhich = get_value($sql);
+					echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+				}
+				if ($_REQUEST['org_tier'] == "GeoRegion" ) {
+					$sql = "SELECT georegion_abbreviation from georegion where georegion_id = $_REQUEST[which_id]";
+					$fromwhich = get_value($sql);
+					echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+				}
+				if ($_REQUEST['org_tier'] == "I-Group Region" ) {
+					$sql = "SELECT igrpreg_name from igroup_regions where igrpreg_id = $_REQUEST[which_id]";
+					$fromwhich = get_value($sql);
+					echo "<P class=trace> $sql : $fromwhich</P>\n";	// DEVONLY
+				}
+
+				echo "<CENTER>\n";
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TH class=ths COLSPAN=2>";
+				echo "Representative sitting on $fromwhich $_REQUEST[org_tier] $_REQUEST[org_name]";
+				echo "<BR>";
+				echo "As Envoy From";
+				echo "</TH>\n";
+
+				// From Tier name
+				echo "<TR>\n";
+				echo "<TD class=tdls>From Tier</TD>\n";
+				echo "<TD class=tds>\n";
+					spew_select_menu('to_tier',$_REQUEST['org_tier'],$_REQUEST['org_tier'],$Tier);
+				echo "</TD>\n";
+
+				// From Org/Group Name
+				echo "<TR>\n";
+				echo "<TD class=tdls>From Group</TD>\n";
+				echo "<TD class=tds>\n";
+					spew_select_menu('to_org_name',$_REQUEST['org_name'],$_REQUEST['org_name'],$Orglist);
+				echo "</TD>\n";
+
+				echo "</TABLE>\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=to_orgrole_name VALUE=Envoy>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_which_id VALUE=$_REQUEST[which_id]>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_tier VALUE=\"$_REQUEST[org_tier]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_org_name VALUE=\"$_REQUEST[org_name]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_name VALUE=\"$_REQUEST[orgrole_name]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_orgrole_id VALUE=\"$_REQUEST[orgrole_id]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_org_id VALUE=\"$_REQUEST[org_id]\">\n";
+				echo "<INPUT TYPE=HIDDEN NAME=from_which_id VALUE=\"$_REQUEST[which_id]\">\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=start_date VALUE=$_REQUEST[start_date]>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=end_date VALUE=$_REQUEST[end_date]>\n";
+
+				echo "<INPUT TYPE=HIDDEN NAME=warrior_id VALUE=$_REQUEST[warrior_id]>\n";
+
+
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Relationship\">\n";
+				echo "</FORM>\n";
+				echo "</CENTER>\n";
+
+				spew_footer($FMT);
+				exit;
+
+			}else{
+				echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+				$result = mysql_query($finalsql);
+	
+				//
+				// TODO: If successful....
+				//
+				$wid = $_REQUEST['warrior_id'];
+				$sql = "SELECT war_fname, war_lname from warrior where war_id = '$wid'";
+				$NameArray = get_menu($sql);
+				$Name = implode(' ', $NameArray);
+				echo "<CENTER>";
+				echo "<H2>Enrolled $Name in role of $_REQUEST[orgrole_name]</H2>\n";
+				echo "<H2>See current roster below</H2>\n";
+				echo "</CENTER>";
+
+				$_REQUEST['Action'] = "List Current Holders";
+			}
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Holder
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update Holder" ) {
+
+			if ( array_key_exists('orgroleholder_id', $_REQUEST)) {
+				$hid = $_REQUEST['orgroleholder_id'];
+				if (! is_numeric( $hid ) ) {
+					die ("ERROR: Attempt to update holder requires orgroleholder_id to be integer. It is not.");
+				}
+			}else{
+				die ("No org role holder Id Set") ;
+			}
+
+			caa_connect();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM orgroleholder WHERE orgroleholder_id = '$hid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('orgroleholder','aaaaaaaaaa',$WICCFG['DBNAME']);
+
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n";   // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE orgroleholder SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlentry[] = $f . " = '" . $val . "'";
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE orgroleholder_id = '$hid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST['Action'] = "View Holder";
+		}//End Action = Update Holder
+
+		//----------------------------------------------------------------------
+	  	// Update Role
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update Role" ) {
+
+			if ( array_key_exists('orgrole_id', $_REQUEST)) {
+				$rid = $_REQUEST['orgrole_id'];
+				if (! is_numeric( $rid ) ) {
+					die ("ERROR: Attempt to update requires orgrole_id to be integer. It is not.");
+				}
+			}else{
+				die ("No org role Id Set") ;
+			}
+
+			caa_connect();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM orgrole WHERE orgrole_id = '$rid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('orgrole','orgrole',$WICCFG['DBNAME']);
+
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n";   // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE orgrole SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlentry[] = $f . " = '" . $val . "'";
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE orgrole_id = '$rid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST['Action'] = "View";
+		}//End Action = Update Role
+
+		//----------------------------------------------------------------------
+	  	// Update Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update Group" ) {
+
+			if ( array_key_exists('org_id', $_REQUEST)) {
+				$oid = $_REQUEST['org_id'];
+				if (! is_numeric( $oid ) ) {
+					die ("ERROR: Attempt to update requires org_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Org Group Id Set") ;
+			}
+
+			caa_connect();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM org WHERE org_id = '$oid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('org','org',$WICCFG['DBNAME']);
+
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n";   // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE org SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlentry[] = $f . " = '" . $val . "'";
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE zzz_id = '$lid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST['Action'] = "View Group";
+		}//End Action = Update Group
+
+		//----------------------------------------------------------------------
+	  	// Query Current/Past Holders
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "List Current Holders"
+	  		|| $_REQUEST['Action'] == "List Current Holders"
+	  		|| $_REQUEST['Action'] == "List Past Holders"
+	  		|| $_REQUEST['Action'] == "My Center") {
+
+			$today = date('Y-m-d');
+
+			caa_connect();
+			//
+			// Get Region id -> Name lookup
+			//
+			$GeoRegion = array();
+			$sql = "SELECT georegion_id, georegion_name from georegion";
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+			$GeoRegion = get_menu_array($sql);
+
+			//
+			//
+			// Get Center id -> Name lookup
+			//
+			$Center = array();
+			$sql = "SELECT center_id, center_name from center";
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+			$Center = get_menu_array($sql);
+
+			//
+			// Get I-Group Region id -> Name lookup
+			//
+			//mysql> desc igroup_regions;
+			//+--------------+-----------------------+------+-----+---------+----------------+
+			//| Field		| Type				  | Null | Key | Default | Extra		  |
+			//+--------------+-----------------------+------+-----+---------+----------------+
+			//| igrpreg_id   | smallint(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| igrpreg_name | varchar(40)		   | NO   |	 |		 |				|
+			//| igrpreg_cen  | int(11) unsigned	  | NO   |	 | 1	   |				|
+			//| igrpreg_rep  | int(10) unsigned	  | YES  |	 | NULL	|				|
+			//+--------------+-----------------------+------+-----+---------+----------------+
+
+			$IGRegion = array();
+			$sql = "SELECT igrpreg_id, igrpreg_name from igroup_regions";
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+			$IGRegion = get_menu_array($sql);
+
+			if (isset ($_REQUEST['igrpreg_id'])){
+				$IGRegCenter = array();
+				$sql = "SELECT igrpreg_id, igrpreg_cen from igroup_regions";
+				echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+				$IGRegCentern = get_menu_array($sql);
+			}
+
+			//
+			// Get I-Group id -> Name lookup
+			//
+
+			$IGroup = array();
+			$sql = "SELECT igroup_id, igroup_name from igroup";
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+			$IGroup = get_menu_array($sql);
+
+			//
+			// Get I-Group Rep Key Matrix Setup
+			//
+
+			$sql = "SELECT orgrep_id, warrior_id, from_orgrole_id, ";
+			$sql .= " to_orgrole_id, from_name, to_name";
+			$sql .= " FROM orgrep ";
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+			$result = mysql_query($sql);
+
+			$FromRoleName = array(array());		// key is upper org, key is constituent group
+			$ToRoleName = array(array());		// key is upper org, key is constituent group
+			$row = array();
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$wid = $row['warrior_id'];
+				//----------------------------------------------------------------------------
+				// Relate To: key is from lower constituent, points to upper organization
+				// If my org/role is in the key, I following the link to the upper group I sit on as a rep
+				//----------------------------------------------------------------------------
+				$fromkey = $wid . ':' .$row['from_orgrole_id'];
+				$FromRoleName[$fromkey] = "$row[from_name] ($row[to_name])";
+				echo "<P class=trace>For wid of $wid and fromkey of $fromkey, setting FromRoleName to $FromRoleName[$fromkey]</P>\n"; // DEVONLY
+
+				//----------------------------------------------------------------------------
+				// Relate From: key is to upper organization, points to constituent org
+				// If my org/role is in the key, I following the link to my constituent group
+				//----------------------------------------------------------------------------
+				$tokey = $wid . ':' . $row['to_orgrole_id'];
+				$ToRoleName[$tokey] = "$row[to_name] ($row[from_name])";
+				echo "<P class=trace>For wid of $wid and key of $tokey, setting ToRoleName to $ToRoleName[$tokey]</P>\n"; // DEVONLY
+			}
+
+			//
+			// Clean up 'All' entries
+			//
+			foreach ($_REQUEST as $key => $val ) {
+				if ( in_array($val, $InValidChoice) ) {
+					unset($_REQUEST[$key]);
+				}
+			}
+			//
+			// Set Up Arrays from which to construct sql
+			//
+			$Where = array (
+				'o.org_id = r.org_id',
+				'r.orgrole_id = h.orgrole_id',
+				'w.war_id = h.warrior_id'
+				);
+
+			$What = array (
+				'o.org_longname', 
+				'o.org_name', 
+				'o.org_id', 
+				'o.org_tier',
+				'r.orgrole_id', 
+				'r.orgrole_name', 
+				'h.orgroleholder_id',
+				'h.orgroleholder_alias',
+				'h.which_id', 
+				'h.start_date', 
+				'h.end_date', 
+				'h.warrior_id', 
+				'w.war_fname', 
+				'w.war_lname'
+			);
+			$From = array (
+				'org'			=>	'o', 
+				'orgrole'		=>	'r', 
+				'orgroleholder'	=>	'h',
+				'warrior'		=>	'w'
+			);;
+			//
+			// If Sortmeby == 'Center', we need to join center table
+			// Only reasonable when selecting  Tier == 'Center'
+			//
+
+			if ($_REQUEST['Sortmeby'] == 'Center' ){
+				//$_REQUEST['org_tier'] = 'Center';	// TODO: Possible train wreck
+				$From['center'] = 'c';
+				//$Where[] = 'h.which_id = c.center_id';	// TODO: 
+			}
+
+			//
+			// Special case of Action == 'List Past Holders'
+			//
+			if ( $_REQUEST['Action'] == 'List Past Holders' ) {
+				$Where[] = "h.end_date < '$today'";
+			}else{
+				// What about null end_dates??
+				$Where[] = "h.end_date > '$today'";
+			}
+
+			//
+			// Special case of Action == 'My Center'
+			// Hardwire org_tier and center_id
+			//
+			if ( $_REQUEST['Action'] == 'My Center' ) {
+				$_REQUEST['org_tier'] = 'Center';
+				$_REQUEST['center_id'] = $_SESSION['center_id'];
+			}
+
+			//
+			// Tier is specified
+			//
+			if (isset ($_REQUEST['org_tier'] ) ) {
+				$val = mysql_real_escape_string($_REQUEST['org_tier']);
+				$Where[] = "o.org_tier = " . "'" . $val . "'";
+			}
+			//
+			// Center is specified
+			// Center Tier or are narrowing scope to a specific center
+			//
+			if ( isset ($_REQUEST['center_id'] ) ) {
+				$cid_val = mysql_real_escape_string($_REQUEST['center_id']);
+				if (! isset ( $_REQUEST['org_tier'] )) {
+					$_REQUEST['org_tier'] = 'Center';
+					$Where[] = "h.which_id = '$cid_val'";
+				}else{
+					$Where[] = "w.war_center = '$cid_val'";
+				}
+			}
+
+			//
+			// Hmm... GeoRegion and Center and org_tier reconciliation
+			// GeoRegion overrides tier, Center overrides GeoRegion
+			// Can select org_tier = Center but select which Georegion
+			// 
+			if ( isset ($_REQUEST['georegion_id'] ) ) {
+				$gr_val = mysql_real_escape_string($_REQUEST['georegion_id']);
+				//
+				// Specific GeoRegion is specified
+				//
+				if (! isset ( $_REQUEST['org_tier'] )) {
+					//
+					// Specific org_tier is NOT set (to center)
+					// Default is all jobs belong to that tier georegion
+					//
+					$_REQUEST['org_tier'] = 'GeoRegion'; 
+					$Where[] = "h.which_id = '$gr_val'";
+				}else{
+					// Specific org_tier is set (to center)
+					// Therefore georegion_id is limiting scope of center
+					if ( ( $_REQUEST['org_tier'] == 'Center' )) {
+						$Where[] = "c.georegion_id = '$gr_val'";
+						$Where[] = 'h.which_id = c.center_id';	// TODO: 
+						$From['center'] = 'c';
+					}
+				}
+			}else{
+				if ( ( $_REQUEST['org_tier'] == 'Center' )) {
+					$Where[] = 'h.which_id = c.center_id';	// TODO: 
+					$From['center'] = 'c';
+				}
+			}
+
+
+			// TODO: Put this in an array loop
+			// Org
+			if (isset ($_REQUEST['org_id'] ) ) {
+				$oid_val = mysql_real_escape_string($_REQUEST['org_id']);
+				$Where[] =  "o.org_id = " . "'" . $oid_val . "'";
+			}
+			if (isset ($_REQUEST['org_name'] ) ) {
+				$oname_val = mysql_real_escape_string($_REQUEST['org_name']);
+				$Where[] =  "o.org_name = " . "'" . $oname_val . "'";
+			}
+
+			// OrgRole
+			if (isset ($_REQUEST['orgrole_id'] ) ) {
+				$orid_val = mysql_real_escape_string($_REQUEST['orgrole_id']);
+				$Where[] =  "r.orgrole_id = " . "'" . $orid_val . "'";
+			}
+			// TODO: Envoy/Representative?
+			if (isset ($_REQUEST['orgrole_name'] ) ) {
+				$orname_val = mysql_real_escape_string($_REQUEST['orgrole_name']);
+				$Where[] = "r.orgrole_name = " . "'" . $orname_val . "'";
+			}
+
+			// Holder
+			if (isset ($_REQUEST['war_id'] ) ) {
+				$wid_val = mysql_real_escape_string($_REQUEST['war_id']);
+				$Where[] = "h.warrior_id = " . "'" . $wid_val . "'";
+			}
+
+			if ( isset ($_REQUEST['igrpreg_id'] ) ) {
+				$igr_val = mysql_real_escape_string($_REQUEST['igrpreg_id']);
+				$Where[] = "o.org_tier = 'I-Group Region'";
+				$Where[] = "h.which_id = '$igr_val'";
+			}
+
+			// Future: I-Group
+			if ( isset ($_REQUEST['igroup_id'] ) ) {
+				$igid_val = mysql_real_escape_string($_REQUEST['igroup_id']);
+				$Where[] = "o.org_tier = 'I-Group'";
+				$Where[] = "h.which_id = '$igid_val'";
+			}
+
+			//
+			// Special case of Exclude Envoy and Representative Issues
+			//
+			if (isset ($_REQUEST['Exclude'])) {
+				$Where[] = "r.orgrole_name != 'Envoy'";
+				$Where[] = "r.orgrole_name != 'Representative'";
+			}
+
+			//
+			// Disambiguate and construct sql
+			//
+			array_unique($Where);
+			array_unique($From);
+			array_unique($What);
+
+			$sql = "SELECT DISTINCT ";
+			$sql .= implode(', ', $What);
+
+			$FromWhat = array();
+			foreach ($From as $table => $abbr ) {
+				$FromWhat[] = $table . ' ' . $abbr;
+			}
+			array_unique($FromWhat);
+			$sql .= ' FROM ' . implode(', ', $FromWhat);
+			$sql .= ' WHERE ' . implode(' AND ', $Where);
+
+			// ORDER BY: TODO: Order By
+			$OrderBy = array(
+				'Center'	=>	'c.center_name',
+				'Group'		=>	'o.org_name, r.orgrole_name',
+				'Name'		=>	'w.war_lname, w.war_fname',
+				'GeoRegion'	=>	'r.georegion_name, c.center_name',
+				'Role'		=>	'r.orgrole_name, w.war_lname',
+				'Tier'		=>	'o.org_tier'
+			);
+
+			$sortby = $_REQUEST['Sortmeby'];
+			$sby = $OrderBy[$sortby];
+			if (isset ($sby)){
+				$sql .= ' ORDER BY ' . $sby;
+			}else{
+				$sql .= ' ORDER BY o.org_tier, o.org_name, r.orgrole_name';
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+			$rowcount = mysql_num_rows($result);
+	
+			// Help Blurb
+			echo "<P class=trace>";
+			echo "Query description, see <A HREF=/help.phpx?";
+			echo "topic=OrgChart&subtopic=Query&Action=Help>query overview</A>.\n";
+			echo " Click on any group or position link to drill down.\n";
+			echo " Click on yellow icon to see general details on that group, role, or holder.\n";
+			echo "<BR>For representatives to other groups,";
+
+			echo " click on purple icon to see details on representative position,\n";
+			echo " or blue icon to see details on envoy position.\n";
+			echo "<BR>First column (More): yellow icon shows notes on service holder";
+			if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {	// SECURITY
+				echo ", green icon edits dates, notes of service term";
+				echo ", red icon deroles man from that service term";
+			}
+			echo ".";
+			echo "</P>\n";
+
+			echo "<P class=trace><B>$_REQUEST[Action]</B>: Returned $rowcount entries</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+	
+			echo "<TH class=ths>More";
+			if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {	// SECURITY
+				echo "/Edit/Deroll\n";
+			}
+			echo"</TH>\n";
+			echo "<TH class=ths>Tier</TH>\n";
+			//echo "<TH class=ths>Which</TH>\n";
+			echo "<TH class=ths>Tier Member</TH>\n";
+			echo "<TH class=ths>Leadership Group</TH>\n";
+			echo "<TH class=ths>Role</TH>\n";
+			echo "<TH class=ths>Holder</TH>\n";
+			echo "<TH class=ths>Start Date</TH>\n";
+			echo "<TH class=ths>End Date</TH>\n";
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+				$tier = $row['org_tier'];
+				$oid = $row['org_id'];
+				$rid = $row['orgrole_id'];
+				$whichid = $row['which_id'];
+				$wid = $row['warrior_id'];	// Warrior_id
+
+				//
+				// View Holder Info
+				//
+				echo "<TD class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?orgroleholder_id=$row[orgroleholder_id]";
+				echo "&Action=View+Holder>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+
+				if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {	// SECURITY
+					//
+					// Edit Holder Info if authorized
+					//
+					echo "&nbsp;&nbsp;";
+
+					echo "<A HREF=$_SERVER[PHP_SELF]?orgroleholder_id=$row[orgroleholder_id]";
+					echo "&Action=Edit+Holder>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+
+					//
+					// Deroll Holder if authorized
+					//
+					echo "&nbsp;&nbsp;";
+
+					echo "<A HREF=$_SERVER[PHP_SELF]?orgroleholder_id=$row[orgroleholder_id]";
+					echo "&Action=Deroll>";
+					echo "<IMG SRC=/images/smallballs/redball.gif BORDER=0></A>";
+				}
+				echo "</TD>\n";
+	
+				//
+				// Tier
+				//
+				echo "<TD class=tdcs>";
+					$url = "org_tier=$row[org_tier]&Action=List+Current+Holders>";
+					$url = preg_replace('/\s+/','+', $url);
+
+					echo "<A HREF=$_SERVER[PHP_SELF]?";
+					echo "$url $row[org_tier]";
+					echo "</A>\n";
+				echo "</TD>\n";
+
+				//
+				// Which Organization: Tier Member
+				//
+				echo "<TD class=tds>";
+
+					$url = "org_tier=$row[org_tier]&which_id=$whichid&Action=List+Current+Holders>";
+					$url = preg_replace('/\s+/','+', $url);
+					switch ($row['org_tier']) {
+						case 'Center':
+							echo "<A HREF=$_SERVER[PHP_SELF]?";
+							echo "$url $Center[$whichid] </A>";
+							break;
+						case 'I-Group Region':
+							echo "<A HREF=$_SERVER[PHP_SELF]?";
+							echo "$url $IGRegion[$whichid]</A>";
+							break;
+						case 'MKPI':
+							echo "<A HREF=$_SERVER[PHP_SELF]?";
+							echo "$url MKPI </A>";
+							break;
+						case 'I-Group':
+							echo "<A HREF=$_SERVER[PHP_SELF]?";
+							echo "$url $IGroup[$whichid]</A>";
+							break;
+						case 'GeoRegion':
+							echo "<A HREF=$_SERVER[PHP_SELF]?";
+							echo "$url $GeoRegion[$whichid]</A>";
+							break;
+					}
+				echo "</TD>\n";
+
+				//
+				// Org or Leadership Group
+				//
+				echo "<TD class=tds>";
+					// Yellow icon to describe details of that Council/Group
+					echo "<A HREF=$_SERVER[PHP_SELF]?org_id=$row[org_id]&Action=View+Group>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+
+					// Drilldown
+					$url = "org_tier=$row[org_tier]";
+					$url .= "&which_id=$whichid";
+					$url .= "&org_name=$row[org_name]";
+					$url .= "&Action=List+Current+Holders>";
+					$url = preg_replace('/\s+/','+', $url);
+
+					echo "<A HREF=$_SERVER[PHP_SELF]?";
+					echo "$url $row[org_name]</A>";
+				echo "</TD>\n";
+
+				//
+				// Role And Mapping to Reps
+				//
+				echo "<TD class=tds>";
+					//
+					// Yellow ball to show details of orgrole (job description)
+					//
+					echo "[$wid]"; // DEVONLY
+					echo "<A HREF=$_SERVER[PHP_SELF]?orgrole_id=$row[orgrole_id]";
+					echo "&Action=View+Role>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				
+					//
+					// Drilldown, Show holders of this role in this tier
+					//
+					$url = "org_tier=";
+					$url .= stripslashes($row[org_tier]);
+					$url .= "&orgrole_name=";
+					$url .= stripslashes($row[orgrole_name]);
+					$url .= "&Action=List+Current+Holders>";
+
+					$url = preg_replace('/\s+/','+', $url);
+
+					$key = $wid . ':' . $rid;
+					echo "[$key]\n";	// DEVONLY
+					echo "<A HREF=$_SERVER[PHP_SELF]?";
+					echo "$url ";
+					if ( isset ($ToRoleName[$key] )) {
+						echo "$ToRoleName[$key]";
+					}elseif ( isset ($FromRoleName[$key]) ) {
+						echo "$FromRoleName[$key]";
+					}else{
+						echo "$row[orgrole_name]";
+					}
+					echo "</A>\n";
+					//
+					// If Holder Alias
+					//
+					if (isset ( $row['orgroleholder_alias'] ) ) {
+						echo " ($row[orgroleholder_alias])";
+					}
+				echo "</TD>\n";
+
+				//
+				// Who
+				//
+				echo "<TD class=tds>";
+					// Yellow ball shows the warrior info
+					echo "<A HREF=/warrior.php?war_id=$row[warrior_id]&Action=View>\n";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+					echo "</A>";
+
+					// Link is drilldown
+					echo "&nbsp;";
+					echo "<A HREF=$_SERVER[PHP_SELF]?";
+
+					$url = "war_id=$row[warrior_id]";
+					$url .= "&Action=List+Current+Holders>";
+					$url = preg_replace('/\s+/','+', $url);
+
+					echo "$url $row[war_fname] $row[war_lname]";
+					echo "</A>";
+
+				echo "</TD>\n";
+
+				//
+				// Start Date
+				//
+				echo "<TD class=tdcs>";
+					echo "$row[start_date]";
+				echo "</TD>\n";
+
+				//
+				// End Date
+				//
+				echo "<TD class=tdcs>";
+					echo "$row[end_date]";
+				echo "</TD>\n";
+
+			}
+			if ( $rowcount < 1 ) {
+				if ( $_SESSION['access'] >= $ORGCFG['ADMINLEVEL'] ) {
+					echo "<TR><TD class=tdcs COLSPAN=8>No job role holders met your search criteria.\n";
+				}else{
+					echo "<TR><TD class=tdcs COLSPAN=7>No job role holders met your search criteria.\n";
+				}
+
+				$sql = "SELECT r.orgrole_id, r.orgrole_longname from orgrole r, org o ";
+				$sql .= " WHERE o.org_id = r.org_id ";
+				if (isset ( $_REQUEST['org_name']) ) {
+					$oname = mysql_real_escape_string($_REQUEST['org_name']);
+					$sql .= " AND o.org_name = '$oname' ";
+				}
+				if (isset ( $_REQUEST['orgrole_name']) ) {
+					$rname = mysql_real_escape_string($_REQUEST['orgrole_name']);
+					$sql .= " AND r.orgrole_name = '$rname' ";
+				}
+				if (isset ( $_REQUEST['org_tier']) ) {
+					$tier = mysql_real_escape_string($_REQUEST['org_tier']);
+					$sql .= " AND o.org_tier = '$tier' ";
+				}
+				$sql .= " ORDER BY r.orgrole_longname ";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+
+				$xresult = mysql_query($sql);
+				$xrowcount = mysql_num_rows($xresult);
+
+				if ( $xrowcount < $ORGCFG['MAXDISPLAYROWS'] ) {
+					$Role = array();
+					$Role = get_menu_array($sql);
+					echo "<BR>See following job descriptions matching your criteria</BR>";
+					foreach ($Role as $key => $val) {
+						echo "<BR><A HREF=$_SERVER[PHP_SELF]?orgrole_id=$key&Action=View+Role>";
+						echo "$val</BR>\n";
+					}
+
+				}else{
+					if ( $xrowcount > $ORGCFG['MAXDISPLAYROWS'] ) {
+						echo "Please select values of Group and/or Role to narrow search.";
+					}
+				}
+
+				echo "</TD>\n";
+
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//Endif ($_REQUEST[Action] == "List Current Holders")) {
+
+		//----------------------------------------------------------------------
+	  	// List Roles
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "List Roles") {
+			caa_connect();
+
+			$fieldlabel = array();
+			$fieldlabel = get_field_labels('orgrole','orgrole',$WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Generate Reports To Array
+			//
+			$sql = "SELECT orgrole_id, orgrole_longname FROM orgrole";
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$ReportsTo = array();
+			$ReportsTo = get_menu_array($sql);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ORGROLE) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$validentries[] = $key . '=' . $val;
+			}
+			array_unique($validentries);
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			$Where = array(
+				'o.org_id = r.org_id'
+			);
+
+			//
+			// Construct where clause into an array from orgrole fields
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( ! empty($val) ) {	
+						if ( preg_match('/%/', $val)) { 
+							$Where[] = 'r.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$Where[] = 'r.' . $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+			//
+			// Construct where clause into an array from org fields
+			//
+			$ofields = array(
+				'org_tier',
+				'org_name'
+			);
+			foreach ($ofields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( ! empty($val) ) {	
+						if ( preg_match('/%/', $val)) { 
+							$Where[] = 'o.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$Where[] = 'o.' . $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT DISTINCT r.orgrole_longname,  r.orgrole_abbreviation, r.orgrole_id, ";
+			$sql .= " r.orgrole_name, r.orgrole_term, r.reports_to_orgrole,";
+			$sql .= " o.org_name, o.org_tier, o.org_id";
+			$sql .= " FROM orgrole r, org o ";
+
+			if ( count($Where) >= 2 ) {
+				$sql .= ' WHERE ' . implode(' AND ', $Where);
+			}else{
+				echo "<CENTER>\n";
+				echo "<H2>Must select more query criteria to prevent killing server</H2>\n";
+				echo "<CENTER>\n";
+				spew_foot($FMT);
+				exit;
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Group'		=>	'r.org_name, r.orgrole_name',
+				'Center'	=>	'c.center_name, r.orgrole_name',
+				'Name'		=>	'r.orgrole_name',
+				'Tier'		=>	'o.org_tier, r.orgrole_name'
+			);
+
+			$sortby = $_REQUEST[Sortmeby];
+			$sby = $OrderBy[$sortby];
+			if (empty ($sby)){
+				$sql .= ' ORDER BY o.org_tier, r.orgrole_name';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+			$rowcount = mysql_num_rows($result);
+			$fieldlabel['org_tier'] = 'Tier';
+			$fieldlabel['orgrole_longname'] = 'Full Name';
+			$fieldlabel['org_id'] = 'Group';
+			$fieldlabel['orgrole_abbreviation'] = 'Abbr';
+	
+			// Help Blurb
+			echo "<P class=trace>";
+			echo "Query description, see <A HREF=/help.phpx?topic=Orgchart&subtopic=Query&Action=Help>query overview</A>.\n";
+			echo " Click on any group or position name link to drill down to narrow query list.\n";
+			echo "<BR>";
+			echo " Click on yellow icon to see details of that role or group.\n";
+			echo " Click on purple icon to see current holders of that role in that tier.\n";
+			echo "</P>\n";
+
+			echo "<P class=trace>Returned $rowcount entries</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>Who</TH>\n";
+
+			foreach ($ORGROLESHOW as $f) {
+				echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$rid = $row['orgrole_id'];
+				$oid = $row['org_id'];
+				echo "<TR>\n";
+
+				// Edit if authorized
+				if ($_SESSION['access'] >= $ORGCFG['ADMINLEVEL'] ) {	// SECURITY
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?orgrole_id=$row[orgrole_id]";
+					echo "&Action=Edit+Role>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// Who
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?orgrole_id=$row[orgrole_id]";
+					echo "&Action=List+Current+Holders>";
+					echo "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+				echo "</TD>\n";
+	
+				foreach ($ORGROLESHOW as $f) {
+					$css = "tds";
+					$display = stripslashes($row[$f]); 
+
+					//
+					// Map reports_to_org number to Role Name with view icon
+					//
+					if ( $f == 'reports_to_orgrole' ) {
+						$rid = $row[$f];
+						$display = "<A HREF=$_SERVER[PHP_SELF]?orgrole_id=$rid&Action=View+Role>";
+						$display .= "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+						//$display .= "&nbsp;&nbsp;";
+						$display .= "$ReportsTo[$rid]";
+					}
+
+					//
+					// Map org_id to Group Name with view icon and drilldown
+					//
+					if ( $f == 'org_id' ) {
+						$name = preg_replace('/\s/', '+', $row['org_name']);
+						$display = "<A HREF=$_SERVER[PHP_SELF]?org_id=$oid&Action=View+Group>";
+						$display .= "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+						//$display .= "&nbsp;&nbsp;";
+						$display .= "<A HREF=$_SERVER[PHP_SELF]?org_name=$name&${drilldown}>$row[org_name]</A>";
+					}
+					//
+					// Add View Role icon in front of orgrole_longname
+					//
+					if ( $f == 'orgrole_longname' ) {
+						$display = "<A HREF=$_SERVER[PHP_SELF]?orgrole_id=$rid&Action=View+Role>";
+						$display .= "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+						$display .= "&nbsp;&nbsp;";
+						$display .= $row[$f];
+					}
+
+
+					if (array_key_exists($f, $JustifyCss)) {
+						$css = $JustifyCss[$f];
+					}
+
+					echo "<TD VALIGN=TOP class=$css>";
+					if (in_array($f, $LINK)) {
+						echo "<A HREF=";
+						echo "$_SERVER[PHP_SELF]";
+						echo '?';
+						$url = preg_replace('/\s+/', '+', $row[$f]);
+						echo "$f=${url}"; 
+						echo "&${drilldown}>";
+						echo "$display</A>\n";
+					}else{
+						echo "$display\n";
+					}
+					echo "<BR></TD>\n";
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//Endif ($_REQUEST['Action'] == "List Roles")) {
+
+		//----------------------------------------------------------------------
+	  	// List Groups Organization (table org)
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "List Groups") {
+			caa_connect();
+
+			//
+			// Generate ToOrg for lookup for reports_to_org
+			//
+			echo "<P class=trace>Entering List Groups</P>\n"; // DEVONLY
+			$sql = "SELECT org_id, org_longname FROM org";
+			echo "<P class=trace>$sql </P>\n";	// DEVONLY
+			$ToOrg = array();
+			$ToOrg = get_menu_array($sql);
+
+			$fieldlabel = array();
+			$fieldlabel = get_field_labels('org','org',$WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			// TODO Message update
+			$fieldlabel['org_abbreviation'] = 'Abbr';
+			$fieldlabel['org_shortname'] = 'Tag';
+			$fieldlabel['org_name'] = 'Group Name';
+			$fieldlabel['org_fullname'] = 'Group Full Name';
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ORG) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$validentries[] = $key . '=' . $val;
+			}
+
+			array_unique($validentries);
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$Where = array();
+
+			//
+			// Construct where clause into an array
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( ! empty($val) ) {	
+						if ( preg_match('/%/', $val)) { 
+							$Where[] =  $f . "LIKE '" . $val . "'" ;
+						}else{
+							$Where[] =  $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT DISTINCT * from org ";
+
+			if ( count($Where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $Where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Tier'		=>	'org_tier, org_name',
+				'Name'		=>	'org_name, org_tier'
+			);
+
+			$sortby = $_REQUEST['Sortmeby'];
+			$sby = $OrderBy[$sortby];
+			if (empty ($sby)){
+				$sql .= ' ORDER BY org_tier, org_name';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+			$count = mysql_num_rows($result);
+
+			echo "<P class=trace>\n";
+			echo "Returned $count records";
+			echo "</P>\n";
+
+			echo "<P class=trace>\n";
+			echo "Click on name links to drill down. Click on yellow icon to see mission and details of group.";
+			echo "<BR>";
+			echo "Click on purple icon to see current roster of men in service to that group.";
+			echo "</P>\n";
+	
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>Who</TH>\n";
+
+
+			foreach ($ORGSHOW as $f) {
+				echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+				// Edit if authorized
+				if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {	// SECURITY
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?org_id=$row[org_id]";
+					echo "&Action=Edit+Group>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// Who
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?org_id=$row[org_id]";
+					echo "&Action=List+Current+Holders>";
+					echo "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+				echo "</TD>\n";
+	
+				foreach ($ORGSHOW as $f) {
+					$css = "tdcs";
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == "reports_to_org" ) {
+						$oid = $row['org_id'];
+						$rid = $row[$f];
+						$display = "<A HREF=$_SERVER[PHP_SELF]?org_id=$rid&Action=View+Group>";
+						$display .= "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+						$display .= "&nbsp;&nbsp;";
+						$display .= "$ToOrg[$rid]";
+					}
+
+					// Display Exceptions (lookup)
+					if ( $f  == "org_longname" ) {
+						$oid = $row['org_id'];
+						$display = "<A HREF=$_SERVER[PHP_SELF]?org_id=$oid&Action=View+Group>";
+						$display .= "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+						$display .= "&nbsp;&nbsp;";
+						$display .= "$row[$f]";
+					}
+
+					if (array_key_exists($f, $JustifyCss)) {
+						$css = $JustifyCss[$f];
+					}
+
+					echo "<TD VALIGN=TOP class=$css>";
+					if (in_array($f, $LINK)) {
+						echo "<A HREF=";
+						echo "$_SERVER[PHP_SELF]";
+						echo '?';
+						$url = preg_replace('/\s+/', '+', $row[$f]);
+						echo "$f=${url}"; 
+						echo "&${drilldown}>";
+						echo "$display</A>\n";
+					}else{
+						echo "$display\n";
+					}
+					echo "<BR></TD>\n";
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//Endif ($_REQUEST['Action'] == "List Groups")) {
+		//----------------------------------------------------------------------
+	  	// Show Candidates
+		// Input: org_tier, org_name, orgrole_name, start_date, end_date, war_lname
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Show Candidates" ) {
+			$row = array();
+
+			echo "<P class=trace>Entering Show Candidates</P>\n"; // DEVONLY
+
+			caa_connect();
+
+			$ShowRequired = array(
+				'org_tier'		=>	'No specific organization tier provided',
+				'org_name'		=>	'No specific council or group name provided',
+				'orgrole_name'	=>	'No specific role/position specified',
+				'war_lname'		=>	'No last name of man to look up for position provided',
+				'start_date'	=>	'No beginning of service date provided',
+				'end_date'		=>	'No end of service date provided'
+			);
+		
+			echo "<P class=trace>";
+			echo "Below is list of warriors matching last name you entered.";
+			echo " Click on the <I>Enroll</I> link to select that man for this position and group.";
+			echo "<BR>For more information, see ";
+			echo " <A HREF=/help.phpx?topic=Orgchart&field_name=New&Action=Help>";
+			echo " Tutorial</A>\n";
+			echo "</P>\n";
+
+			//
+			// Required info gauntlet
+			//
+			foreach ($ShowRequired as $field => $msg) {
+				if ($_REQUEST[$field] == 'All' ) {
+					echo "<P class=trace>Unsetting $field as it is = All</P>\n"; // DEVONLY
+					unset($_REQUEST[$field]);
+				}
+				
+				if (! isset( $_REQUEST[$field] ) ) {
+					echo "<P class=trace>Setting error for unset field $field </P>\n"; // DEVONLY
+					$err .= '<LI>' . $msg . '</LI>';
+				}
+			}
+			//
+			// Required field input validation fail. Notifiy and exit
+			//
+			if ( isset ($err) ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD class=tds><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "<H3>Please hit browser back button and adjust form entry options.</H3>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Look Up Org ID from org_tier and org_name
+			//
+			$orgname = mysql_real_escape_string( $_REQUEST['org_name']);
+			$tier = mysql_real_escape_string( $_REQUEST['org_tier']);
+
+			$sql = "SELECT org_id FROM org WHERE org_name = '$orgname' AND org_tier = '$tier'";
+			$oid = get_value($sql);
+			echo "<P class=trace>$sql Returned $oid</P>\n"; // DEVONLY
+
+			if ( ! isset ($oid) ) {
+				$err .= '<LI>Unable to determine organization ID from ';
+				$err .= $_REQUEST['org_name'] . ' for tier ' . $tier . '</LI>';
+			}
+
+			//
+			// Look Up OrgRole ID
+			//
+			$rolename = mysql_real_escape_string( $_REQUEST['orgrole_name']);
+
+			$sql = "SELECT r.orgrole_id FROM orgrole r, org o WHERE ";
+			$sql .= " r.orgrole_name = '$rolename' ";
+			$sql .= " AND o.org_tier = '$tier'";
+			$sql .= " AND o.org_id = r.org_id";
+			$sql .= " AND r.org_id = '$oid'";
+			$rid = get_value($sql);
+			echo "<P class=trace>$sql Returned $rid</P>\n"; // DEVONLY
+			
+			if ( ! isset ($rid) ) {
+				$err .= '<LI>Unable to determine position/role ID from ';
+				$err .= $_REQUEST['orgrole_name'] . ' for tier ' . $tier . '</LI>';
+			}
+
+			//
+			// Validate start date and end date
+			//
+			$not_ok =  validate_date($_REQUEST['start_date']);
+			if ( isset ($not_ok)) {
+				$err .= '<LI>Start Date of ' . $_REQUEST['start_date'] . ': ' . $not_ok . '</LI>';
+			}else{
+				$sd = $_REQUEST['start_date'];
+			}
+
+			$not_ok =  validate_date($_REQUEST['end_date']);
+			if ( isset ($not_ok)) {
+				$err .= '<LI>End Date of ' . $_REQUEST['end_date'] . ': ' . $not_ok . '</LI>';
+			}else{
+				$ed = $_REQUEST['end_date'];
+			}
+
+			if ( $sd > $ed ) {
+				$err .= '<LI>Term of service start date must preceed end date</LI>';
+			}
+
+			//
+			// Database lookup validation fail. Notifiy and exit
+			//
+			if ( isset ($err) ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD class=tds><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "<H3>Please hit browser back button and adjust form entry options.</H3>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Create roster of which tier organization for which_id
+			//
+			$Roster = array();
+			if ( $tier == 'GeoRegion') {
+				$msql = 'SELECT georegion_id, georegion_name from georegion order by georegion_name';
+				$which_default = $_SESSION['georegion_id'];
+			}
+
+			if ( $tier == 'Center') {
+				$msql = 'SELECT center_id, center_name from center order by center_name';
+				$which_default = $_SESSION['center_id'];
+			}
+
+			if ( $tier == 'I-Group Region') {
+				$msql = 'SELECT igrpreg_id, igrpreg_name from igroup_regions order by igrpreg_name';
+				$which_default = $_SESSION['igrpreg_id'];
+			}
+
+			if ( $tier == 'I-Group') {
+				$msql = 'SELECT igroup_id, igroup_name from igroup order by igroup_name';
+				$which_default = $_SESSION['igroup_id'];
+			}
+
+
+			echo "<P class=trace>$msql</P>\n";	// DEVONLY
+			$Roster = get_menu_array($msql);
+			if ( $tier == 'MKPI') {
+				$Roster = array(
+					'99'	=>	'MKPI'
+				);
+			}
+
+			$lname = mysql_real_escape_string( $_REQUEST['war_lname']);	// Beware O'Reiley
+			//
+			// Help blurb
+			//
+			echo "<P class=trace>For help information, see";
+			echo " <A HREF=/help.phpx?topic=Orgchart&subtopic=Enroll&context=Enroll&Action=Help>tutorial</A>";
+			echo "</P>\n";
+
+			//
+			// Passed the Error Gauntlet, Generate sql
+			//
+			echo "<CENTER>\n";
+			echo "<H3>Enrolling man into <I>$tier</I> $_REQUEST[org_name] leadership group";
+			echo "<BR>Role of: $_REQUEST[orgrole_name]</H3>\n";
+
+			if ($_REQUEST['orgrole_name'] == 'Representative' || $_REQUEST['orgrole_name'] == 'Envoy') {
+				echo "<P class=trace>";
+				echo "Please review specifics of ";
+				echo "<A HREF=/help.phpx?table_name=orgrep&field_name=Overview&Action=Help>";
+				echo "Representative and Envoy</A> relationships prior to proceeding.";
+				echo "</P>\n";
+			}
+
+			if (isset ($_REQUEST['war_lname']) ) {
+
+				$sql = "SELECT w.war_id, w.war_fname, w.war_lname, w.war_city, w.war_state, c.center_name";
+				$sql .= " FROM warrior w, center c WHERE ";
+				$sql .= " w.war_center = c.center_id AND ";
+
+				if ( preg_match('/%/',$lname)) {
+					$sql .= " w.war_lname LIKE '$lname'";
+				}else{
+					$sql .= " w.war_lname = '$lname'";
+				}
+
+				$sql .= " ORDER BY w.war_lname, w.war_fname ";
+				echo "<P class=trace>$sql</P>\n"; // DEVONLY
+				$result = mysql_query($sql);
+				$cnt = mysql_num_rows($result);
+
+				echo "<P class=trace>Returned $cnt candidates.</P>\n";
+
+				echo "<TABLE BORDER>\n";
+				echo "<TH class=ths>First Name</TH>\n";
+				echo "<TH class=ths>Last Name</TH>\n";
+				echo "<TH class=ths>Center</TH>\n";
+				echo "<TH class=ths>City</TH>\n";
+				echo "<TH class=ths>State</TH>\n";
+				// TODO: Alter 'In Which' to 'From Which' for Envoy/Representative
+				echo "<TH class=ths>In Which $tier</TH>\n";
+				while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+					$wid = $row['war_id'];
+					echo "<TR>\n";
+
+					//  First Name
+					echo "<TD class=tds>";
+					echo "$row[war_fname]";
+					echo "</TD>\n";
+
+					// Last Name
+					echo "<TD class=tds>";
+					echo "$row[war_lname]";
+					echo "</TD>\n";
+
+					// Center
+					echo "<TD class=tds>";
+					echo "$row[center_name]";
+					echo "</TD>\n";
+
+					// City
+					echo "<TD class=tds>";
+					echo "$row[war_city]";
+					echo "</TD>\n";
+
+					// State
+					echo "<TD class=tdcs>";
+					echo "$row[war_state]";
+					echo "</TD>\n";
+
+					// Roster/Action
+					echo "<TD class=tdcs>";
+						echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+						spew_select_hash_menu('which_id',$which_default,'',$Roster);
+						echo "<INPUT TYPE=HIDDEN NAME=end_date VALUE=$ed>";
+						echo "<INPUT TYPE=HIDDEN NAME=org_id VALUE=$oid>";
+						echo "<INPUT TYPE=HIDDEN NAME=org_name VALUE=\"$_REQUEST[org_name]\">";
+						echo "<INPUT TYPE=HIDDEN NAME=org_tier VALUE=\"$tier\">";
+						echo "<INPUT TYPE=HIDDEN NAME=orgrole_id VALUE=$rid>";
+						echo "<INPUT TYPE=HIDDEN NAME=orgrole_name VALUE=\"$rolename\">";
+						echo "<INPUT TYPE=HIDDEN NAME=start_date VALUE=$sd>";
+						echo "<INPUT TYPE=HIDDEN NAME=warrior_id VALUE=$wid>";
+						echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Enroll>";
+						echo "</FORM>\n";
+
+					echo "</TD>\n";
+				}
+				echo "</TABLE>\n";
+			}else{
+				die("No Warrior Last Name given");
+			}
+
+			echo "</CENTER>\n";
+	  	}//Endif ($_REQUEST['Action'] == "Show Candidates")) {
+
+		//----------------------------------------------------------------------
+	  	// View Role or Position
+		//----------------------------------------------------------------------
+	  	if ( $_REQUEST['Action'] == "View Role" ) {
+			echo "<P class=trace>Entering View Role</P>\n";	// DEVONLY
+
+			if ( array_key_exists('orgrole_id', $_REQUEST)) {
+				$orid = $_REQUEST['orgrole_id'];
+				if ( ! is_numeric($orid) ) {
+					die ("Org Role ID ($orid) is not an integer.") ;
+				}
+			}else{
+				die ("No Orgrole Id Set") ;
+			}
+			echo "<P class=trace>OrgRole ID = $orid</P>\n";	// DEVONLY
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT r.* , o.org_name, o.org_longname FROM orgrole r, org o ";
+			$sql .= " WHERE r.orgrole_id = '$orid' AND o.org_id = r.org_id";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+			$result = mysql_query($sql);
+			$row = array();
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('orgrole','orgrole',$WICCFG['DBNAME']);
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ORGROLE as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=orgrole&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>";
+				echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				$display = stripslashes($row[$fieldname]);
+				//
+				// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				//
+				if ( $fieldname == "org_id" ) {
+					$display = $row['org_longname'];
+				}
+				if ( $fieldname == "reports_to_orgrole" ) {
+					$ReportsTo = array();
+					$rid = $row['reports_to_orgrole'];
+
+					$sql = "SELECT orgrole_longname from orgrole WHERE orgrole_id = '$rid'";
+					$name = get_value($sql);
+
+					$display = "<A HREF=$_SERVER[PHP_SELF]?orgrole_id=$rid&Action=View+Role>$name</A>";
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			if ($_SESSION['access'] >= $ORGCFG['ROLEEDITLEVEL']){	// SECURITY
+				echo "<INPUT TYPE=HIDDEN NAME=orgrole_id VALUE=$orid>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit Role\">\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "View Role")
+
+		//----------------------------------------------------------------------
+	  	// View Org Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View Group" ) {
+
+			if ( array_key_exists('org_id', $_REQUEST)) {
+				$oid = $_REQUEST['org_id'];
+				if ( ! is_numeric($oid) ) {
+					die ("Org ID ($oid) is not an integer.") ;
+				}
+			}else{
+				die ("No Org Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM org WHERE org_id = '$oid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('org','org',$WICCFG['DBNAME']);
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<CENTER>\n";
+			echo "<H3>Details of $row[org_longname]</H3>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ORG as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=org&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>";
+				echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				$display = stripslashes($row[$fieldname]);
+				//
+				// View Entry Lookup for Reports
+				//
+				if ( $fieldname == "reports_to_org" ) {
+					$rid = $row['reports_to_org'];
+					$Org = array();
+					$rsql = "SELECT * from org WHERE org_id = '$rid'";
+					$rresult = mysql_query($rsql);
+					$Org = mysql_fetch_array($rresult, MYSQL_ASSOC) ;
+					$display = "<A HREF=$_SERVER[PHP_SELF]?org_id=$rid&Action=View+Group>";
+					$display .= $Org['org_tier'] . ' ' . $Org['org_name'];
+					$dispay .= "</A>";
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			if ( $_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=HIDDEN NAME=org_id VALUE=$_REQUEST[org_id]>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit Group\">\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "View Group")
+
+		//----------------------------------------------------------------------
+	  	// View Holder
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View Holder" ) {
+
+			if ( array_key_exists('orgroleholder_id', $_REQUEST)) {
+				$hid = $_REQUEST['orgroleholder_id'];
+				if ( ! is_numeric($hid) ) {
+					die ("Org Role Holder ID ($hid) is not an integer.") ;
+				}
+			}else{
+				die ("No Org Role Holder Id Set") ;
+			}
+
+			caa_connect();
+			$fieldlabel = get_field_labels('orgroleholder','orgroleholder',$WICCFG['DBNAME']);
+
+			// TODO : Message
+			$fieldlabel['orgrole_id'] = "Role Name";
+
+			$menulist = array();
+
+			$sql = "SELECT h.*, r.orgrole_longname, o.org_tier, w.war_fname, w.war_lname";
+			$sql .= " FROM orgrole r, orgroleholder h, warrior w, org o";
+			$sql .= " WHERE r.orgrole_id = h.orgrole_id AND orgroleholder_id = '$hid'";
+			$sql .= " AND o.org_id = r.org_id AND h.warrior_id = w.war_id";
+
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+			$xid = $row['which_id'];
+
+			//
+			// Identify Tier
+			//
+			$Tier = $row['org_tier'];
+
+			//$rid = $row['orgrole_id'];
+			//$sql2 = "SELECT o.org_tier from org o, orgrole r WHERE r.orgrole_id = o.orgrole_id";
+			//$sql2 .= " AND r.orgrole_id = '$rid'";
+			//$Tier = get_value($sql2);
+			//echo "<P class=trace>$sql2 Returns $Tier</P>\n"; // DEVONLY
+
+			//
+			// Lookup which member of that tier
+			//
+			if ( $Tier == 'GeoRegion' ) {
+				$fieldlabel['which_id'] = "Which GeoRegion";
+				$sql3 = "SELECT georegion_name FROM georegion WHERE georegion_id = '$xid'";
+			}
+
+			if ( $Tier == 'Center' ) {
+				$fieldlabel['which_id'] = "Which Center";
+				$sql3 = "SELECT center_name FROM center WHERE center_id = '$xid'";
+			}
+
+			if ( $Tier == 'I-Group Region' ) {
+				$fieldlabel['which_id'] = "Which I-Group Region";
+				$sql3 = "SELECT igrpreg_name FROM igrpreg WHERE igrpreg_id = '$xid'";
+			}
+
+			if ( $Tier == 'I-Group' ) {
+				$fieldlabel['which_id'] = "Which I-Group";
+				$sql3 = "SELECT igroup_name FROM igroup WHERE igroup_id = '$xid'";
+			}
+
+			if ( $Tier == 'Center' ) {
+				$fieldlabel['which_id'] = "Which Center";
+				$sql3 = "SELECT center_name FROM center WHERE center_id = '$xid'";
+			}
+
+			$WhichOne = get_value($sql3);
+			echo "<P class=trace>$sql3 Returns $WhichOne</P>\n"; // DEVONLY
+
+			// Blurb
+			echo "<P class=trace>";
+			echo "Details of current role holder. Click on left column labels to get more explanation.\n";
+			echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($HOLDER as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=orgroleholder&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD class=tds>";
+				$display = stripslashes($row[$fieldname]);
+
+				//
+				// Lookup overrides
+				//
+
+				// Orgrole Long Name
+				if ( $fieldname == "orgrole_id" ) {
+					$display = stripslashes($row[orgrole_longname]);
+				}
+
+				// Person
+				if ( $fieldname == "warrior_id" ) {
+					// TODO: Nickname?
+					$display = stripslashes($row[war_fname]) . ' ';
+					$display .= stripslashes($row[war_lname]);
+				}
+
+				// Tier Pointer Name
+				if ( $fieldname == "which_id" ) {
+					$display = stripslashes($WhichOne);
+				}
+				// Email
+				if ( $fieldname == "orgroleholder_email" ) {
+					$display = "<A HREF=mailto:$display>$display</A>";
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+
+			echo "</TABLE>\n";
+
+			if ( $_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=HIDDEN NAME=orgroleholder_id VALUE=$hid>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit Holder\">\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "View Holder")
+
+		//----------------------------------------------------------------------
+	  	// FUTURE: View Rep
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View Rep" ) {
+
+			if ( array_key_exists('orgrep_id', $_REQUEST)) {
+				$orgrep_id = $_REQUEST['orgrep_id'];
+				if ( ! is_numeric($orgrep_id) ) {
+					die ("Orgrep ID ($orgrep_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Orgrep Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM orgrep WHERE orgrep_id = '$orgrep_id'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('orgrep','orgrep',$WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($fields as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=orgrep&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				$display = stripslashes($row[$fieldname]);
+				//
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			echo "</FORM>\n";
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "View Rep")
+
+		//----------------------------------------------------------------------
+		// END 'Action' Processing Options
+		//----------------------------------------------------------------------
+
+	}else{	// No Action Field
+		// Note: Co-opted by setting Default
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		global $WICCFG;
+		global $ORGCFG;
+		$list = array();
+		caa_connect();
+		echo "<P class=trace>";
+		echo "Select specific role or group and optional one of center or georegion and click on <I>List Current Holders</I>";
+		echo " or <I>My Center</I> to see men in current service roles.";
+		echo "<BR> For help, see";
+		echo " <A HREF=$WICCFG[WICURL]/help.phpx?topic=Orgchart&subtopic=Overview&context=Overview&Action=Help>overview</A>";
+		echo " or <A HREF=$WICCFG[WICURL]/help.phpx?topic=Orgchart&subtopic=Query&context=Query&Action=Help>query tutorial</A>.";
+		if ($_SESSION['access'] >= $ORGCFG['EDITLEVEL']){
+			echo " To enroll man in new service role, click in <I>New</I>  button.";
+		}
+		echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Tier</TH>\n";
+		echo "<TH class=ths>Leadership Group</TH>\n";
+		echo "<TH class=ths>Role or Position</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		// Tier
+		echo "<TR><TD class=tds>\n";
+		$sql = "SELECT DISTINCT org_tier FROM org ORDER BY org_tier";
+		$list = get_menu($sql);
+		spew_select_menu('org_tier',$_REQUEST['org_tier'],'All',$list);
+		echo "</TD>\n";
+
+		// Group
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct org_name FROM org ORDER BY org_name" ;
+		$list = get_menu($sql);
+		spew_select_menu('org_name',$_REQUEST['org_name'],'All',$list);
+		echo "</TD>\n";
+
+		// Org Role
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct orgrole_name FROM orgrole ORDER BY orgrole_name" ;
+		$list = get_menu($sql);
+		spew_select_menu('orgrole_name',$_REQUEST['orgrole_name'],'All',$list);
+		echo "</TD>\n";
+
+		// Center
+		echo "<TD class=tds>\n";
+		$sql = "SELECT center_id, center_name from center order by center_name";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('center_id',$_REQUEST['center_id'],'All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Center',
+			//'GeoRegion',
+			//'I-Group Region',
+			'Group',
+			'Role',
+			'Tier'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Role',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+
+
+		//echo "<TABLE BORDER>\n";
+		//echo "<TH class=ths>GeoRegion</TH>\n";
+		//echo "<TR>";
+
+		//// GeoRegion
+		//echo "<TD class=tds>\n";
+		//$sql = "SELECT distinct georegion_id, georegion_name from georegion order by georegion_name";
+		//$list = get_menu_array($sql);
+		//spew_select_hash_menu('georegion_id',$_REQUEST['georegion_id'],'All',$list);
+		//echo "</TD>\n";
+
+		//echo "</TR>\n";
+		//echo "</TABLE>\n";
+
+		echo "<P class=trace>";
+		echo "<INPUT TYPE=CHECKBOX NAME=Exclude VALUE=Yes>";
+		echo "Exclude Envoy and Representative Roles</P>\n";
+
+		// End Form
+
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"My Center\">\n";
+		//echo "<INPUT TYPE=HIDDEN NAME=georegion_id VALUE=5>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Current Holders\">\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Past Holders\">\n";
+
+		if ( isset ( $ORGCFG['ISADMIN'] ) ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Roles\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Groups\">\n";
+		}
+
+		if ( $_SESSION['access'] >= $ORGCFG['EDITLEVEL'] ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}//End function spew_query_form
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>

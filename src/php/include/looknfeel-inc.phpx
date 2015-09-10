@@ -1,0 +1,179 @@
+<?php
+	//#==================================================================
+	//# KKK Look And Feel (Headers and Footers)
+	//#------------------------------------------------------------------
+	//# Jerry Bowes, jerbowes@yahooo.com
+	//#------------------------------------------------------------------
+	//# $Date: 2015/08/16 19:14:33 $
+	//# $Source: /home/jbowes/kkk/src/php/include/RCS/looknfeel-inc.phpx,v $
+	//# $Id: looknfeel-inc.phpx,v 1.31 2015/08/16 19:14:33 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+
+	require_once("config-inc.phpx");
+	require_once("nav-inc.phpx");
+	//require_once("googlemap-inc.phpx");
+
+	//--------------------------------------------------------------------
+	// Spew Header
+	//--------------------------------------------------------------------
+	function spew_header($FMT) {
+		//
+		// Set Defaults for FMT from KKKCFG
+		//
+		global $KKKCFG;
+
+		foreach ($KKKCFG as $key => $val ) {
+			if (! empty ($FMT[$key]) ) {
+				$FMT[$key] = $val;
+			}
+		}
+		echo "<!DOCTYPE html>\n";
+		echo "<HTML>\n";
+		echo "<HEAD>\n";
+		echo "<TITLE> $FMT[TITLE] </TITLE>\n";
+		if ( isset ( $FMT['DESCRIPTION'] )) {
+			echo "<META NAME=\"DESCRIPTION\" VALUE=\"$FMT[DESCRIPTION]\">\n";
+		}
+		//
+		// Language encoding
+		//
+		echo "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n";
+
+		if ( isset ( $FMT['CSS'] )) {
+  			echo "<LINK HREF=/cssdev/$FMT[CSS].css REL=stylesheet TYPE=text/css>\n";
+		}else{
+  			echo "<LINK HREF=/cssdev/kkk.css REL=stylesheet TYPE=text/css>\n";
+		}
+
+
+		//
+		// Javascript files here
+		//
+		if (isset ($FMT['JSCHECKBOX'] ) ) {
+			echo "<script type=\"text/javascript\" src=\"/jscriptdev/checkbox.js\">\n";
+			echo "</script>\n";
+		}
+		if (isset ($FMT['JSCHECKBOX2'] ) ) {
+			echo "<script type=\"text/javascript\" src=\"/jscriptdev/checkbox2.js\">\n";
+			echo "</script>\n";
+		}
+
+		echo "</HEAD>\n";
+
+		echo "<CENTER>\n";
+		echo "<TABLE WIDTH=100% CELLSPACING=0 CELLPADDING=0 BORDER=0>\n";
+		echo "<TR>\n";
+
+		// Jerry Development Tool Weirdness
+		// If you want something to be phpx you have to call it phpz so that translations
+		// will work. Trust me on this
+
+		if ( preg_match('/\.phpz/', $_SERVER['REQUEST_URI']) ) {
+			echo "<TD ALIGN=LEFT WIDTH=10% class=masthead>\n";
+			echo "<A HREF=/>";
+			echo "<IMG SRC=/images/kkk/logos/kkk-home-logo-187x120b.png BGCOLOR=#FF0066 BORDER=5 HEIGHT=115 WIDTH=173></A>";
+			echo "</TD>\n";
+
+			echo "<TD ALIGN=CENTER class=masthead>";
+			echo "<H1 class=banner>$FMT[BANNER]</H1>";
+
+			if (isset ( $FMT['BANNER2'] ) ) {
+				echo "<H2 class=banner>$FMT[BANNER2]</H2>";
+			}else{
+				echo "<H2 class=banner>DEVELOPMENT PROTOTYPE</H2>";
+			}
+			if (isset ( $FMT['BANNER3'] ) ) {
+				echo "<H3 class=banner>$FMT[BANNER3]</H3>";
+			}
+			echo "</TD>\n";
+
+		}else{
+			echo "<TD ALIGN=LEFT WIDTH=10% class=masthead>\n";
+			echo "<A HREF=/>";
+			echo "<IMG SRC=/images/kkk/logos/kkk-home-logo-187x120b.png  HEIGHT=120 WIDTH=183></A>";
+			echo "</TD>\n";
+
+			echo "<TD ALIGN=CENTER class=masthead>";
+			echo "<H1 class=banner>$FMT[BANNER]</H1>";
+
+
+			if (isset ( $FMT['BANNER2'] ) ) {
+				echo "<H2 class=banner>$FMT[BANNER2]</H2>";
+			}else{
+				echo "<H2 class=banner>DEVELOPMENT PROTOTYPE</H2>";
+			}
+
+			if (isset ( $FMT['BANNER3'] ) ) {
+				echo "<H3 class=banner>$FMT[BANNER3]</H3>";
+			}
+
+			echo "</TD>\n";
+		}
+
+		if ( isset ( $FMT['NONAV'] ) ) {
+			// No nav bar
+		}else{
+			echo "<TR>\n";
+			echo "<TD COLSPAN=2 class=navbar>";
+			spew_navbar($FMT);
+			echo "</TD>\n";
+		}
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+		echo "<HR>\n";
+		if ( isset ( $FMT['IGMAPS']) 
+            || isset ( $FMT['MIGMAPS']) 
+            || isset ( $FMT['LOCMAP'] )) {
+			echo "<BODY onload=\"init_map()\">\n";
+		}else{
+			echo "<BODY>\n";
+		}
+	}//End spew_header
+
+	//--------------------------------------------------------------------
+	// Spew Footer
+	//--------------------------------------------------------------------
+	function spew_footer(array $FMT) {
+		global $KKKCFG;
+		//
+		// Set Defaults for FMT from KKKCFG
+		//
+		foreach ($KKKCFG as $key => $val ) {
+			if ( empty( $FMT[$key]) ) {
+				$FMT[$key] = $val;
+			}
+		}
+
+		echo "</BODY>\n";
+		// 
+		echo "<CENTER>\n";
+		echo "<HR>\n";
+		// No submenus in footer navbar
+			unset ($FMT['NAV2']);
+
+		echo "<TABLE WIDTH=100%>\n";
+		echo "<TR>\n";
+
+		if (! isset ( $FMT['NONAV'] ) ) {
+			echo "<TD CLASS=navbar>";
+			spew_navbar($FMT);
+			echo "<BR>KKK application issues: email <A class=navbar HREF=mailto:jerbowes@yahoo.com>Jerry</A>,\n";
+			echo "content feedback: email \n  ";
+			echo "<A class=navbar HREF=\"mailto:";
+		}else{
+			echo "<TD CLASS=tdcs>";
+			echo "KKK application issues: email <A HREF=mailto:jerbowes@yahoo.com>Jerry</A>,\n";
+			echo "content feedback: email \n  ";
+			echo "<A class=footer HREF=\"mailto:";
+		}
+		echo "$FMT[AUTHOREMAIL]\">";
+		echo "$FMT[AUTHOR]</A>\n";
+		echo "</TD></TABLE>\n";
+		echo "</CENTER>\n";
+		echo "</HTML>\n";
+	}//End spew_footer
+
+?>

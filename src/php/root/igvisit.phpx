@@ -1,0 +1,1191 @@
+<?php
+	//#==================================================================
+	//# I-Group Visit Management
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#==================================================================
+	//-------------------------------------------------------------------
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no war_id in $_SESSION, 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+	session_start();
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$returl =  $_SERVER['PHP_SELF'];
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$url = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl .=  '?' .  $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=$returl");;
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"I-Group Visit Program",
+		'TITLE'			=>	"I-Group Visit Program",
+		'MODULENAME'	=>	"igvisit.phpx",
+		'NAV1'		=>	"IGROUPS"	// Level 1 menu navigation group
+	);
+
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$IGVCFG = array (
+		'EDITLEVEL'		=>	'1'			// Access level to get edit screen
+	);
+	$TODAY = `date +%F`;
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	//
+	$ALLFIELD = array(
+		'igvisit_id',
+		'status',
+		'igroup_id',
+		'requester_id',
+		'visit_date',
+		'igvisit_type',
+		'visitor_id',
+		'igvisit_description',
+		'reference_url'
+	);
+
+	//
+	//	Fields visible in query output list
+	$NEWFIELD = array(
+		'igroup_id',
+		'requester_id',
+		'visit_date',
+		'igvisit_type',
+		'igvisit_description',
+		'reference_url'
+	);
+
+	//
+	//	Fields visible in query output list
+	$SHOW = array(
+		'requester_id',
+		'igroup_id',
+		'visit_date',
+		'status',
+		'igvisit_type',
+		'igvisit_description',
+		'visitor_id'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'visit_date',
+		'status',
+		'igvisit_type'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+		'igvisit_type'
+	);
+
+	//
+	// Required for New Request
+	//
+	$RequiredField = array(
+		'requester_id'			=> 'must log in for me to know the requester',
+		'igroup_id'				=> 'select what I-Group',
+		'visit_date'			=> 'enter desired visit date',
+		'status'				=> 'enter visit request status',
+		'igvisit_type'			=> 'enter type of visit',
+		'igvisit_description'	=> 'enter desired purpose or focus of visit'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'igvisit_id',
+		'requester_id'
+	);
+
+	$FieldType = array(
+		'requester_id'			=>	'MenuArray',
+		'igroup_id'				=>	'MenuArray',
+		'visit_date'			=>	'Menu',
+		'status'				=>	'Menu',
+		'igvisit_type'			=>	'Menu',
+		'igvisit_description'	=>	'TextArea',
+		'visitor_id'			=>	'MenuArray',
+		'reference_url'			=>	'LongText'
+	);
+
+	$BASE = "SELECT choice from menu where table_name = 'igvisit' and field_name = ";
+	$Menu = array(
+		'igroup_id'		=>	"SELECT igroup_id, igroup_name FROM igroup order by igroup_name",
+		'visit_date'	=>	"SELECT calendar_date from allcal where calendar_date > '$TODAY' limit 90",
+		'status'		=>	"$BASE 'status'",
+		'igvisit_type'	=>	"$BASE 'igvisit_type'",
+	);
+	// Assemble more complex
+
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'igvisit_description'	=>	'tds' // small left justified
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+	if (array_key_exists('Action', $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_SESSION);	// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+	  	// Pick Me as a visitor
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Pick" ) {
+			caa_connect();
+			$whoid = $_SESSION['war_id'];
+			$vid = $_REQUEST['igvisit_id'];
+			$picksql = "UPDATE igvisit set visitor_id = '$whoid' WHERE igvisit_id = '$vid'";
+			mysql_query($picksql);
+			echo "<P class=trace>$picksql</P>\n"; // DEVONLY DEBUG
+			$_REQUEST['Action'] = 'Query';
+		}
+		//----------------------------------------------------------------------
+	  	// Insert New Request
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Request" ) {
+			caa_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('igvisit','id');
+			$fields = array_keys($fieldlabel);
+            $fieldlabel['igroup_id'] = "I-Group";
+            $fieldlabel['requester_id'] = "Requester";
+
+            $Default = array(
+                'status'        =>      'New'
+            );
+            foreach ( $Default as $key => $val ) {
+                if ( ! isset ($_REQUEST[$key] ) ) {
+                    $_REQUEST[$key] = $val;
+                }
+            }
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+            //
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+            //
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['igvisit_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO igvisit (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	// DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<H2>Request successfully added</H2>\n";
+			echo "</CENTER>\n";
+            email_request_ack;
+		}//End if $_REQUEST[Action] == "Insert New Request" 
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+			if ( array_key_exists('igvisit_id', $_REQUEST)) {
+				$vid = $_REQUEST[igvisit_id];
+				if (! is_numeric( $vid ) ) {
+					die ("ERROR: Attempt to update requires igvisit_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Visit Id Set") ;
+			}
+
+			caa_connect();
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM igvisit WHERE igvisit_id = '$vid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('igvisit','aaaaaaaaaa');
+
+			print '<pre>';	// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n"; // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$sql = 'UPDATE igvisit SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlx =   $f . " = '" . $val . "'";
+						array_push($sqlentry, $sqlx);
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE igvisit_id = '$vid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+
+			$_REQUEST[Action] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query or Interview
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query" 
+			|| $_REQUEST['Action'] == "List"
+			|| $_REQUEST['Action'] == "Interview") {
+			caa_connect();
+			$fieldlabel = array();
+
+			$fieldlabel = get_field_labels('igvisit','igvisit');
+			$fieldlabel['igroup_id'] = 'I-Group Name';
+			$fieldlabel['requester_id'] = 'Requester';
+			$fieldlabel['visitor_id'] = 'Visitor';
+			$fieldlabel['igroup_id'] = 'Requesting I-Group';
+			$fields = array_keys($fieldlabel);
+			//
+			// Create Center Requester Roster
+			//
+			$cid = $_SESSION['center_id'];
+			$whosql = "SELECT w.war_id, w.war_fname, w.war_lname, w.war_email  ";
+			$whosql .= " FROM warrior w WHERE w.war_center = '$cid'";
+			echo "<P class=trace>$whosql</P>\n"; // DEBUG DEVONLY
+			$result = mysql_query($whosql);
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$wid = $row['war_id'];
+				$Who[$wid] = $row['war_fname'] . ' ' . $row['war_lname'];
+				$Email[$wid] = $row['war_email'];
+			}
+			asort($Who);	// By value
+
+			//
+			// Create Prettier I-Group Name
+			//
+			$igsql = "SELECT DISTINCT i.igroup_id, i.igroup_name, c.center_abbr ";
+			$igsql .= " FROM igroup i, center c ";
+			$igsql .= " WHERE i.igroup_cen = c.center_id ";
+			$igresult = mysql_query($igsql);
+			while ($row = mysql_fetch_array($igresult, MYSQL_ASSOC) ) {
+				$iid = $row['igroup_id'];
+				$Igroup[$iid] = $row['center_abbr'] . ':  ' . $row['igroup_name'];
+			}
+			asort($Igroup);
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters[Action] = $_REQUEST[Action];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$what = array();
+			//
+			// Select fields for igvisit table
+			//
+			foreach ($ALLFIELD as $f ) {
+				$what[] = 'v.' . $f;
+			}
+			//
+			// Select fields for igroup table
+			//
+			$what[] = 'i.igroup_name';
+			$what[] = 'i.igroup_cen';
+
+			$where = array(
+				'i.igroup_id = v.igroup_id'
+			);
+
+			$from = array(
+				'igvisit'	=>	'v',
+				'igroup'	=>	'i'
+			);
+
+			//
+			// Construct where clause into an array for igvisit table
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( !empty($val) ) {	// DEV: Can we populate an entry with a blank, e.g. reset?
+						if ( preg_match('/%/', $val)) { 
+							$where[] = 'v.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$where[] =  'v.' .$f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+			//
+			// Construct where clause into an array for igroup table
+			//
+			$igfields = array(
+				'igroup_name',
+				'igroup_cen'
+			);
+			foreach ($igfields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( !empty($val) ) {	// DEV: Can we populate an entry with a blank, e.g. reset?
+						if ( preg_match('/%/', $val)) { 
+							$where[] = 'i.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$where[] =  'i.' .$f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+			
+
+			$sql .= "SELECT DISTINCT " . implode(',', $what);
+			$fromsql = array();
+			foreach ($from as $table => $abbr) {
+				$fromsql[] = $table . ' ' . $abbr;
+			}
+			$fromsql = array_unique($fromsql);
+			$sql .= ' FROM ' . implode(',', $fromsql);
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Requester'		=>	'requester_id',
+				'Visitor'		=>	'visitor_id',
+				'Status'		=>	'igvisit_status, igroup_id',
+				'Date'		=>	'visit_date',
+				'Requester'		=>	'requester_name',
+				'Type'		=>	'igvisit_type, igvisit_description'
+			);
+			$sortby = $_REQUEST[Sortmeby];
+			if (empty ($sortby)){
+				$sql .= ' ORDER BY visit_date';
+			}else{
+				$sql .= ' ORDER BY ' . $OrderBy[$sortby];
+			}
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY
+			$result = mysql_query($sql);
+	
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access'] >= $IGVCFG[EDITLEVEL] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+
+			unset($fields[igvisit_id]);
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+				//
+				// Edit
+				//
+				if ($_SESSION['access'] >= $IGVCFG[EDITLEVEL] ) {	// SECURITY
+					echo "<TD class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?igvisit_id=$row[igvisit_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				//
+				// View
+				//
+				echo "<TD class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?igvisit_id=$row[igvisit_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+				//
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$display = $row[$f];
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'igroup_id' ) {
+						$iid = $row['igroup_id'];
+						$display = "<A HREF=/igroups.phpx?igroup_id=$iid&Action=View>$Igroup[$iid]</A>";
+					}
+					if ( $f  == 'requester_id' ) {
+						$rid = $row['requester_id'];
+						$display = "<A HREF=mailto:$Email[$rid]>$Who[$rid]</A>";
+					}
+					if ( $f  == 'visitor_id' ) {
+						$vid = $row['visitor_id'];
+						if ($_REQUEST['Action'] == 'Interview' ) {
+							if (isset ( $vid ) ) {
+								$display = "<A HREF=$_SERVER[PHP_SELF]?Action=Pick&igvisit_id=$row[igvisit_id]>Replace $Who[$vid]</A>";
+							}else{
+								$display = "<A HREF=$_SERVER[PHP_SELF]?Action=Pick&igvisit_id=$row[igvisit_id]>Sign Me Up</A>";
+							}
+						}else{
+							if (isset ( $vid ) ) {
+								$display = "<A HREF=mailto:$Email[$vid]>$Who[$vid]</A>";
+							}else{
+								$display = "<BR>";
+							}
+						}
+					}
+
+					if (in_array($f, $SHOW)) {
+
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+
+						echo "<TD class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>";
+						}else{
+							echo "$display";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "List")) {
+		//----------------------------------------------------------------------
+	  	// New Request Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New Request" ) {
+			$menulist = array();
+			$mywid = $_SESSION['war_id'];
+			$myiid = $_SESSION['igroup_id'];
+			$Default = array ( 
+				'requester_id'	=>		"$mywid",
+				'status'		=>		'New'
+			);
+
+			//
+			// Create Center Requester Roster
+			//
+			$cid = $_SESSION['center_id'];
+			$whosql = "SELECT w.war_id, w.war_fname, w.war_lname, w.war_email  ";
+			$whosql .= " FROM warrior w WHERE w.war_center = '$cid'";
+			echo "<P class=trace>$whosql</P>\n"; // DEBUG DEVONLY
+			$result = mysql_query($whosql);
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$wid = $row['war_id'];
+				$Who[$wid] = $row['war_fname'] . ' ' . $row['war_lname'];
+				$Email[$wid] = $row['war_email'];
+			}
+			asort($Who);	// By value
+			$FieldType['requester_id'] = 'MenuRequester';
+			//
+			// Create Prettier I-Group Name
+			//
+			$FieldType['igroup_id'] = 'MenuIgroup';
+			$igsql = "SELECT DISTINCT i.igroup_id, i.igroup_name, c.center_abbr ";
+			$igsql .= " FROM igroup i, center c ";
+			$igsql .= " WHERE i.igroup_cen = c.center_id ";
+			$igresult = mysql_query($igsql);
+			while ($row = mysql_fetch_array($igresult, MYSQL_ASSOC) ) {
+				$iid = $row['igroup_id'];
+				$Igroup[$iid] = $row['center_abbr'] . ':  ' . $row['igroup_name'];
+			}
+			asort($Igroup);
+
+			echo "<CENTER>\n";
+            echo "<H2>Visit Request</H2>\n";
+            echo "<P class=trace>Complete form and click on <I>Insert New Request</I> at bottom. For more information,";
+            echo " see <A HREF=/help.php?table_name=igvisit&field_name=Overview&Action=Help>overview</A> or click";
+            echo " on name links in left colunm for specifics on that field.\n";
+            echo "</P>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabel = get_field_labels('igvisit','id');
+
+			unset($fieldlabel['igvisit_id']);
+
+			foreach ($NEWFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdls>";
+                echo "<A HREF=help.php?table_name=igvisit&field_name=${fieldname}&help_type=Explanation&Action=Help>";
+                echo "$val";
+                echo "</A>";
+                echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],$Default[$fieldname],$menulist);
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuRequester" ) {
+						spew_select_hash_menu($fieldname, $_SESSION[war_id],$Who[$mywid],$Who);
+					}
+
+					if ($FieldType[$fieldname] == "MenuIgroup" ) {
+						spew_select_hash_menu($fieldname, $_SESSION[igroup_id],$Igroup[$myiid],$Igroup);
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=10></TEXTAREA>\n";
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname>";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Request\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Edit
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Edit")  {
+
+			if ( array_key_exists('igvisit_id', $_REQUEST)) {
+				$vid = $_REQUEST[igvisit_id];
+				if ( ! is_numeric($vid) ) {
+					die ("Visit ID ($vid) is not an integer.") ;
+				}
+			}else{
+				die ("No Visit Id Set") ;
+			}
+			$menulist = array();
+			$Who = array();
+
+			caa_connect();
+			//
+			// Select subset of people who can be requesters and visitors
+			// Only those who have logged in via WIC
+			//
+			$whosql	=	"SELECT w.war_id, w.war_fname, w.war_lname FROM warrior w access_password a ";
+			$whosql .= " WHERE w.war_id = a.warrior_id "; // 
+			//$whosql .= " AND war_center = $_SESSION[center_id]";
+			$whoresult = mysql_query($whosql);
+			while ($whorow = mysql_fetch_array($whoresult, MYSQL_ASSOC) ) {
+				$wid = $whorow['war_id'];
+				$Who[$wid] = $whorow['war_fname'] . ' ' . $whorow['war_lname'];
+			}
+			$FieldType['visitor_id'] = 'WhoMenu';
+			$FieldType['requester_id'] = 'WhoMenu';
+
+
+			$sql = "SELECT * FROM igvisit WHERE igvisit_id = '$vid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('igvisit','id');
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdl>$label</TD>\n";
+				echo "<TD VALIGN=TOP>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							asort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "WhoMenu" ) {
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$Who);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=igvisit_id VALUE=$_REQUEST[igvisit_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Delete>\n";
+
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Edit")
+
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "View" ) {
+
+			if ( array_key_exists('igvisit_id', $_REQUEST)) {
+				$vid = $_REQUEST[igvisit_id];
+				if ( ! is_numeric($vid) ) {
+					die ("Visit ID ($vid) is not an integer.") ;
+				}
+			}else{
+				die ("No Visit Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM igvisit WHERE igvisit_id = '$vid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('igvisit','id');
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdl>$label</TD>\n";
+				echo "<TD VALIGN=TOP>";
+
+				$display = $row[$fieldname];
+				//
+				// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				//
+				if ( $fieldname == "igvisit_id" ) {
+					$sql = "SELECT igvisit_name from center where igvisit_id = '$row[igvisit_id]'";
+					$display = get_value($sql);
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+	  	}//if ($_REQUEST['Action] == "View" )
+
+	//----------------------------------------------------------------
+	// END Action Options
+	//----------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		caa_connect();
+		$list = array();
+		echo "<CENTER>\n";
+        echo "<P class=trace>See <A HREF=$WICCFG[WICURL]/help.phpx?application=igvisit&field_name=Overview&Action=Help>";
+        echo "overview</A> for more information.</P>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Requester</TH>\n";
+		echo "<TH class=ths>I-Group</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		echo "<TH class=ths>Status</TH>\n";
+		echo "<TH class=ths>Visitor</TH>\n";
+		echo "<TH class=ths>Date</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+		// Requester Name
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT w.war_fname, w.war_lname, w.war_id FROM warrior w, igvisit i";
+		$sql .= " WHERE w.war_id = i.requester_id";
+		$namelist = array();
+
+		$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			$wid = $row['war_id'];
+			$namelist[$wid] = $row['war_fname'] . ' ' . $row['war_lname'];
+		}
+		spew_select_hash_menu('requester_id','','All',$namelist);
+		echo "</TD>\n";
+
+		// I-Group
+		$Igroup = array();
+		echo "<TD class=tds>\n";
+			$igsql = "SELECT DISTINCT i.igroup_id, i.igroup_name, c.center_abbr ";
+			$igsql .= " FROM igroup i, center c, igvisit v ";
+			$igsql .= " WHERE i.igroup_cen = c.center_id AND i.igroup_id = v.igroup_id";
+			$igresult = mysql_query($igsql);
+			while ($row = mysql_fetch_array($igresult, MYSQL_ASSOC) ) {
+				$iid = $row['igroup_id'];
+				$Igroup[$iid] = $row['center_abbr'] . ':  ' . $row['igroup_name'];
+			}
+			asort($Igroup);
+
+		//$sql = "SELECT DISTINCT i.igroup_id, i.igroup_name from igroup i, igvisit v";
+		//$sql .= " WHERE i.igroup_id = v.igroup_id";
+		//$list = array();
+		//$list = get_menu_array($sql);
+		//asort($list);
+		spew_select_hash_menu('igroup_id','All','All',$Igroup);
+		echo "</TD>\n";
+
+
+		// Type 
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct igvisit_type from  igvisit order by igvisit_type" ;
+		$list = get_menu($sql);
+		spew_select_menu('type','All','All',$list);
+		echo "</TD>\n";
+
+		// Status
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct status from  igvisit order by status" ;
+		$list = get_menu($sql);
+		spew_select_menu('status','All','All',$list);
+		echo "</TD>\n";
+
+
+		// Visitor Name
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT w.war_fname, w.war_lname, w.war_id ";
+		$sql .= " FROM warrior w, igvisit i";
+		$sql .= " WHERE w.war_id = i.visitor_id";
+		$namelist = array();
+
+		$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			$wid = $row['war_id'];
+			$namelist[$wid] = $row['war_fname'] . ' ' . $row['war_lname'];
+		}
+		spew_select_menu('igvisit_name','','All',$namelist);
+		echo "</TD>\n";
+
+		// Date
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct visit_date from igvisit order by visit_date";
+		$list = get_menu($sql);
+		spew_select_menu('visit_date','All','All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Requester',
+			'Type',
+			'Date',
+			'Visitor',
+			'Type',
+			'Center'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Date',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Interview\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New Request\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+	} // function spew_query_form
+
+
+	//----------------------------------------------------------------
+	// Function email_request_ack
+	//----------------------------------------------------------------
+	function email_request_ack() {
+		global $WICCFG;
+        $cid = $_SESSION['center_id'];
+        $iid = $_REQUEST['igroup_id'];  // I-Group
+        if ( ! isset ( $iid ) ) {
+            die("No I-Group ID sent to email_request_ack\n");
+        }
+        $rid = $_SESSION['war_id'];     // Requester 
+        if ( ! isset ( $rid ) ) {
+            die("No Requester ID sent to email_request_ack via Session of war_id\n");
+        }
+        //
+        //
+        // Get Info About My I-Group
+        //
+        $Igroup = array();
+        $sql = "SELECT * FROM igroup WHERE igroup_id = '$iid'";
+        $iresult = mysql_query($sql);
+	    $Igroup = mysql_fetch_array($iresult, MYSQL_ASSOC) ;
+
+        //
+
+        // Query the datebase for a basic listing of all those who have specified 
+		// Preference to assist
+        $sql = "SELECT w.war_id, w.war_email, w.war_hphone, w.war_fname, w.war_lname, ";
+        $sql .= " FROM  warrior w, warrior_preference p ";
+        $sql .= " WHERE p.warrior_id = w.war_id ";
+		$sql .= " AND p.preference_id < 400 AND p.preference_id >= 300";
+		// And is in your center
+		// $sql .= " AND w.war_center = i.center_id ";
+        echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+        // Get Info About Requester
+        //
+        $Requester = array();
+        $sql = "SELECT war_fname, war_lname, war_nname, war_email, war_hphone, war_wphone, war_cphone ";
+        $sql .= " FROM warrior WHERE war_id = '$rid'";
+        $rresult = mysql_query($sql);
+	    $Requester = mysql_fetch_array($rresult, MYSQL_ASSOC) ;
+
+        //
+        // Get Info About Region Rep
+        //
+        $Requester = array();
+        $regid = $Igroup['igroup_reg'];
+        $sql = "SELECT w.war_fname, w.war_lname, w.war_nname, w.war_email, w.war_hphone, w.war_wphone, w.war_cphone ";
+        $sql .= " FROM warrior w WHERE w.war_id = '$rid'";
+        //JJJ
+        $rresult = mysql_query($sql);
+	    $Requester = mysql_fetch_array($rresult, MYSQL_ASSOC) ;
+
+		//
+		// Config parameters for email acknowledgement
+		//
+		$ReqEmail = array (
+			'subject'		=>	"$Igroup[igroup_name] I-Group Visit Request: $_REQUEST[visit_date]", 
+			'fromemail'		=>	"mkphelp@mkp.org",
+			'toemail'		=>	"jerbowes@yahoo.com",	// Safety, overwritten in send_emai_ack
+			'fromname'		=>	"MKP WIC I-Group Administrator" 
+		);
+
+		if ( $data[war_email] ) {
+			$ReqEmail[toemail] = $data[war_email];
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $data[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "ReqEmail<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($ReqEmail), ENT_QUOTES);	//DEBUG DEVONLY
+		echo "Incoming Data<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($data), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		$fd = popen($WICCFG[MAILER],"w"); 
+		fputs($fd, "From: $ReqEmail[fromname] <$ReqEmail[fromemail]>\n"); 
+		fputs($fd, "To: $ReqEmail[toemail]\n"); 
+
+		if ( $data[war_email2] ) {
+			fputs($fd, "Cc: $data[war_email2]\n"); 
+			echo "<CENTER>\n";
+			echo "<H2>A copy has also been sent to your alternate email $data[war_email2]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		fputs($fd, "Subject: $ReqEmail[subject]\n\n"); 
+		fputs($fd, "Your MKP login password has been reset. Below are your MKP login credentials\n\n"); 
+		fputs($fd, "$WICCFG[WICURL]/igvisit.phpx?igvisit_id=$data[igvisit_id]&Action=Query\n\n");
+		fputs($fd, "Do not reply to this email. If you are having any difficulties, please \n");
+		fputs($fd, "contact Jerry Bowes, jerbowes@yahoo.com:\n\n");
+		pclose($fd); 
+
+	}//End function email_request_ack
+	//----------------------------------------------------------------
+	// Function email_signup_ack
+	//----------------------------------------------------------------
+	function email_signup_ack (  ) {
+		global $WICCFG;
+		//
+		// Config parameters for email acknowledgement
+		//
+		$SignupEmail = array (
+			'subject'		=>	"MKP WIC I-Group Visit", 
+			'fromemail'		=>	"mkphelp@mkp.org",
+			'toemail'		=>	"jerbowes@yahoo.com",	// Safety, overwritten in send_emai_ack
+			'fromname'		=>	"MKP WIC I-Group Administrator" 
+		);
+
+		if ( $data[war_email] ) {
+			$SignupEmail[toemail] = $data[war_email];
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $data[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "SignupEmail<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($SignupEmail), ENT_QUOTES);	//DEBUG DEVONLY
+		echo "Incoming Data<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($data), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		$fd = popen($WICCFG[MAILER],"w"); 
+		fputs($fd, "From: $SignupEmail[fromname] <$SignupEmail[fromemail]>\n"); 
+		fputs($fd, "To: $SignupEmail[toemail]\n"); 
+
+		if ( $data[war_email2] ) {
+			fputs($fd, "Cc: $data[war_email2]\n"); 
+			echo "<CENTER>\n";
+			echo "<H2>A copy has also been sent to your alternate email $data[war_email2]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		fputs($fd, "Subject: $SignupEmail[subject]\n\n"); 
+		fputs($fd, "Your MKP login password has been reset. Below are your MKP login credentials\n\n"); 
+		fputs($fd, "$WICCFG[WICURL]/igvisit.phpx?igvisit_id=$data[igvisit_id]&Action=Query\n\n");
+		fputs($fd, "Do not reply to this email. If you are having any difficulties, please \n");
+		fputs($fd, "contact Jerry Bowes, jerbowes@yahoo.com:\n\n");
+		pclose($fd); 
+
+	}//End function email_signup_ack
+?>

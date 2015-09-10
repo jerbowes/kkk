@@ -1,0 +1,60 @@
+<?php
+	//#==================================================================
+	//#	KKK Configuration File
+	//#------------------------------------------------------------------
+	//# Jerry Bowes, jerbowes@yahoo.com
+	//#------------------------------------------------------------------
+	//# $Date: 2015/08/16 19:18:18 $
+	//# $Source: /home/jbowes/kkk/src/php/include/RCS/config-inc.phpx,v $
+	//# $Id: config-inc.phpx,v 1.10 2015/08/16 19:18:18 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	$KKKCFG = array (
+		'ADMINEMAIL'		=>	'jerbowes@yahoo.com',
+		'AUDIT'				=>	'8',
+		'AUTHOR'			=> 	'Jerry Bowes',
+		'AUTHOREMAIL'		=>	'jerbowes@yahoo.com',
+		'BASEURL'			=>	'http://kkk.jbowes.net',
+		'COMPANYNAME'		=>	'KKK',
+		'COOKIEEXP'			=>	'+1h',					// DEVONLY
+		'COOKIEEXPSECS'		=>	'600',					// DEVONLY
+		'COOKIEEXP'			=>	'+8h',					// LIVEONLY
+		'COOKIEEXPSECS'		=>	'9600',					// LIVEONLY
+		'CSS'				=>	'kkk',					
+		'DBUSER'			=>	'kkk',
+		'DBNAME'			=>	'kkkdev',				//DEVONLY 
+		'DBNAME'			=>	'kkklive',				//LIVEONLY 
+		'DBPASSWD'			=>	'kkkG0d',						// LIVEONLY
+		'DBPASSWD'			=>	'kkkG0d',						// DEVONLY
+		'DBHOST'			=>	'localhost',
+		'DBPORT'			=>	'3306',
+		'DOMAIN'			=>	'kkk.jbowes.net',
+		'EMAILDOMAIN' 		=>	'jbowes.net',
+		'GROUPEMAIL'		=>	'jerbowes@yahoo.com',
+		'HEADSHOTDIR'		=>	'/var/www/kkk-html/photos/headshots',
+		'HEADSHOTURL'		=>	'/photos/headshots',
+		'HELPURL'		    =>	'http://help.jbowes.org',
+		'LOCALTIMEZONE'		=>	'PST-8',
+        'LIBRARYTARGETURL'  =>  "/library",
+        'LIBRARYTARGETDIR'  =>  "/var/www/kkk-html/library",
+		'MAILER'			=>  '/usr/sbin/sendmail -t',			// LIVEONLY SAFETY OFF
+		'MAILER'			=>  '/usr/sbin/sendmail -t',			// DEVONLY SAFETY OFF
+		//'MAILER'			=>  "cat /tmp/kkkmail.$$",			// DEVONLY SAFETY ON
+		'SECKKKURL'			=>	'https://kkk.jbowes.org',
+		'TIMEZONE'			=>	'America/Los Angles',
+		'KKKITTEAM'			=>	'jerbowes@yahoo.com',
+		'WEBMASTER'			=>	'jerbowes@yahoo.com',
+		);
+
+	//------------------------------------------------------------------
+	// All system recognized preferences and their default (US) values
+	//------------------------------------------------------------------
+	$VALIDPREFERENCE = array (
+		'encoding'			=>	'utf8',
+		'language'			=>	'US_English',
+		'datefmt'			=>	'YYYY-MM-DD'
+		);
+
+?>

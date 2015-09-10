@@ -1,0 +1,117 @@
+<?php
+	//#==================================================================
+	//# MKP-USA I-Group Portal Home Page
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2013/08/06 12:48:02 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/index.phpx,v $
+	//# $Id: index.phpx,v 1.10 2013/08/06 12:48:02 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+
+	$FMT = array (
+		'DESCRIPTION'=>	'ManKind Project MKP USA I-Group Portal. Supporting men who have completed their NWTA with personal growth resources in mensgroups called I-Groups',
+		'KEYWORDS'=>	'ManKind Project MKP I-Group Portal mensgroups integrity mensgroup relationship lover warrior king magician male archetypes accountability personal growth healing training men marriage',
+		'BANNER'	=>	'ManKind Project USA I-Group Portal',
+		'TITLE'		=>	'ManKind Project MKP USA I-Group Portal',
+		'NONAV'		=>	'NONAV'
+	);
+
+	$FMT['TITLE'] .= " DEVELOPMENT PROTOTYPE";		// DEV_ONLY
+
+	global $WICCFG;
+	spew_header($FMT);
+	echo "<P class=trace>Thanks for the explanation. I want to ";
+    echo "<A HREF=$WICCFG[SECWICURL]/login.phpx>Login</A> now.\n";
+	echo "</P>\n";
+	echo "<CENTER>\n";
+
+	echo "<TABLE BORDER=0 CELLPADDING=8  WIDTH=80%>\n";
+	echo "<TH class=ths>";
+    echo "Development Prototype: "; // DEV_ONLY
+    echo "Making a safer world.&nbsp;&nbsp; Building better men.&nbsp;&nbsp; Supporting them mentoring each other in circles.</TH>\n";
+	echo "<TR><TD class=tds>\n";
+
+	echo "The <A HREF=http://mkp.org>Mankind Project</A> is a training organization.\n";
+    echo "We create a safer world by building better men.\n";
+    echo "We do this through a training weekend and supporting their ongoing personal";
+	echo " growth in circles of their peers.\n";
+
+    echo "<P>\n";
+    echo "We teach men who they are, who they can be,\n";
+    echo " and how to let go of who they do not want to be.\n";
+	echo "We provide experiential training and support so men can\n";
+	echo "live empowered lives of centered awareness, emotional honesty, intentional choice, and personal integrity.\n";
+    echo "We give them the opportunity to know from this perspective what is most important to them";
+	echo " and what calls them to be their mission in the world.\n";
+	echo "To distinguish these men who serve\n";
+    echo "the world through their personal mission, we use the term <B>New Warrior</B>.\n";
+    echo "</P>\n";
+
+	echo "<P>\n";
+	echo "MKP offers two things to men. \n";
+    echo "<OL>\n";
+    echo "<LI>\n";
+    echo "The initial training weekend is called the\n";
+	echo "<A HREF=http://nwta.mkp.org>New Warrior Training Adventure</A> (NWTA)\n";
+    echo "This weekend introduces men to the core concepts of integrity, accoutability, and emotional literacy.\n";
+    echo "It helps men to identify what calls them to serve in the world by clarifying their personal mission.\n";
+    echo "<LI>\n";
+	echo "After the NWTA, men receive ongoing support from other men who have completed their training.\n";
+	echo "Men regularly sit in circles helping each other apply and integrate the awareness and tools from the NWTA\n";
+	echo "and many other aspects of personal growth and public leadership skills into their daily lives.\n";
+	echo "These groups are called Integration Groups or <B>I-Groups</B>.\n";
+    echo "</OL>\n";
+	echo "</P>\n";
+
+	echo "<P>\n";
+	echo "Traditionally the NWTA weekend has received most of the attention, but the";
+	echo " reality is that most of the building of better men comes from the work we do in I-Groups.\n";
+	echo " The USA I-Group Portal serves and facilitates our work in circles to build better men.\n";
+	echo "</P>\n";
+
+	echo "<P>\n";
+	echo "If you know a man who is ready to master his fear and step into a life of\n";
+	echo "power, integrity, emotional honesty, and being part of a community of wonderful\n";
+	echo "men, introduce us.\n";
+	echo "</P>\n";
+
+	echo "<P>\n";
+	echo "If you have completed your NWTA, ";
+    echo " <A HREF=$WICCFG[SECWICURL]/login.phpx><B>enter</B></A>.\n";
+	echo "</P>\n";
+	echo "</TD>\n";
+	echo "</TABLE>\n";
+	echo "</CENTER>\n";
+
+	spew_footer($FMT);
+
+?>

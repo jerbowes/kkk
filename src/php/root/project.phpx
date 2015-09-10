@@ -1,0 +1,1400 @@
+<?php
+	//#==================================================================
+	//# Project
+	//# Jerry Bowes, jerbowes@yahoo.com
+	//#------------------------------------------------------------------
+	//# $Source: /home/jbowes/kkk/src/php/root/RCS/project.phpx,v $
+	//# $Id: project.phpx,v 1.2 2015/08/30 16:04:06 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no people_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+	global $KKKCFG;
+	if (session_status() !== PHP_SESSION_ACTIVE) {session_start();}
+
+	if ( ! isset ( $_SESSION['people_id'] )) {
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$param = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl =  $_SERVER['PHP_SELF'] . '?' .  $param;
+			header("Location: $KKKCFG[BASEURL]/login.phpx?RetUrl=$returl");;
+		}else{
+			$returl =  $_SERVER['PHP_SELF'];
+			header("Location: $KKKCFG[BASEURL]/login.phpx?RetUrl=$returl");;
+		}
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"Kkk Projects",
+		'TITLE'			=>	"Kkk Projects",
+		'MODULENAME'	=>	"project.phpx",
+		'NAV1'			=>	"INFO"	// Level 1 menu navigation group
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$PROJECTCFG = array (
+		'EDITLEVEL'		=>	'1'			// Access level to get edit screen
+	);
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		'project_id',
+		'program_id',
+		'project_type',
+		'project_name',
+		'project_status',
+		'project_state',
+		'ticket_id',
+		'department_id',
+		'project_tag',
+		'project_summary',
+		'project_url',
+		'project_priority',
+		'dependent_on',
+		'percent_complete',
+		'estimated_hours',
+		'actual_hours',
+		'date_opened',
+		'date_approved',
+		'date_started',
+		'date_due',
+		'owner_id',
+		'alternate_id',
+		'projmgr_id',
+		'project_details'
+	);
+
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+		'program_id',
+		'project_name',
+		'project_status',
+		'project_state',
+		'project_tag',
+		'project_priority',
+		'estimated_hours',
+		'percent_complete',
+		'owner_id'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'program_id',
+		'project_type',
+		'project_state',
+		'project_tag',
+		'program_id',
+		'department_id',
+		'project_priority',
+		'owner_id',
+		'projmgr_id'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+		'project_status'
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'program_id'		=>	'select program',
+		'project_type'		=>	'select type',
+		'project_name'		=>	'enter project name',
+		'project_status'	=>	'select project status',
+		'project_state'		=>	'select project workflow state',
+		'department_id'		=>	'select department customer',
+		'project_tag'		=>	'enter project tag',
+		'project_summary'	=>	'enter project summary',
+		//'project_url'		=>	'enter twiki page or other reference url',
+		'project_priority'	=>	'select priority',
+		'percent_complete'	=>	'enter whole number percent complete',
+		'date_opened'		=>	'enter date opened',
+		'date_approved'		=>	'enter approval date',
+		'date_started'		=>	'enter start date',
+		'date_due'			=>	'enter due date',
+		'owner_id'			=>	'select project owner',
+		'alternate_id'		=>	'select project assistant',
+		'projmgr_id'		=>	'select project or program manager name',
+		'project_details'	=>	'enter details and deliverables'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'project_id'
+	);
+
+	$FieldType = array(
+		'program_id'			=> 'MenuArray',
+		'project_type'			=> 'Menu',
+		'project_state'			=> 'Menu',
+		'project_status'		=> 'Menu',
+		'department_id'			=> 'MenuArray',
+		'project_summary'		=> 'LongText',
+		'project_url'			=> 'LongText',
+		'project_priority'		=> 'MenuArray',
+		'dependent_on'			=> 'MenuArray',
+		'date_opened'			=> 'Date',
+		'date_approved'			=> 'Date',
+		'date_started'			=> 'Date',
+		'date_due'				=> 'Date',
+		'owner_id'				=> 'WhoMenu',
+		'alternate_id'			=> 'WhoMenu',
+		'projmgr_id'			=> 'WhoMenu',
+		'project_details'		=> 'TextArea'
+	);
+
+	$BASE = "SELECT choice FROM menu WHERE table_name = 'project' AND ";
+	$BBASE = "SELECT choice, description FROM menu WHERE table_name = 'project' AND ";
+	$Menu = array(
+		'dependent_on'		=> "SELECT project_id, project_name from project ORDER BY project_name",
+		'project_type'		=> "$BASE field_name = 'project_type' ORDER BY choice",
+		'project_state'		=> "$BASE field_name = 'project_state' ORDER BY choice",
+		'project_status'	=> "$BASE field_name = 'project_status' ORDER BY choice",
+		'department_id'		=> "SELECT department_id, department_name from department order by department_name",
+		'project_priority'	=> "$BBASE field_name = 'project_priority' ORDER BY choice",
+		"project_id"		=> "SELECT project_id, project_name from project",
+		"program_id"		=> "SELECT program_id, program_name FROM program ORDER BY program_name"
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'program_name'		=>	'tds',	// small left justified
+		'program_id'		=>	'tds',	// small left justified
+		'project_name'		=>	'tds'	// small left justified
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+	if (array_key_exists('Action', $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+			$dbh = kkk_pdo_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('project','project',$KKKCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			// Define default values
+			$Default = array (
+				'project_state'	 =>  'New'
+			);
+
+
+			// Setup default values
+			foreach ($Default as $key => $val ) {
+				if ( ! isset ( $_REQUEST[$key]) ) {
+					$_REQUEST[$key] = $val;
+				}
+			}
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['project_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO project (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $dbh->quote($_REQUEST[$f]);
+					$sql2 .=  $val . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = $dbh->query($finalsql);
+
+			$_REQUEST['Action'] = 'View';
+			$_REQUEST['project_id'] = $dbh->lastInsertId();
+
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Delete
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Delete" ) {
+
+			if ( array_key_exists('project_id', $_REQUEST)) {
+				$project_id = $_REQUEST[project_id];
+				if (! is_numeric( $project_id ) ) {
+					die ("ERROR: Attempt to update requires project_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Project Id Set") ;
+			}
+
+			$dbh = kkk_pdo_connect();
+
+			$sql = "DELETE FROM project WHERE project_id = '$project_id'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			$dbh->query($sql);
+
+			echo "<CENTER>\n";
+			echo "<H3>Project deleted</H3>\n";
+			echo "</CENTER>\n";
+			$_REQUEST['Action'] = 'List Current';
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update" ) {
+
+			if ( array_key_exists('project_id', $_REQUEST)) {
+				$project_id = $_REQUEST['project_id'];
+				if (! is_numeric( $project_id ) ) {
+					die ("ERROR: Attempt to update requires project_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Project Id Set") ;
+			}
+
+			$dbh = kkk_pdo_connect();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM project WHERE project_id = '$project_id'";
+            $result = $dbh->query($sql);
+			$Original = $result->fetch(PDO::FETCH_ASSOC);
+
+
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = array();
+			$fields = array();
+			$fieldlabel = get_field_labels('project','aaaaaaaaaa',$KKKCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Incoming After invalid Cull\n";   // DEBUG DEVONLY
+			print_r($_REQUEST);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE project SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $val != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = $dbh->quote($val);
+						$sqlentry[] = $f . " = " . $val ;
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE project_id = '$project_id'";
+
+			//TODO: Calculate precent_complete from estimated_hours, actual_hours
+			$percent = ( 100 * ($_REQUEST['actual_hours'] - $_REQUEST['estimated_hours'])/$_REQUEST['estimated_hours']);
+			echo "<p class=trace>New Percent Complete: $percent</p>\n";	// DEVONLY DEBUG
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$dbh->query($sql);
+				echo "<CENTER>\n";
+				echo "<H3>Update successful</H3>\n";
+				echo "</CENTER>\n";
+			}else{
+				echo "<CENTER>\n";
+				echo "<H3>No Changes Made</H3>\n";
+				echo "</CENTER>\n";
+			}
+
+			$_REQUEST['Action'] = "View";
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Query 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query"
+	  		|| $_REQUEST['Action'] == "List"
+	  		|| $_REQUEST['Action'] == "List Active"
+	  		|| $_REQUEST['Action'] == "List Current"
+	  		|| $_REQUEST['Action'] == "Query Active") {
+
+			$dbh = kkk_pdo_connect();
+			$fieldlabel = array();
+
+			$fieldlabel = get_field_labels('project','project',$KKKCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$validentries[] = $key . '=' . $val;
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Generate People Lookup List
+			//
+			$Who = array();
+			$sql = "select * from people";
+			$Who = get_people_picklist($sql);
+			print_r($Who); // DEVONLY
+
+			//
+			// Base project sql query
+			//
+			$What = array(
+				'p.*',
+				'g.program_name',
+				'g.program_tag'
+			);
+			$Where = array(
+				'p.program_id = g.program_id'
+			);
+			$From = array(
+				'project'	=>	'p',
+				'program'	=>	'g'
+			);
+
+			//
+			// Construct where clause into an array
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = $_REQUEST[$f];
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+
+					if ( ! empty($val) ) {
+						$val = $dbh->quote($_REQUEST[$f]);
+						if ( preg_match('/%/', $val)) { 
+							$Where[] = 'p.' . $f . "LIKE " . $val  ;
+						}else{
+							$Where[] =  'p.' .$f . " = " . $val ;
+						}
+					}
+				}
+			}
+
+			//
+			// Special Case Query Actions
+			//
+			if  ($_REQUEST['Action'] == 'List Active' ) {
+				$Where[] = "p.project_status != 'Complete'";
+				$Where[] = "p.project_status != 'Unstarted'";
+				$Where[] = "p.project_status != 'New'";
+				$Where[] = "p.project_status != 'Hold'";
+			}
+			//
+			// Assemble sql
+			//
+			$sql = "SELECT DISTINCT " . implode(',', $What);
+
+			$Fromsql = array();
+
+			foreach ($From as $table => $abbr) {
+				$Fromsql[] = $table . ' ' . $abbr;
+			}
+			$Fromsql = array_unique($Fromsql);
+
+			$sql .= ' FROM ' . implode(', ', $Fromsql);
+
+			if ( count($Where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $Where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Name'		=>	'p.project_name',
+				'Priority'	=>	'p.project_priority, p.project_name',
+				'Project'	=>	'p.project_name',
+				'Urgency'	=>	'p.project_urgency, p.project_priority, p.project_name',
+				'Type'		=>	'p.project_type, p.project_name',
+				'Deadline'		=>	'p.date_due',
+				//'Deadline'		=>	'p.date_due DESCENDING',
+				'State'		=>	'p.project_state, p.project_name',
+				'Program'	=>	'g.program_name, p.project_name'
+			);
+
+			$sortby = $_REQUEST['Sortmeby'];
+			$sby = $OrderBy[$sortby];
+
+			if (empty ($sby)){
+				$sql .= ' ORDER BY g.program_name, p.project_name';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			$result = $dbh->query($sql);
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			echo "<P class=trace>Click on <I>Project Name</I> link to see list of tasks. Other links drill down.</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access'] >= $PROJECTCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}
+			}
+
+
+			while ($row = $result->fetch(PDO::FETCH_ASSOC)){
+				echo "<TR>\n";
+
+				// Edit if authorized
+				// SECURITY
+				if ($_SESSION['access'] >= $PROJECTCFG['EDITLEVEL'] ) {	
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?project_id=$row[project_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// View for everyone
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?project_id=$row[project_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'project_id' ) {
+						$display = "<A HREF=/task.phpx?project_id=$row[project_id]&Action=List>";
+						$display .= $row['project_name'];
+						$display .= '</A>';
+					}
+
+					if ( $f  == 'project_name' ) {
+						$display = "<A HREF=/task.phpx?project_id=$row[project_id]&Action=List>";
+						$display .= $row['project_name'];
+						$display .= '</A>';
+					}
+
+					if ( $f  == 'program_id' ) {
+						$display = $row['program_name'];
+					}
+
+					if ( $f  == 'owner_id' ) {
+						$oid = $row['owner_id'];
+						$display = $Who[$oid];
+					}
+
+					if (in_array($f, $SHOW)) {
+
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+
+						echo "<TD VALIGN=TOP class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "List")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+
+			$menulist = array();
+			$table = 'project';
+			$DateRange = array();
+			$Who = array();
+			$DateRange = get_date_range();
+			$Who = get_people_picklist('');
+			$today = date('Y-m-d');
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabel = get_field_labels('project','project',$KKKCFG['DBNAME']);
+
+			unset($fieldlabel['project_id']);
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				if (in_array($fieldname, $NoEdit)){
+					continue;
+				}
+				
+				echo "<TR>\n";
+				echo "<TD CLASS=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$val</A></TD>\n";
+				echo "<TD class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+
+					if ( $FieldType[$fieldname] == "WhoMenu" ) {
+						spew_select_hash_menu($fieldname,$_SESSION['people_id'],'',$Who);
+					}
+
+					if ( $FieldType[$fieldname] == "Date" ) {
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],$today,$DateRange);
+					}
+
+
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						if ($fieldname == 'dependent_on'){
+							$menulist['0'] = 'None';
+							asort($menulist);
+							spew_select_hash_menu($fieldname,'None','None',$menulist);
+						}else{
+							asort($menulist);
+							spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						}
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname></TEXTAREA>\n";
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname>";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}//End if ($_REQUEST['Action'] == "New" ) 
+
+		//----------------------------------------------------------------------
+	  	// Edit 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+			$table='project';
+
+			if ( array_key_exists('project_id', $_REQUEST)) {
+				if ( isset ($_REQUEST['project_id'] ) ) {
+					$project_id = stripslashes($_REQUEST['project_id']);
+				}else{
+					die ("NO Project ID in edit function.") ;
+				}
+				if ( ! is_numeric($project_id) ) {
+					die ("Project ID ($project_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Project Id Set") ;
+			}
+
+			$dbh = kkk_pdo_connect();
+			$menulist = array();
+			$row = array();
+
+			$sql = "SELECT * FROM project WHERE project_id = '$project_id'";
+			$result = $dbh->query($sql);
+			$row = $result->fetch(PDO::FETCH_ASSOC);
+
+			$fieldlabel = get_field_labels('project','project',$KKKCFG['DBNAME']);
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				if ($fieldname == 'project_details'){
+					continue;
+				}
+				echo "<TR>\n";
+				echo "<TD class=tdls>\n";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>\n";
+				echo "</TD>\n";
+				echo "<TD class=tds>\n";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+							if (in_array($fieldname, $EXTEND)) {
+								echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+							}
+						}
+
+						if ( $FieldType[$fieldname] == "WhoMenu" ) {
+							$menulist = get_people_picklist('');
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "Date" ) {
+							$menulist = get_date_range();
+							spew_select_menu($fieldname, $row[$fieldname],$row[$fieldname],$menulist);
+						}
+
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							if ( $fieldname == 'dependent_on'){
+								$menulist['0'] = 'None';
+								asort ($menulist);
+								spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+							}else{
+								spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+							}
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=project_id VALUE=$project_id>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			// SECURITY
+			if ( $_SESSION['access'] >= $PROJECTCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Delete>\n";
+			}
+			echo "</FORM>\n";
+
+			//
+			// Details Only
+			//
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths>Details</TH>\n";
+			echo "<TR><TD class=tds>";
+			echo "<TEXTAREA NAME=project_details COLS=80 ROWS=40>$row[project_details]</TEXTAREA>\n";
+			echo "<TD>\n";
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=project_id VALUE=$project_id>\n";
+			// SECURITY
+			if ( $_SESSION['access'] >= $PROJECTCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			}
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			//
+			// Add Journal History
+			//
+			echo "<FORM ACTION=/journal.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_id VALUE=$project_id>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_table VALUE=$table>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Journal\">\n";
+			//
+			// Show Journal History
+			//
+			show_journal_history($project_id, $project);
+
+	  	}//if ($_REQUEST['Action'] == "Edit") 
+
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View" ) {
+
+			$table = 'project';
+
+			if ( array_key_exists('project_id', $_REQUEST)) {
+				if ( isset ( $_REQUEST['project_id'] ) ) {
+					$project_id = $_REQUEST['project_id'];
+				}else{
+					die ("No Project ID ID in view function") ;
+				}
+				if ( ! is_numeric($project_id) ) {
+					die ("Project ID ($project_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Project Id Set") ;
+			}
+			$table_id = $project_id;
+
+
+			$dbh = kkk_pdo_connect();
+
+			$Who = array();
+			$Who = get_people_picklist('');
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM project WHERE project_id = '$project_id'";
+			$result = $dbh->query($sql);
+			$row = $result->fetch(PDO::FETCH_ASSOC);
+
+			$fieldlabel = get_field_labels('project','project',$KKKCFG['DBNAME']);
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER=5>\n";
+	
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$label</A></TD>\n";
+				echo "<TD class=tds>";
+
+				$display = stripslashes($row[$fieldname]);
+
+				//
+				// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				//
+				if ( $fieldname == "program_id" ) {
+					$sql = "SELECT program_name from program where program_id = '$row[program_id]'";
+					$display = get_value($sql);
+				}
+				if ( $fieldname == "owner_id" ) {
+					$pid = $row[$fieldname];
+					$display = $Who[$pid];
+				}
+				if ( $fieldname == "alternate_id" ) {
+					$pid = $row[$fieldname];
+					$display = $Who[$pid];
+				}
+				if ( $fieldname == "projmgr_id" ) {
+						$pid = $row[$fieldname];
+					$display = $Who[$pid];
+				}
+
+				if ( $fieldname == "dependent_on" ) {
+					if (!empty ($row[$fieldname])){
+						$pid = $row[$fieldname];
+						$sql = "SELECT project_name from project where project_id = '$pid'";
+						$pname = get_value($sql);
+						$display = "<A HREF=/project.phpx?project_id=$pid&Action=View>$pname</A>";
+					}
+				}
+				if ( $fieldname == "department_id" ) {
+					if (!empty ($row[$fieldname])){
+						$dept_id = $row[$fieldname];
+						$sql = "SELECT department_name from department where department_id = '$dept_id'";
+						$display = get_value($sql);
+					}
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			if ( $_SESSION['access'] >= $PROJECTCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=HIDDEN NAME=project_id VALUE=$project_id>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit\">\n";
+			}
+			echo "</FORM>\n";
+			echo "</TABLE>\n";
+
+			//
+			// Add Journal History
+			//
+			echo "<FORM ACTION=/journal.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_id VALUE=$project_id>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=source_table VALUE=$table>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Journal\">\n";
+			echo "</FORM>\n";
+
+			//
+			// Show Journal History
+			//
+			show_journal_history($project_id, $table);
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "View")
+
+		//----------------------------------------------------------------------
+		// END 'Action' Processing Options
+		//----------------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		global $KKKCFG;
+		$dbh = kkk_pdo_connect();
+		$list = array();
+		// Blurb
+		echo "<P class=trace>\n";
+		echo "Help and explanations available via ";
+		echo "<A HREF=$KKKCFG[BASEURL]/help.phpx?table_name=project&field_name=Overview&Action=Help>Overview</A>.";
+		echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Program</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Status</TH>\n";
+		echo "<TH class=ths>Owner</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+
+		// Program Name
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT g.program_id, g.program_name ";
+		$sql .= " FROM project p, program g";
+		$sql .= " WHERE p.program_id = g.program_id";
+		$sql .= " ORDER BY g.program_name ";
+		$list = get_menu_array($sql);
+		$list['All'] = 'All';
+		spew_select_hash_menu('program_id','All','All',$list);
+		echo "</TD>\n";
+
+		// Type 
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct project_type from  project order by project_type" ;
+		$list = get_menu($sql);
+		spew_select_menu('project_type','All','All',$list);
+		echo "</TD>\n";
+
+		// State
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct project_state from  project order by project_state" ;
+		$list = get_menu($sql);
+		spew_select_menu('project_state','All','All',$list);
+		echo "</TD>\n";
+
+		// Status
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct project_status from  project order by project_status" ;
+		$list = get_menu($sql);
+		spew_select_menu('project_status','All','All',$list);
+		echo "</TD>\n";
+
+
+		// Owner
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT p.people_id, p.nickname FROM people p, project x" ;
+		$sql .= " WHERE p.people_id = x.owner_id";
+		$list = get_menu_array($sql);
+		$list['All'] = 'All';
+		spew_select_hash_menu('owner_id','All','All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Program',
+			'Name',
+			'Priority',
+			'Deadline',
+			'State',
+			'Type'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Program',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Active\">\n";
+		// SECURITY
+		if ($_SESSION['access'] >= $PROJECTCFG['EDITLEVEL'] ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function Show Journal History
+	//----------------------------------------------------------------
+
+	function show_journal_history ( $cid, $ctable ) {
+		global $KKKCFG;
+		$dbh = kkk_pdo_connect();
+
+		$subname = "show_journal_history";
+
+		echo "<P class=trace>Entering $subname in $program</P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"author_id"			=>	"45759",
+			"journal_type"		=>	"Journal",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		//
+		// Get List of nicknames for journal authors
+		//
+		$Who = array();
+		$sql = "SELECT p.people_id, p.first_name, p.nickname, p.last_name, p.email_1 from people p, journal j";
+		$sql .= " WHERE p.people_id = j.author_id ";
+		$sql .= " AND j.table_name = '$ctable' AND j.table_id = '$pid' ";
+		$Who = get_people_picklist($sql);
+
+		//
+		// Get List of emails for journal authors
+		//
+		$AuthorEmail = array();
+		$sql = "SELECT p.people_id , p.email_1 from people p, journal j";
+		$sql .= " WHERE p.people_id = j.author_id ";
+		$sql .= " AND j.table_name = '$ctable' AND j.table_id = '$pid' ";
+		$AuthorEmail = get_menu_array($sql);
+
+		//
+		// Get List of existing journal types
+		//
+		$sql = "SELECT distinct journal_type from journal";
+		$ctypes =  get_menu($sql);
+
+		//
+		// Generate SQL query
+		//
+	
+		$cfields =  get_fields('journal','journal',$KKKCFG[DBNAME]);
+	
+		$sql = "SELECT  ";
+		$sql .= " j.journal_id, j.journal_access, j.author_id, j.date_created, j.journal_type,";
+		$sql .= " j.journal_summary, j.journal_detail"; 
+		$sql .= " FROM journal j WHERE j.table_name = '$ctable' and j.table_id = '$pid' ";
+
+		if (! isset($_SESSION[people_id] ) ) {
+			$sql .= " AND j.journal_access = 'Public' ";
+			echo "<P class=trace>Following are all public entries. ";
+			echo "Remaining entries visible after <A HREF=/login.phpx>logging in.</A></P>\n";
+		}
+
+		$sql .= " ORDER BY j.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//
+
+		$result = $dbh->query($sql);
+		$TotalEntries = '0';
+
+		$rowcount = $result->rowCount();
+
+		$Sort = array();
+		$Journal = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Journal History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Journal] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			echo "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			echo "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Journal Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Journal=Summary/', '', $url);
+			echo "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			echo "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Journal=Detail\">Show Journal Details</P>\n";
+		}
+
+		$count = $result->rowCount();
+		echo "<CENTER>\n";
+		$howmany = "Entries";
+
+		if ( $count == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<TABLE id=${ctable}_journal_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Journal'] == "Detail" ) {
+			echo "<TH class=ths>Details of $count Journal $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $count Journal $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Journal=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=journallist>\n";
+
+
+		while ($Journal = $result->fetch(PDO::FETCH_ASSOC)){
+
+			$ts =  timestamp2display($Journal[date_created]);
+			echo "<LI>";
+			echo "<A HREF=\"/journal.phpx?journal_id=$Journal[journal_id]&Action=View\">";
+			echo "<IMG SRC=/images/smallballs/greenball.gif HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Journal['author_id'];
+
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">$Who[$author_id]</A>:\n";
+
+			echo "$Journal[journal_summary]\n";
+
+			if ( $_REQUEST[Journal] == "Detail" ) {
+				echo "<UL id=journallistbody><LI>\n";
+				echo "<PRE>\n";
+				$cleantext = stripslashes($Journal[journal_detail]);
+				$display = wordwrap($cleantext, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		if (! $count) {
+			echo "<LI>No journal entries</LI>\n";
+		}
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+	}// End funtion show_journal_history
+	//----------------------------------------------------------------
+	// Function Get SFull Name Picklist
+	//----------------------------------------------------------------
+	function get_people_picklist ($sql ) {
+		global $KKKCFG;
+		$dbh = kkk_pdo_connect();
+		$row = array();
+		$MyWho = array();
+		if (empty($sql)){
+			$sql = "SELECT people_id, first_name, last_name, nickname from people";
+			$sql .= " ORDER BY first_name, last_name";
+		}
+
+		if (empty ($sql) ) {
+			die ("Function get_people_picklist attempted without sql statement: $sql");
+		}
+
+		$result = $dbh->query($sql);
+		while ($row = $result->fetch(PDO::FETCH_ASSOC)){
+			if ( empty ( $row['nickname'] ) ) {
+				$name = $row['first_name'] . ' ' . $row['last_name'];
+			}else{
+				$name = $row['nickname'];
+				#$name = $row['nickname'] . ' ' . $row['last_name'];
+			}
+			$id = $row['people_id'];
+			$MyWho[$id]  = $name;
+		}
+		return($MyWho);
+	}// End funtion get_people_picklist
+
+	//----------------------------------------------------------------
+	// Function Get SFull Name Picklist
+	//----------------------------------------------------------------
+	function get_date_range() {
+		global $KKKCFG;
+		$Tmp = array();
+		$DateRange = array();
+		$thisyear = date('Y');
+		$thismonth = date('m');
+
+		$sql = "SELECT calendar_date, weekday from allcal";
+		$sql .= " WHERE year = '$thisyear'";
+
+		if ($thismonth > 10) {
+			$nextyear = ($thiyear + 1);
+			$sql .= " OR year = '$nextyear'";
+		}
+		$Tmp = get_menu_array($sql);
+
+		foreach ($Tmp as $date => $weekday){
+			$DateRange[$date] = $date . ' : ' .  $weekday ;
+		}
+
+		ksort($DateRange);
+		return($DateRange);
+	}// End funtion get_date_range
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack ( array $Data ) {
+		global $KKKCFG;
+		//
+		// Config parameters for email acknowledgement
+		//
+		$LOGINEMAIL = array (
+			'subject'		=>	"Project Autobot", 
+			'fromemail'		=>	"$KKKCFG[EMAIL]",
+			'toemail'		=>	"$KKKCFG[EMAIL]",	// Safety, overwritten in send_email_ack
+			'fromname'		=>	"$KKKCFG[COMPANY] Ops Admin" 
+		);
+
+		if ( $Data['people_email'] ) {
+			$LOGINEMAIL['toemail'] = $Data['people_email'];
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $Data[people_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "LOGINEMAIL<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($LOGINEMAIL), ENT_QUOTES);	//DEBUG DEVONLY
+		echo "Incoming Data<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($Data), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		$fd = popen($KKKCFG[MAILER],"w"); 
+		//
+		// Construct Mail Headers
+		//
+		fputs($fd, "From: $LOGINEMAIL[fromname] <$LOGINEMAIL[fromemail]>\n"); 
+		fputs($fd, "To: $LOGINEMAIL[toname] <$LOGINEMAIL[toemail]>\n"); 
+
+		if ( $Data[people_email2] ) {
+			fputs($fd, "Cc: $Data[people_email2]\n"); 
+			echo "<CENTER>\n";
+			echo "<H2>A copy has also been sent to your alternate email $Data[people_email2]</H2>\n";
+			echo "</CENTER>\n";
+		}
+		//
+		// Subject
+		//
+		fputs($fd, "Subject: $LOGINEMAIL[subject]\n\n"); 
+		//
+		// Body
+		//
+		fputs($fd, "Your Anchorfree issue has been resolved. Below is more information.\n\n"); 
+		fputs($fd, "Username: $Data[access_username]\n");
+		fputs($fd, "Click on the following link to log in and reset your password\n\n");
+		fputs($fd, "$KKKCFG[BASEURL]\n\n");
+		fputs($fd, "Do not reply to this email. If you are having any difficulties, please fill\n");
+		fputs($fd, "out an Anchorfree helpdesk request at the following link url:\n\n");
+		fputs($fd, "\t$KKKCFG[HELPDESK]\n");
+
+		pclose($fd); 
+	}//End function send_email_ack
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>

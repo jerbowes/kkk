@@ -1,0 +1,454 @@
+<?php
+//#==================================================================
+//# Google Mapping Functions
+//#------------------------------------------------------------------
+//# Jerry Bowes, jerbowes@yahoo.com
+//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+//#------------------------------------------------------------------
+//# $Source: /home/jbowes/kkk/src/php/include/RCS/googlemap-inc.phpx,v $
+//# $Id: googlemap-inc.phpx,v 1.4 2015/08/14 15:21:21 jbowes Exp $
+//#------------------------------------------------------------------
+//# SET EDITOR FOR 4 space TAB stops
+//# :set autoindent tabstop=4 showmatch	 (vi)
+//#==================================================================
+
+//-------------------------------------------------------------------
+// Spew Google Map Javascript header for 'I-Groups Near Me' query
+//-------------------------------------------------------------------
+//
+function spew_gmap_igroup_header($zip) {
+    require_once("config-inc.phpx");
+    require_once("msutils-inc.phpx");
+
+	global $KKKCFG;
+
+	$fd = fopen("/tmp/spew_gmap_igroup_header.log","w"); // DEVONLY
+
+	echo "<meta name='viewport' content='initial-scale=1.0, user-scalable=no' />\n";
+	echo "<script type='text/javascript' src='http://maps.google.com/maps/api/js?sensor=false'>\n";
+	echo "</script>\n";
+
+	caa_connect();
+
+	$mylocsql = "SELECT latitude, longitude from zipdata where zip_code = '$zip'";
+	fwrite($fd, "$mylocsql\n"); ; // DEVONLY
+	$mylocresult = mysql_query($mylocsql);
+
+	$myloc = array();
+	$myloc = mysql_fetch_array($mylocresult, MYSQL_ASSOC);
+	foreach ($myloc as $key => $val ) {		// DEVONLY
+		fwrite($fd, "$key : $val\n"); ; 		// DEVONLY
+	}										// DEVONLY
+
+	$lat = $myloc['latitude'];
+	fwrite($fd, "Stating Latitude: $lat\n"); ; 		// DEVONLY
+	$long = $myloc['longitude'];
+	fwrite($fd, "Stating Longitude: $long\n"); ; 	// DEVONLY
+
+	if ( $lat >= 0.0 ) {
+		$minlat = floatval($lat - floatval($KKKCFG['IGROUPLATDELTA']));
+		$maxlat = floatval($lat + floatval($KKKCFG['IGROUPLATDELTA']));
+	}else{
+		$minlat = floatval($lat + floatval($KKKCFG['IGROUPLATDELTA']));
+		$maxlat = floatval($lat - floatval($KKKCFG['IGROUPLATDELTA']));
+	}
+	fwrite($fd, "Min Latitude: $minlat\n"); ; 		// DEVONLY
+	fwrite($fd, "Max Latitude: $maxlat\n"); ; 		// DEVONLY
+
+	if ( $long >= 0.0 ) {
+		$minlong = floatval($long - floatval($KKKCFG['IGROUPLONGDELTA']));
+		$maxlong = floatval($long + floatval($KKKCFG['IGROUPLONGDELTA']));
+	}else{
+		$minlong = floatval($long + floatval($KKKCFG['IGROUPLONGDELTA']));
+		$maxlong = floatval($long - floatval($KKKCFG['IGROUPLONGDELTA']));
+	}
+	fwrite($fd, "Min Longitude: $minlong\n"); ; 		// DEVONLY
+	fwrite($fd, "Max Longitude: $maxlong\n"); ; 		// DEVONLY
+
+	$sql = "SELECT DISTINCT i.igroup_name, i.igroup_id, i.igroup_time, i.igroup_status, i.igroup_night, i.igroup_frequency, ";
+	$sql .= " l.location_latitude, l.location_longitude";
+	$sql .=  " FROM igroup i, fulllocation l ";
+	$sql .=  " WHERE ";
+	$sql .= " i.location_id = l.location_id ";
+	if ( $lat >= 0.0 ) {
+		$sql .= " AND l.location_latitude > '$minlat' ";
+		$sql .= " AND l.location_latitude < '$maxlat' ";
+	}else{
+		$sql .= " AND l.location_latitude < '$minlat' ";
+		$sql .= " AND l.location_latitude > '$maxlat' ";
+	}
+	if ( $long >= 0.0 ) {
+		$sql .= " AND l.location_longitude > '$minlong' ";
+		$sql .= " AND l.location_longitude < '$maxlong' ";
+	}else{
+		$sql .= " AND l.location_longitude < '$minlong' ";
+		$sql .= " AND l.location_longitude > '$maxlong' ";
+	}
+	fwrite($fd, "$sql\n"); ; 		// DEVONLY
+
+	echo "<script type='text/javascript'>
+
+	function attachTargetInfo(marker, infowindow, info, map) {
+  		google.maps.event.addListener(marker, 'click', function() {
+    		marker.setTitle(info);
+   		 	infowindow.open(map,marker);
+  		});
+		marker.setMap(map);
+	}
+
+	function init_map(){
+
+		var myLatlng = new google.maps.LatLng( $lat, $long );
+		var myOptions = {
+			zoom: 9,
+			center: myLatlng,
+			mapTypeId: google.maps.MapTypeId.ROADMAP 
+		};
+
+		var map = new google.maps.Map( document.getElementById( 'map_canvas' ), myOptions );
+
+		var marker = new google.maps.Marker( {
+			position: myLatlng,
+			map: map,
+			title: 'My House at $zip'
+			}
+		);
+
+		marker.setMap(map);
+";
+
+	echo "var checksql = \"$sql\";\n"; // DEBUG DEVONLY
+
+	$result = mysql_query($sql);
+
+	while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ){
+		$cnt++;
+		$lat = $row['location_latitude'];
+		$status = $row['igroup_status'];
+		$long = $row['location_longitude'];
+		$igroupname = mysql_real_escape_string($row['igroup_name']);
+		fwrite($fd, "$row[igroup_name] : $status  $lat, $long\n");	// DEVONLY
+
+		echo "var mkrLatLng = new google.maps.LatLng($lat, $long);\n";
+		//
+		// Custom Icon Colors
+		//
+		$pincolor = 'FE7569';	// Default
+
+		if (preg_match('/Closed/', $status)) {
+			$pincolor = 'FF0000';	// Red
+			fwrite($fd, "Closed: $row[igroup_name] of status $status, setting pincolor to $pincolor  \n");	// DEVONLY
+		}
+		if ( preg_match('/Open/', $status)) {
+			$pincolor = '33FF33';	// Green unless in None: range below
+			fwrite($fd, "Open: $row[igroup_name] of status $status, setting pincolor to $pincolor  \n");	// DEVONLY
+		}
+
+		echo " var pinColor = '$pincolor';
+    	var pinImage = new google.maps.MarkerImage('http://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|' + pinColor,
+        new google.maps.Size(21, 34),
+        new google.maps.Point(0,0),
+        new google.maps.Point(10, 34));
+
+    	var pinShadow = new google.maps.MarkerImage('http://chart.apis.google.com/chart?chst=d_map_pin_shadow',
+        new google.maps.Size(40, 37),
+        new google.maps.Point(0, 0),
+        new google.maps.Point(12, 35));
+		";
+
+		echo "var marker = new google.maps.Marker( {\n";
+		echo " position: mkrLatLng,\n";
+		echo " title: \"$igroupname\",\n";
+		echo " map: map,\n";
+		echo " icon: pinImage,\n";
+		echo " shadow: pinShadow,\n";
+		echo " zIndex: $cnt ";
+		echo "});\n";
+
+		echo "var contentString = '<div id=content><div id=siteNotice></div>";
+		echo "<div id=bodyContent>";
+		echo "<A HREF=$KKKCFG[KKKURL]/igroups.php?igroup_id=$row[igroup_id]&Action=View>$igroupname</A>";
+		echo "<ul>";
+		echo "<li>Night: $row[igroup_night]</li>";
+		echo "<li>When: $row[igroup_frequency]</li>";
+		echo "<li>Time: $row[igroup_time]</li>";
+		echo "</ul></div></div>';\n";
+
+		echo "var infowindow = new google.maps.InfoWindow({content: contentString});\n\n";
+
+    	echo "attachTargetInfo(marker, infowindow, contentString, map);\n";
+	}
+
+	echo "}\n";
+
+	echo "</script>\n";
+
+	fclose($fd); 	// DEVONLY
+}//End spew_gmap_igroup_header
+
+//-------------------------------------------------------------------
+// Spew Google Map Javascript header for 'Men Near My I-Group' query
+//-------------------------------------------------------------------
+//
+function spew_gmap_men_header($igroup_id) {
+    require_once("config-inc.phpx");
+	global $KKKCFG;
+
+	$fd = fopen("/tmp/spew_gmap_men_header.log","w"); // DEVONLY
+
+	echo "<meta name='viewport' content='initial-scale=1.0, user-scalable=no' />\n";
+	echo "<script type='text/javascript' src='http://maps.google.com/maps/api/js?sensor=false'>\n";
+	echo "</script>\n";
+
+	caa_connect();
+
+	$myigroupsql = "SELECT igroup_id, igroup_name, igroup_zip, location_id from igroup WHERE igroup_id = '$igroup_id'";
+
+	fwrite($fd, "$myigroupsql\n");	// DEVONLY
+
+	$myigroupresult = mysql_query($myigroupsql);
+
+	$MyIgroup = array();
+	$MyIgroup = mysql_fetch_array($myigroupresult, MYSQL_ASSOC);
+
+	foreach ($MyIgroup as $key => $val ) {	// DEVONLY
+		fwrite($fd, "$key : $val\n");		// DEVONLY
+	}										// DEVONLY
+
+	$lid = $MyIgroup['location_id'];
+	$zip = $MyIgroup['igroup_zip'];
+	$igroupname = mysql_real_escape_string($MyIgroup['igroup_name']);
+	fwrite($fd, "My I-Group Zip : $zip\n");		// DEVONLY
+
+    $MyLocation = array();
+	if ( ! empty ($lid )) {
+		$mylocsql = "SELECT location_latitude, location_longitude FROM fulllocation WHERE location_id = '$lid'";
+		fwrite($fd, "Exists lid ($lid) mylocsql : $mylocsql\n");	// DEVONLY
+		$mylocresult = mysql_query($mylocsql);
+	    $MyLocation = mysql_fetch_array($mylocresult, MYSQL_ASSOC);
+	    $lat = $MyLocation['location_latitude'];
+	    $long = $MyLocation['location_longitude'];
+		fwrite($fd, "Lat: $lat\n");		// DEVONLY
+		fwrite($fd, "Long: $long\n");		// DEVONLY
+
+	}else{
+		fwrite($fd, "No lid ($lid)...\n");	// DEVONLY
+
+        if ( ! empty ( $zip ) ) {
+		    $mylocsql = "SELECT DISTINCT latitude, longitude FROM zipdata WHERE zip_code = '$zip' limit 1";
+			fwrite($fd, "Exists zip ($zip) mylocsql : $mylocsql\n");	// DEVONLY
+		    $mylocresult = mysql_query($mylocsql);
+	        $MyLocation = mysql_fetch_array($mylocresult, MYSQL_ASSOC);
+	        $lat = $MyLocation['latitude'];
+	        $long = $MyLocation['longitude'];
+			fwrite($fd, "Lat: $lat\n");		// DEVONLY
+			fwrite($fd, "Long: $long\n");		// DEVONLY
+        }else{
+            $lat = '37.4';
+            $long = '-122.4';
+            $zip = "Unknown";
+			fwrite($fd, "No zip ($zip) : hardwire lat to $lat and long to $long\n");	// DEVONLY
+        }
+    }
+	fwrite($fd, "Lat : $lat\n");	// DEVONLY
+	fwrite($fd, "Long : $long\n");	// DEVONLY
+
+	if ( $lat >= 0.0 ) {
+		$minlat = floatval($lat - floatval($KKKCFG['MENLATDELTA']));
+		$maxlat = floatval($lat + floatval($KKKCFG['MENLATDELTA']));
+	}else{
+		$minlat = floatval($lat + floatval($KKKCFG['MENLATDELTA']));
+		$maxlat = floatval($lat - floatval($KKKCFG['MENLATDELTA']));
+	}
+
+	fwrite($fd, "MinLat : $minlat\n");	// DEVONLY
+	fwrite($fd, "MaxLat : $maxlat\n");	// DEVONLY
+
+	if ( $long >= 0.0 ) {
+		$minlong = floatval($long - floatval($KKKCFG['MENLONGDELTA']));
+		$maxlong = floatval($long + floatval($KKKCFG['MENLONGDELTA']));
+	}else{
+		$minlong = floatval($long + floatval($KKKCFG['MENLONGDELTA']));
+		$maxlong = floatval($long - floatval($KKKCFG['MENLONGDELTA']));
+	}
+
+	fwrite($fd, "MinLong : $minlong\n");	// DEVONLY
+	fwrite($fd, "MaxLong : $maxlong\n");	// DEVONLY
+
+	echo "<script type='text/javascript'>
+
+	function attachTargetInfo(marker, infowindow, info, map) {
+  		google.maps.event.addListener(marker, 'click', function() {
+    		marker.setTitle(info);
+   		 	infowindow.open(map,marker);
+  		});
+		marker.setMap(map);
+	}";
+
+	echo "function init_map(){\n";
+
+		echo " var myLatlng = new google.maps.LatLng( $lat, $long );\n";
+		echo " var myOptions = {\n";
+			echo "  zoom: 10,\n";
+			echo "  center: myLatlng,\n";
+			echo "  mapTypeId: google.maps.MapTypeId.ROADMAP \n";
+		echo " };\n";
+
+		echo " var map = new google.maps.Map( document.getElementById( 'map_canvas' ), myOptions );\n";
+
+		echo " var marker = new google.maps.Marker( {\n";
+			echo "  position: myLatlng,\n";
+			echo "  map: map,\n";
+			echo "  title: 'My I-Group ($igroupname) at $zip'\n";
+			echo " }\n";
+		echo ");\n";
+
+		echo "marker.setMap(map);\n";
+
+    //
+    // 	$sql: Men within DELTA degrees lat/long
+    //	NOTE: Need zipdata(zip_code) index or this query is sloooow
+    //
+	$sql = "SELECT DISTINCT ";
+    $sql .= " w.war_id, w.war_fname, w.war_lname, w.war_street, w.war_city, w.war_state, w.war_zip, ";
+	$sql .= " r.war_ig_ig,";
+	$sql .= " z.latitude, z.longitude";
+	$sql .=  " FROM warrior w, zipdata z, warrior_igroup r ";
+	$sql .=  " WHERE ";
+	$sql .= " w.war_zip = z.zip_code ";
+	$sql .= "AND  w.war_id = r.war_ig_war ";
+
+	if ( $lat >= 0 ) {
+		$sql .= " AND z.latitude > '$minlat' ";
+		$sql .= " AND z.latitude < '$maxlat' ";
+	}else{
+		$sql .= " AND z.latitude < '$minlat' ";
+		$sql .= " AND z.latitude > '$maxlat' ";
+	}
+	if ( $long >= 0 ) {
+		$sql .= " AND z.longitude > '$minlong' ";
+		$sql .= " AND z.longitude < '$maxlong' ";
+	}else{
+		$sql .= " AND z.longitude < '$minlong' ";
+		$sql .= " AND z.longitude > '$maxlong' ";
+	}
+
+	fwrite($fd, "$sql\n");	// DEVONLY
+	$result = mysql_query($sql);
+    $row = array();
+
+	while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ){
+		$cnt++;
+
+        $fname = addslashes($row['war_fname']);
+        $wid = $row['war_id'];
+        $iid = $row['war_ig_ig'];
+        $lname = addslashes($row['war_lname']);
+        $city = addslashes($row['war_city']);
+        $street = addslashes($row['war_street']);
+		fwrite($fd, "$wid : $fname $lname $iid $city $street\n");	// DEVONLY
+
+		echo "var mkrLatLng = new google.maps.LatLng($row[latitude], $row[longitude]);\n";
+
+		$pincolor = 'FE7569';	// Default
+		$pincolor = '33FF33';	// Green unless in None: range below
+		// 
+		// CAUTION: HARDWIRED VALUES
+		// Range of 100-160 (center_id + 100) are Reserved Null I-Groups beginning with name 'None: ...'
+		// This will blow up when we get to 59 centers... I'm not worried about that
+		// 
+		if ($iid > 100 && $iid < 160 ) {	
+			$pincolor = 'FF0000';	// Red, not in I-Group
+		}
+
+		//
+		// Custom Icon Colors
+		//
+		echo " var pinColor = '$pincolor';
+    	var pinImage = new google.maps.MarkerImage('http://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|' + pinColor,
+        new google.maps.Size(21, 34),
+        new google.maps.Point(0,0),
+        new google.maps.Point(10, 34));
+
+    	var pinShadow = new google.maps.MarkerImage('http://chart.apis.google.com/chart?chst=d_map_pin_shadow',
+        new google.maps.Size(40, 37),
+        new google.maps.Point(0, 0),
+        new google.maps.Point(12, 35));
+		";
+
+		echo "var marker = new google.maps.Marker( {\n";
+		echo " position: mkrLatLng,\n";
+		echo " title: \"$fname $lname\",\n";
+		echo " map: map,\n";
+		echo " icon: pinImage,\n";
+		echo " shadow: pinShadow,\n";
+		echo " map: map,\n";
+		echo " zIndex: $cnt\n";
+		echo "});\n";
+
+		//echo "var contentString = '<div id=content><div id=siteNotice></div>";
+		echo "var contentString = '<div id=content>";
+		echo "<A HREF=$KKKCFG[KKKURL]/warrior.php?war_id=$row[war_id]&Action=View>$fname $lname</A>";
+		echo "<div id=bodyContent><ul>";
+		echo "<li>$street</li>";
+		echo "<li>$city $row[war_state]</li>";
+		echo "</ul></div></div>';\n";
+
+		echo "var infowindow = new google.maps.InfoWindow({content: contentString});\n";
+
+		echo "attachTargetInfo(marker, infowindow, contentString, map);\n";
+	}
+
+	echo "}\n";
+
+	echo "</script>\n";
+
+	fclose($fd); 	// DEVONLY
+}//End spew_gmap_men_header
+
+//-------------------------------------------------------------------
+// Spew Google Map Javascript header: Location in fulllocation view
+//-------------------------------------------------------------------
+function spew_gmap_this_location_header($lid) {
+    require_once("config-inc.phpx");
+	global $KKKCFG;
+	echo "<meta name='viewport' content='initial-scale=1.0, user-scalable=no' />\n";
+	echo "<script type='text/javascript' src='http://maps.google.com/maps/api/js?sensor=false'>\n";
+	echo "</script>\n";
+
+	caa_connect();
+
+	$sql = "SELECT * FROM fulllocation WHERE location_id = '$lid'";
+
+	$result = mysql_query($sql);
+	$Where = array();
+	$Where = mysql_fetch_array($result, MYSQL_ASSOC);
+	$lat = $Where['location_latitude'];
+	$long = $Where['location_longitude'];
+	$locationname = mysql_real_escape_string($Where['location_name']);
+
+	echo "<script type='text/javascript'>
+
+	function init_map(){
+
+		var myLatlng = new google.maps.LatLng( $lat, $long );
+		var myOptions = {
+			zoom: 9,
+			center: myLatlng,
+			mapTypeId: google.maps.MapTypeId.ROADMAP 
+		};
+
+		var map = new google.maps.Map( document.getElementById( \"map_canvas\" ), myOptions );
+
+		var marker = new google.maps.Marker( {
+			position: myLatlng,
+			map: map,
+			title: \"$locationname\"
+			}
+		);
+		marker.setMap(map);
+		}\n";
+	echo "</script>\n";
+}//End spew_gmap_this_location_header
+
+?>

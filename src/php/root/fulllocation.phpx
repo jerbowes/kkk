@@ -1,0 +1,1304 @@
+<?php
+	//#==================================================================
+	//# Full Location Utility
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2013/04/08 03:38:02 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/fulllocation.phpx,v $
+	//# $Id: fulllocation.phpx,v 1.8 2013/04/08 03:38:02 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	
+	require_once('./include/config-inc.phpx');
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------
+	// Look and feel parameters
+	//------------------------------------------------------------------------
+	$FMT = array (
+		'BANNER'		=>	'MKP Event Locations',
+		'TITLE'			=>	'MKP Event Locations',
+		'MODULENAME'	=>	'fulllocation.phpx',
+        'NAV1'          =>  'INFO'
+	);
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$LOCCFG = array (
+		'EDITLEVEL'		=>	'1',	// Access level to get edit screen
+		'NEWNWTALEVEL'	=>	'5',	// Access level to jump to nwta for new
+		'EDITLEVEL'	    =>	'1',		// Access level to get create new
+		'ADMINLEVEL'	=>	'7'		// Access level to delete
+	);
+	//------------------------------------------------------------------------
+	// Database Fields
+
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		//'location_id',
+		'location_name',
+		'center_id',
+		'location_type',
+		'location_street',
+		'location_city',
+		'location_state',
+		'location_zip',
+		'location_county',
+		'location_country',
+		'location_capacity',
+		'location_url',
+		'map_url',
+		'contact_id',
+		'contact_name',
+		'contact_phone',
+		'contact_email',
+		'location_latitude',
+		'location_longitude',
+		'driving_directions',
+		'location_description',
+		'location_notes'
+	);
+
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+		//'location_id',	// DEVONLY
+		'location_name',
+		'center_id',
+		'location_city',
+		'location_state',
+		'location_country',
+		'location_type'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'center_id',
+		'location_state',
+		'location_city',
+		'location_country',
+		'location_county',
+		'location_type'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'center_id'				=>	'enter center',
+		'location_state'		=>	'enter state or province',
+		'location_city'			=>	'enter city',
+		'location_description'	=>	'enter description',
+		'location_country'		=>	'enter country',
+		'location_name'			=>	'enter location venue name (not address, city, or state)',
+		'location_street'		=>	'enter street address',
+		'location_type'			=>	'enter venue type from list'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'location_id'
+	);
+
+	$Menu = array(
+		"center_id"		=> "SELECT center_id, center_name from center order by center_name",
+		"location_type"			=> "SELECT choice from menu where table_name = 'fulllocation' and field_name = 'location_type'"
+	);
+
+	$FieldType = array(
+		'center_id'				=>	'MenuArray',
+		'contact_email'			=>	'LongText',
+		'contact_id'			=>	'Menu',
+		'driving_directions'	=>	'TextArea',
+		'location_notes'	   	=>	'TextArea',
+		'location_description'	=>	'TextArea',
+		'location_type'			=>	'Menu',
+		'location_url'			=>	'LongText',
+		'map_url'				=>	'LongText'
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'location_name'		=>	'tds'	// small left justified
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+    //
+    // Magic Hoogie for initialize google map parameters from database
+    //
+    if ($_REQUEST['Action'] == "View" ) {
+        if (! empty( $_REQUEST['location_id'] )) {
+            caa_connect();
+            $lid = intval($_REQUEST['location_id']);
+            if ( $lid > 0 ) {
+                $sql = "SELECT location_latitude, location_longitude ";
+                $sql .= " FROM fulllocation ";
+                $sql .= " WHERE location_id = '$lid'";
+    
+                $result = mysql_query($sql);
+    
+                $GeoLoc = array();
+			    $GeoLoc = mysql_fetch_array($result, MYSQL_ASSOC) ;
+                $geo = abs($GeoLoc['location_latitude']) + abs($GeoLoc['location_longitude']);
+
+                if ( $geo > 0 ) {
+                    $FMT['LOCMAP'] = $lid;
+                }
+            }
+        }
+    }
+
+	spew_header($FMT);
+	if (array_key_exists('Action', $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+        echo "FMT LOCMAP is $FMT[LOCMAP]\n"; // DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+
+		//----------------------------------------------------------------------
+	  	// Delete
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Delete" ) {
+            caa_connect();
+
+			if ( array_key_exists('location_id', $_REQUEST)) {
+                $lid = mysql_real_escape_string($_REQUEST['location_id']);
+				if ( empty( $lid ) ) {
+					die ("ERROR: location_id has no value for delete function. Contact administrator");
+				}
+				if (! is_numeric( $lid ) ) {
+					die ("ERROR: delete function requires location_id to be numeric. It is not. Contact administrator");
+				}
+			}else{
+				die ("ERROR: delete function requires location_id. Contact administrator");
+            }
+
+            if ($_SESSION['access'] < $LOCCFG['ADMINLEVEL'] ) {
+                echo "<CENTER><H3>You must have access level of at least $LOCCFG[ADMINLEVEL] to delete a location.</H3></CENTER>\n";
+                spew_footer($FMT);
+                exit;
+            }
+            //---------------------------------------
+            // Data Integrity Gauntlet
+            //---------------------------------------
+			spew_query_form();
+
+            $sql = "SELECT location_name from fulllocation WHERE location_id = '$lid'";
+            $locname = get_value($sql);
+            echo "<CENTER><H1>Deleting location $locname</H1></CENTER>\n";
+            //
+            // Check I-Groups
+            //
+            $sql = "SELECT igroup_id, igroup_name from igroup WHERE location_id = '$lid'";
+            $Igroups = array();
+            $Igroups = get_menu_array($sql);
+            echo "<CENTER><H3>Verifying no I-Groups meet at $locname</H3></CENTER>\n";
+			echo "<p class=trace>$sql</p>\n"; // DEVONLY
+            if ( count($Igroups) > 0 ){
+                echo "<CENTER>\n";
+                echo "<TABLE BORDER>\n";
+                echo "<TH class=ths>I-Groups Currently Listed at $locname</TH>\n";
+                echo "<TR><TD class=tds><UL>\n";
+                foreach ($Igroups as $id => $name) {
+                    echo "<LI><A HREF=/igroups.phpx?igroup_id=$id&Action=View>$name</A></LI>\n";
+                }
+                echo "</UL></TD></TABLE>\n";
+                echo "</CENTER>\n";
+                $allstop++;
+            }
+            //
+            // Check NWTA initiations
+            //
+            //mysql> desc initiation;
+            //+--------------------+------------------+------+-----+------------+----------------+
+            //| Field              | Type             | Null | Key | Default    | Extra          |
+            //+--------------------+------------------+------+-----+------------+----------------+
+            //| initiation_id      | int(11) unsigned | NO   | PRI | NULL       | auto_increment |
+            //| initiation_day     | char(15)         | NO   |     |            |                |
+            //| initiation_date    | date             | NO   |     | 0000-00-00 |                |
+            //| initiation_center  | int(11)          | NO   | MUL | 0          |                |
+            //| initiation_camp    | char(40)         | NO   |     | NULL       |                |
+            //| initiation_loc     | int(11) unsigned | NO   | MUL | 1          |                |
+            //| initiation_city    | char(40)         | NO   |     |            |                |
+            //| initiation_state   | char(4)          | NO   |     | NULL       |                |
+            //| initiation_country | char(2)          | NO   |     | NULL       |                |
+            //+--------------------+------------------+------+-----+------------+----------------+
+
+            $sql = "SELECT i.*, c.center_name from initiation i, center c ";
+            $sql .= " WHERE i.initiation_loc = '$lid' AND i.initiation_center = c.center_id";
+            $Initiation = array();
+            $Nwta = array();
+            $row = array();
+            $result = mysql_query($sql);
+
+            echo "<CENTER><H3>Verifying no NWTAs were conducted at $locname</H3></CENTER>\n";
+			echo "<p class=trace>$sql</p>\n"; // DEVONLY
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+                $id = $row['initiation_id'];
+                $Nwta[$id] = $row['center_name'] . ' NWTA  at ' . $row['initiation_camp'] . ' on ' . $row['initiation_date'] ;
+            }
+            print_r($Nwta); // DEVONLY
+
+            if ( count(array_keys($Nwta)) > 0 ){
+                echo "<CENTER>\n";
+                echo "<TABLE BORDER>\n";
+                echo "<TH class=ths>NWTA Initiations Currently Listed at $locname</TH>\n";
+                echo "<TR><TD class=tds><UL>\n";
+                foreach ($Nwta as $id => $name) {
+                    echo "<LI><A HREF=/nwta.phpx?initiation_id=$id&Action=View>$name</A></LI>\n";
+                }
+                echo "</UL></TD></TABLE>\n";
+                echo "</CENTER>\n";
+                $allstop++;
+            }
+
+            //
+            // Check non-NWTA Trainings
+            //
+
+            //mysql> desc trainings;
+            //+-------------+------------------+------+-----+------------+----------------+
+            //| Field       | Type             | Null | Key | Default    | Extra          |
+            //+-------------+------------------+------+-----+------------+----------------+
+            //| trg_id      | int(11) unsigned | NO   | PRI | NULL       | auto_increment |
+            //| trg_name    | char(60)         | NO   |     | NULL       |                |
+            //| trg_date    | date             | NO   |     | 0000-00-00 |                |
+            //| trg_loc     | char(50)         | NO   |     | NULL       |                |
+            //| trg_city    | char(40)         | NO   |     |            |                |
+            //| trg_state   | char(2)          | NO   |     | CA         |                |
+            //| trg_center  | int(11) unsigned | NO   |     | 37         |                |
+            //| trg_country | char(2)          | NO   |     | NULL       |                |
+            //+-------------+------------------+------+-----+------------+----------------+
+            //
+            $sql = "SELECT trg_id, trg_name from trainings WHERE trg_loc = '$lid'";
+            $Training = array();
+            $Training = get_menu_array($sql);
+            echo "<CENTER><H3>Verifying no non-NWTA training events were held at $locname</H3></CENTER>\n";
+			echo "<p class=trace>$sql</p>\n"; // DEVONLY
+            if ( count(array_keys($Training)) > 0 ){
+                echo "<CENTER>\n";
+                echo "<TABLE BORDER>\n";
+                echo "<TH class=ths>Training Events Currently Listed at $locname</TH>\n";
+                echo "<TR><TD class=tds><UL>\n";
+                foreach ($Training as $id => $name) {
+                    echo "<LI><A HREF=/trainings.phpx?trg_id=$id&Action=View>$name</A></LI>\n";
+                }
+                echo "</UL></TD></TABLE>\n";
+                echo "</CENTER>\n";
+                $allstop++;
+            }
+
+            //
+            // Delete if passed the gauntlet
+            //
+
+            if ( ! isset ($allstop) ) {
+                $sql = "DELETE from fulllocation WHERE location_id = '$lid'";
+			    echo "<p class=trace>$sql</p>\n";
+                mysql_query($sql);    // SAFETY
+                echo "<CENTER><H3>Location Deleted</H3></CENTER>\n";
+            }else{
+                echo "<CENTER><H1>Please resolve discrepancies to prevent orphans and try again.</H1></CENTER>\n";
+                
+            }
+
+            spew_footer($FMT);
+            exit;
+        }
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+			caa_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('fulllocation','location');
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['location_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO fulllocation (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	// DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+
+			$_REQUEST['location_id'] = mysql_insert_id();
+			$_REQUEST['Action'] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update" ) {
+			if ( array_key_exists('location_id', $_REQUEST)) {
+				$lid = $_REQUEST[location_id];
+				if (! is_numeric( $lid ) ) {
+					die ("ERROR: Attempt to update requires location_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Location Id Set for Update Function") ;
+			}
+
+			caa_connect();
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM fulllocation WHERE location_id = '$lid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('fulllocation','location');
+
+			print '<pre>';						//  DEVONLY
+			echo "Incoming Updated Fields\n"; 		// DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEVONLY
+			print '</pre>';	// DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$sql = 'UPDATE fulllocation SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$val = preg_replace("/\\\'/", "''", $val); // O\'Neil -> O''Neil
+						$sqlentry[] =   $f . " = '" . $val . "'";
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE location_id = '$lid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY 
+
+            echo "<CENTER>\n";
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+            echo "</CENTER>\n";
+
+			$_REQUEST['Action'] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query or Full Query
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query" 
+		|| $_REQUEST['Action'] == "List"
+		|| $_REQUEST['Action'] == "Full Query") {
+			spew_query_form();
+			caa_connect();
+			$fieldlabel = get_field_labels('fulllocation','location');
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$sql = "SELECT DISTINCT l.location_id, l.center_id, l.location_name, c.center_name, ";
+			$sql .= " l.location_street, l.location_latitude, l.location_longitude, l.location_city, ";
+			$sql .= " l.location_state, l.location_country, l.location_type ";
+			$sql .= " FROM fulllocation l, center c";
+
+			//
+			// Construct where clause into an array
+			//
+			$where = array(
+				'l.center_id = c.center_id'
+			);
+
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if (!empty( $val) ) {	// DEV: Can we populate an entry with a blank, e.g. reset?
+						if ( preg_match('/%/', $val)) { 
+							$sqlw = 'l.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$sqlw = 'l.' . $f . "='" . $val . "'" ;
+						}
+						array_push($where, $sqlw);
+					}
+				}
+			}
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'City'		=>	'l.location_city, l.location_name',
+				'Center'	=> 	'c.center_name, l.location_name',
+				'Name'		=>	'l.location_name',
+				'State'		=>	'l.location_state, l.location_name',
+				'Type'		=>	'l.location_type, l.location_name'
+			);
+			$sortby = $_REQUEST[Sortmeby];
+			if ( empty ( $OrderBy[$sortby]) ) {
+				$sql .= ' ORDER BY l.location_state, l.location_city, l.location_name ';
+			}else{
+				$sql .= ' ORDER BY ' . $OrderBy[$sortby];
+			}
+
+			echo "<p class=trace>$sql</p>\n";	// CHECK DEVONLY
+			$result = mysql_query($sql);
+	
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<CENTER>\n";
+            echo "<P class=trace>Click on Green ball to update location record,";
+            echo " Yellow ball to see location details,";
+            echo " or Purple ball to see Google Map.";
+            echo " Other links &quot;drill down&quot; to narrow selection.</P>\n";
+			echo "<TABLE id=fulllocation_query_results BORDER>\n";
+
+			if ($_SESSION['access'] >= $LOCCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+			echo "<TH class=ths>Map</TH>\n";
+
+			unset($fields[location_id]);
+
+			foreach ($ALLFIELD as $f) {
+
+				if ($_REQUEST['Action'] == "Full Query" ) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}else{
+					if (in_array($f, $SHOW)) {
+						echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+					}
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+				// Conditional Edit
+				if ($_SESSION['access'] >= $LOCCFG['EDITLEVEL'] ) {
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?location_id=$row[location_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// UnConditional View
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?location_id=$row[location_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+
+				// Google Map Link, depending on what is available
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					$geo = abs($row['location_latitude']) + abs($row['location_longitude']); 
+					if ($geo > 0 ) {
+						$addr = $row['location_latitude'] .',+' . $row['location_longitude']. '+(' . $row['location_name'] . ')&iwloc=A&hl=en';
+						$addurl = preg_replace('/\s+/', '+', $addr);
+						echo "<A HREF=\"http://maps.google.com/maps?q=$addurl&sensor=false\">";
+						echo "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+					} elseif (isset ($row[location_street]) && isset ($row[location_city]) && isset ($row[location_state])) {
+						$addr = $row['location_street'] . ',' . $row['location_city'] . ',' . $row['location_state'];
+						$addr .= ',' . $row['location_country'] . '+(' . $row[location_name] . ')&iwloc=A&hl=en';
+						$addurl = preg_replace('/\s+/', '+', $addr);
+						echo "<A HREF=\"http://maps.google.com/maps?q=$addurl&sensor=false\">";
+						echo "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+					}
+				echo "</TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$display = $row[$f];
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'center_id' ) {
+						$display = $row[center_name];
+					}
+
+					if ($_REQUEST['Action'] == "Full Query" ) {
+					// Full Query
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								$url = preg_replace('/\s+/', '+', $row[$f]);
+								echo "$f=$url"; 
+								echo "&${drilldown}>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+					}else{
+					// NOT Full Query
+						if (in_array($f, $SHOW)) {
+
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								$url = preg_replace('/\s+/', '+', $row[$f]);
+								echo "$f=${url}"; 
+								echo "&${drilldown}>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+						}
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "Query" || "List")) 
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			$menulist = array();
+			$contactlist = array();
+			$row = array();
+
+			caa_connect();
+			spew_query_form();
+
+			$contactlist = get_contact_list();
+            $FieldType['contact_id'] = "ContactMenu";
+
+
+			echo "<P class=trace>Please verify your location is not already here using the above query</P>\n";
+			echo "<P class=trace>Enter basic name and address information and hit the\n";
+			echo "<B>Insert New Entry</B> button at the bottom of this form.\n";
+			echo "<BR>Once entered, google map locator tools will be available to\n";
+			echo "look up latitude and longitude to make it fully mapable.</P>\n";
+
+			echo "<P class=trace>For help, see";
+            echo " <A HREF=/help.php?table_name=fulllocation&field_name=Overview&Action=Help>overview</A>.\n";
+            echo " Right click on the left column field label with your mouse";
+            echo " to get help displayed in a new tab or window.\n";
+            echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=fulllocation_new_form BORDER>\n";
+
+			$fieldlabel = get_field_labels('fulllocation','location');
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR>\n";
+                echo "<TD VALIGN=TOP CLASS=tdls>\n";
+                echo "<A HREF=/help.php?table_name=fulllocation&field_name=$fieldname&help_type=Explanation&Action=Help>";
+                echo "$val</A></TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						//ksort($menulist);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+					}
+
+					if ($FieldType[$fieldname] == "ContactMenu" ) {
+						spew_select_hash_menu($fieldname, $_SESSION[war_id],'',$contactlist);
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname>";
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=10></TEXTAREA>";
+					}
+
+					if (in_array($fieldname, $EXTEND)) {
+						echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+					}
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}//Endforeach ALLFIELD
+
+			echo "</TABLE>\n";
+
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Display Map
+		//----------------------------------------------------------------------
+	  	if (($_REQUEST[Action] == "Display Map")) {
+			if (! array_key_exists('location_id', $_REQUEST)) {
+				die ("No Location Id Set") ;
+			}
+			caa_connect();
+			spew_query_form();
+			$sql = "SELECT * FROM fulllocation WHERE location_id = '$_REQUEST[location_id]'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+			echo "<H2>Map Display Not Yet Implemented</H2>\n";
+
+	  	}//Endif ($_REQUEST[Action] == "Display Map")
+
+
+		//----------------------------------------------------------------------
+	  	// Edit  EDIT
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Edit")  {
+
+			if ( array_key_exists('location_id', $_REQUEST)) {
+				$lid = $_REQUEST['location_id'];
+				if ( ! is_numeric($lid) ) {
+					die ("Location ID ($lid) is not an integer.") ;
+				}
+			}else{
+				die ("No Location ID Set coming into Edit function") ;
+			}
+
+			$row=array();
+			$menulist = array();
+			$contactlist = array();
+			$contactlist = get_contact_list();
+            $FieldType['contact_id'] = "ContactMenu";
+
+			caa_connect();
+
+			$sql = "SELECT * FROM fulllocation WHERE location_id = '$lid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('fulllocation','location');
+
+			$addr = $row['location_street'] . ',' . $row['location_city'] . ',' . $row['location_state'];
+			$addurl = preg_replace('/\s+/', '+', $addr);
+
+			echo "<CENTER>\n";
+
+			echo "<P class=trace>";
+			echo "Once you have entered the street address, city, state, and zip code use the \n";
+			echo "<A HREF=\"http://maps.googleapis.com/maps/api/geocode/json?address=$addurl&sensor=true\">\n";
+			echo "Google geocoder</A> to look up latitude and longitude and cut and paste it into the location below.";
+			// TODO: Javascript JSON PARSER
+			//for (i = 0; i < myJSONResult.results.length; i++) {
+			//	myAddress[i] = myJSONResult.results[i].formatted_address;
+			//}
+            echo "<BR>";
+            echo "If the latitude and longitude are included, you can see";
+			$nurl = preg_replace('/\s+/', '+', $row['location_name']);
+			echo " a <A HREF=http://maps.google.com/maps?q=$row[location_latitude],+$row[location_longitude]+($nurl)&iwloc=A&hl=en>";
+			echo " Google map</A> of this location.\n";
+            echo "</P>\n";
+
+            echo "<P>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=fulllocation_view_form BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+                echo "<A HREF=/help.phpx?table_name=fulllocation&field_name=$fieldname&help_type=Explanation&Action=Help>";
+                echo "$label</A>\n";
+				echo "</TD>\n";
+
+				echo "<TD class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],$row[$fieldname],$menulist);
+							}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "ContactMenu" ) {
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$contactlist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=10>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=location_id VALUE=$_REQUEST[location_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=New>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+			echo "</P>\n";
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View VIEW
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View" ) {
+
+            echo "<P class=trace>Now Entering View Function</P>\n"; // DEVONLY
+
+			if ( array_key_exists('location_id', $_REQUEST)) {
+				$lid = $_REQUEST[location_id];
+				if ( ! is_numeric($lid) ) {
+					die ("Location ID ($lid) is not an integer.") ;
+				}
+			}else{
+				die ("No Location ID Set coming into Edit/View function") ;
+			}
+
+			caa_connect();
+			spew_query_form();
+
+			$menulist = array();
+			$fieldlabel = array();
+			$row = array();
+
+			$sql = "SELECT * FROM fulllocation WHERE location_id = '$lid'";
+            print "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('fulllocation','location');
+
+			$addr = $row['location_street'] . ',' . $row['location_city'] . ',' . $row['location_state'];
+			$addurl = preg_replace('/\s+/', '+', $addr);
+
+			$nurl = preg_replace('/\s+/', '+', $row['location_name']);
+			echo "<CENTER>\n";
+
+			echo "<P class=trace>";
+			echo "Once you have entered the street address, city, and state, (and clicked Update) use the \n";
+			echo "<A HREF=\"http://maps.googleapis.com/maps/api/geocode/json?address=$addurl&sensor=true\">\n";
+			echo "Google geocoder</A> to look up the latitude and longitude to cut and paste and add it to the location below.\n";
+            echo "<BR>\n";
+            echo "If the latitude and longitude are included, you can see a ";
+			echo "<A HREF=\"http://maps.google.com/maps?q=$row[location_latitude],";
+            echo "+$row[location_longitude]+($nurl)&iwloc=A&hl=en\">";
+			echo "Google map</A> of this location.";
+            echo "</P>\n";
+
+			now_what($row);
+
+            echo "<P>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			// Outer Table
+			echo "<TABLE BORDER=5>\n";
+            echo "<TH class=ths>Location Details</TH>\n";
+            echo "<TH class=ths>Google Map (If address info complete)</TH>\n";
+			echo "<TR><TD ALIGN=CENTER VALIGN=TOP>\n";
+
+				//
+				// Left Hand Info Table
+				//
+				echo "<TABLE id=fulllocation_view_form BORDER>\n";
+				foreach ($ALLFIELD as $fieldname ) {
+					$label = $fieldlabel[$fieldname];
+					echo "<TR>\n";
+					echo "<TD class=tdls>";
+					echo "<A HREF=/help.phpx?table_name=fullocation&field_name=$fieldname&Action=Help>";
+					echo "$label</A></TD>\n";
+
+					echo "<TD class=tds>";
+					//
+					// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+					//
+
+					$display = $row[$fieldname];
+
+					if ( $fieldname == "contact_id" ) {
+						$cid = $row[$fieldname];
+						$sql = "SELECT war_fname, war_lname from warrior where war_id = '$row[contact_id]'";
+						$name = array();
+						$name = get_menu($sql);
+						$fullname = implode(' ',  $name);
+						$display = "<A HREF=$WICCFG[WICURL]/warrior.php?war_id=$cid&Action=View>$fullname</A>";
+					}
+					if ( $fieldname == "center_id" ) {
+						$sql = "SELECT center_name from center where center_id = '$row[center_id]'";
+						$display = get_value($sql);
+					}
+
+					if ( $fieldname == "location_url" ) {
+						$display = "<A HREF=\"$row[$fieldname]\">$row[$fieldname]</A>";
+					}
+					if ( $fieldname == "map_url" ) {
+						$display = "<A HREF=\"$row[$fieldname]\">$row[$fieldname]</A>";
+					}
+	
+	
+					echo "$display<BR>";
+					echo "</TD>\n";
+				}//Endforeach fieldname
+				echo "</TABLE>\n";
+			    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=location_id VALUE=$_REQUEST[location_id]>\n";
+			    if ($_SESSION['access'] >= $LOCCFG['EDITLEVEL'] ) {
+				    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Edit>\n";
+			    }
+			    if ($_SESSION['access'] >= $LOCCFG['ADMINLEVEL'] ) {
+				    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Delete>\n";
+			    }
+				echo "</P>\n";
+			echo "</TD><TD VALIGN=TOP>\n";	// Map
+				// Right Hand Map
+                echo "<DIV id=\"map_canvas\" style=\"width: 400px; height: 500px\"></DIV>\n";
+			echo "</TD>\n";
+			echo "</TABLE>\n";
+            echo "</P>\n";
+
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "View")
+
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		caa_connect();
+		$list = array();
+        echo "<P class=trace>Select values of Center, Type, City, or State and click on <I>List</I> button.\n";
+        echo "If your location is not here, enter it by clicking on <I>New</I>.";
+        echo " For more information, see";
+        echo " <A HREF=/help.phpx?table_name=fulllocation&field_name=Overview&Action=Help>overview</A>.\n";
+        echo "</P>\n";
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=fulllocation_query_form BORDER>\n";
+		echo "<TH class=ths>Location Name</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		// Location Name
+		echo "<TR><TD class=tds>\n";
+		$sql = "SELECT DISTINCT location_name from fulllocation order by location_name";
+		$list = get_menu($sql);
+		spew_select_menu('location_name','','All',$list);
+		echo "</TD>\n";
+
+		// Center
+		echo "<TD class=tds>\n";
+		$sql = "SELECT c.center_id, c.center_name FROM center c, fulllocation l ";
+		$sql .= " WHERE l.center_id = c.center_id order by c.center_name";
+		//$sql .= " AND georegion_id = '5'" // USA ONLY
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('center_id',$_SESSION[center_id],'All',$list);
+		echo "</TD>\n";
+
+		// Type 
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct location_type from  fulllocation order by location_type" ;
+		$list = get_menu($sql);
+		spew_select_menu('location_type','All','All',$list);
+		echo "</TD>\n";
+
+		// City
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct location_city from fulllocation order by location_city";
+		$list = get_menu($sql);
+		spew_select_menu('location_city','','All',$list);
+		echo "</TD>\n";
+
+		// State
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct location_state from fulllocation order by location_state";
+		$list = get_menu($sql);
+		spew_select_menu('location_state','','All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Name',
+			'City',
+			'State',
+			'Type',
+			'Center'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Center',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Full Query\">\n";
+		if ($_SESSION['access'] >= $LOCCFG['EDITLEVEL'] ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+	}
+	//----------------------------------------------------------------
+	// Function now_what
+	//----------------------------------------------------------------
+	function now_what (array $row) {
+        echo "<P class=trace>Entering now_what</P>\n"; // DEVONLY
+        echo "<PRE>\n";     // DEVONLY
+        print_r($row);      // DEVONLY
+        echo "</PRE>\n";    // DEVONLY
+		$lid = $row['location_id'];
+
+		echo "<TABLE id=fulllocation_action_options BORDER>\n";
+		echo "<TH class=ths>At this location I want to...</TH>\n";
+		echo "<TR><TD class=tds>\n";
+		echo "<UL>\n";
+
+        //  Get roster of I-Groups
+		echo "<LI>\n";
+			echo "<A HREF=/igroups.phpx?location_id=$lid&center_id=$row[center_id]&Action=List>";
+			echo "View I-Groups meeting here";
+			echo "</A>";
+		echo "</LI>\n";
+
+        //  Create new I-Group here
+		echo "<LI>\n";
+			echo "<A HREF=/igroups.phpx?location_id=$lid&center_id=$row[center_id]&Action=New>";
+			echo "Register a new I-Group that meets here";
+			echo "</A>";
+		echo "</LI>\n";
+
+        // Register new training
+		echo "<LI>\n";
+			echo "<A HREF=/trainings.phpx?location_id=$lid&Action=New>";
+			echo "Register a new (non-NWTA) training to be held here";
+			echo "</A>";
+		echo "</LI>\n";
+
+        // See roster of trainings or events
+		echo "<LI>\n";
+			echo "<A HREF=/trainings.phpx?location_id=$lid&Action=Query>";
+			echo "See list of (non-NWTA) Trainings conducted here";
+			echo "</A>";
+		echo "</LI>\n";
+
+        // See list of NWTA weekends held here
+	    echo "<LI>\n";
+		    echo "<A HREF=/nwta.phpx?initiation_loc=$lid&Action=Query>";
+		    echo "See list of NWTA weekends held here";
+		    echo "</A>";
+	    echo "</LI>\n";
+
+        // Create NWTA weekend here
+        if ($row['location_type'] == 'Large Group' ) {
+            if ( $_SESSION['access'] >= $LOCCFG['NEWNWTALEVEL'] ) {
+	            echo "<LI>\n";
+	            echo "<A HREF=/nwta.phpx?initiation_loc=$lid&Action=New>";
+	            echo "Register new NWTA to be held here";
+	            echo "</A>";
+	            echo "</LI>\n";
+            }
+        }
+
+        // Create calendar event here
+		//echo "<LI>\n";
+			//echo "<A HREF=/calender.phpx?location_id=$lid&Action=New>";
+			//echo "Create an event for the online MKP calendar";
+			//echo " (Not yet implemented)";
+			//echo "</A>";
+		//echo "</LI>\n";
+
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+	}
+	//----------------------------------------------------------------
+	// Function get_contact_list, 
+	//----------------------------------------------------------------
+	function get_contact_list () {
+        caa_connect();
+        $contlist = array();
+        $row = array();
+
+		$sql = "SELECT DISTINCT w.war_id, w.war_nname, w.war_fname, w.war_lname, w.war_city ";
+		$sql .= " FROM warrior w, access_password a ";
+		$sql .= " WHERE w.war_id = a.warrior_id ";
+	 
+		//
+		// Defaults to those in your center
+		//
+		//if (!empty ($_SESSION['center_id'] ) ) {
+	        //$cid = $_SESSION['center_id'];
+		    //$sql .= " AND w.war_center = '$cid'" ;
+		//}
+		$sql .= " ORDER BY w.war_lname, w.war_fname ";
+	 
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+	 
+		$result = mysql_query($sql);
+	 
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+		    $id = $row['war_id'];
+			if (! empty($row['war_nname']) ){
+			    $contlist[$id] = $row['war_nname'] . ' ' . $row['war_lname'];
+			}else{
+				$contlist[$id] = $row['war_fname'] . ' ' . $row['war_lname'];
+			}
+			$contlist[$id] .= ' (' . $row['war_city'] . ')';
+		}
+        return($contlist);
+	}// Endfunction get_contact_list
+?>

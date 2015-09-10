@@ -1,0 +1,2714 @@
+<?php
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/23 23:57:10 $
+	//# $Id: igroups-prospect.phpx,v 1.3 2012/12/23 23:57:10 jbowes Exp $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/igroups-prospect.phpx,v $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	//#------------------------------------------------------------------
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+	require_once('./include/session-inc.phpx');
+	require_once('./include/nav-inc.phpx');
+	$FMT = array (
+		'NAV1'		=>	'IGROUPS',
+		'BANNER'	=>	'MKP I-Groups',
+		'TITLE'		=>	'MKP I-Groups'
+	);
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// BEGIN Custom Block
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	$IGCFG = array (
+		'EDITLEVEL'		=>	'4'
+	);
+
+	$REGFIELD = array(
+		'igrpreg_id',
+		'igrpreg_name',
+		'igrpreg_cen'
+	);
+
+	$IGROUPFIELD = array(
+		'igroup_id',
+		'igroup_name',
+		'igroup_title',
+		'igroup_status',
+		'igroup_cen',
+		'igroup_reg',
+		'igroup_street',
+		'igroup_city',
+		'igroup_state',
+		'igroup_country',
+		'igroup_zip',
+		'igroup_frequency',
+		'igroup_night',
+		'igroup_mixed',
+		'igroup_newmembers',
+		'igroup_rep',
+		'igroup_time',
+		'igroup_visit_initiated',
+		'igroup_visit_uninitiated',
+		'igroup_history'
+	);
+
+	$ALLFIELD = array(
+		'igroup_id',
+		'igroup_name',
+		'location_id',
+		'igroup_title',
+		'igroup_status',
+		'igroup_cen',
+		'igroup_reg',
+		'location_city',
+		'location_state',
+		'igroup_street',
+		'igroup_city',
+		'igroup_state',
+		'igroup_country',
+		'igroup_zip',
+		'igroup_frequency',
+		'igroup_night',
+		'igroup_mixed',
+		'igroup_newmembers',
+		'igroup_rep',
+		'igroup_time',
+		'igroup_visit_initiated',
+		'igroup_visit_uninitiated',
+		'center_id',
+		'location_description',
+		'location_country',
+		'location_county',
+		'location_street',
+		'location_type',
+		'location_url',
+		'map_url',
+		'contact_id',
+		'location_capacity',
+		'contact_name',
+		'contact_phone',
+		'contact_email',
+		'driving_directions',
+		'location_latitude',
+		'location_longitude',
+		'location_notes',
+		'igroup_history'
+	);
+
+	$SHOW = array(
+		'igroup_name',
+		'igroup_cen',
+		'location_id',
+		'igroup_status',
+		'igroup_reg',
+		'location_city',
+		'location_state',
+		'location_id',
+		'igroup_frequency',
+		'igroup_mixed',
+		'igroup_newmembers',
+		'igroup_night',
+		'igroup_visit_initiated',
+		'igroup_visit_uninitiated',
+		'location_zip'
+	);
+
+	// Fields that can have query drill down links on display
+	$LINK = array(
+		'igroup_cen',
+		'location_city',
+		'igroup_country',
+		'igroup_mixed',
+		'igroup_newmembers',
+		'igroup_night',
+		'igroup_frequency',
+		'igroup_reg',
+		'location_state',
+		'location_id',
+		'igroup_status',
+		'igroup_visit_initiated',
+		'igroup_visit_uninitiated',
+		'location_zip'
+	);
+	// Fields that are from a Menu Picklist that can have new members
+
+	$EXTEND = array(
+	);
+
+	// Required for New Entry
+	$RequiredField = array(
+		'igroup_name'		=>		'enter name of igroup',  
+		'igroup_cen'		=>		'enter center',
+		'location_id'		=>		'enter location, or query from <A HREF=/fulllocation.php>location menu</A>',
+		'igroup_frequency'	=>		'enter frequency of meeting',
+		'igroup_mixed'		=>		'enter whether this I-Group is men or mixed gender',
+		'igroup_newmembers'	=>		'enter whether open to new members',
+		'igroup_night'		=>		'enter night of week I-Group meets',
+		'igroup_reg'		=>		'enter I-Group region',
+		'igroup_rep'		=>		'enter I-Group rep',
+		'igroup_status'		=>		'enter status of I-Group',
+		'igroup_time'		=>		'enter time your I-Group meets',
+		'igroup_visit_initiated'	=>		'enter whether you allow initiated men as visitors',  
+		'igroup_visit_uninitiated'	=>		'enter whether you allow uninitiated to visitor'
+	);
+	// Global query choices
+	$InValidChoice = array(
+		'All',
+		'None',
+		'',
+		' ',
+		'Choose'
+	);
+	// Edit record fields with edit disabled
+	$NoEdit = array(
+		'igroup_id',
+		'center_id'
+	);
+	$FieldType = array(
+		'igroup_newmembers'			=>	'Menu',
+		'igroup_mixed'				=>	'Menu',
+		'igroup_rep'				=>	'RepMenu',
+		'igroup_frequency'			=>	'Menu',
+		'igroup_status'				=>	'Menu',
+		'igroup_visit_uninitiated'	=>	'Menu',
+		'igroup_visit_initiated'	=>	'Menu',
+		'igroup_night'				=>	'Menu',
+		'location_id'				=>	'MenuArray',
+		'igroup_newmembers'			=>	'Menu',
+		'igroup_history'			=>	'TextArea',
+		'igroup_cen'				=>	'MenuArray',
+		'location_id'				=>	'MenuArray',
+		'igroup_reg'				=>	'MenuArray'
+	);
+	$BASE = "SELECT choice from menu WHERE table_name = 'igroup' AND field_name = ";
+	$Menu = array(
+		'igroup_newmembers'			=> $BASE . "'igroup_newmembers'",
+		'igroup_mixed'				=> $BASE . "'igroup_mixed'",
+		'igroup_frequency'			=> $BASE . "'igroup_frequency'",
+		'igroup_night'				=> $BASE . "'igroup_night'",
+		'igroup_status'				=> $BASE . "'igroup_status'",
+		'igroup_visit_initiated'	=> $BASE . "'igroup_visit_initiated'",
+		'igroup_visit_uninitiated'	=> $BASE . "'igroup_visit_uninitiated'",
+		'igroup_cen' 				=> 'SELECT DISTINCT center_id, short_name from center',
+		'location_name' 			=> "SELECT DISTINCT location_name from fulllocation WHERE location_type = 'Small Group' OR location_typ = 'Residence'",
+		'location_id' 				=> "SELECT DISTINCT location_id, location_name from fulllocation WHERE location_type = 'Small Group' OR location_type = 'Residence'",
+		'igroup_reg' 				=> 'SELECT DISTINCT igrpreg_id, igrpreg_name from igroup_regions'
+	);
+
+	$DaysOfWeek = array (
+		'Mon',
+		'Tue',
+		'Wed',
+		'Thu',
+		'Fri',
+		'Sat',
+		'Sun'
+	);
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'location_id'	=>	'tds',	// small left justified
+		'igroup_name'	=>	'tds',	// small left justified
+		'location_city'	=>	'tds',	// small left justified
+		'igroup_reg'	=>	'tds'	// small left justified
+	);
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// END Custom Block
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	session_start();
+
+	//--------------------------------------------------------------------------
+	// Send to login if session has no war_id 
+	// Construct return url for login if needed
+	//--------------------------------------------------------------------------
+	//
+	if (! isset( $_SESSION['war_id'] )) {
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$url = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl =  $_SERVER['PHP_SELF'] . '?' .  $url;
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}else{
+			$returl =  $_SERVER['PHP_SELF'];
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}
+		exit;
+	}
+	//--------------------------------------------------------------------------
+
+	if (array_key_exists('Action', $_REQUEST)) {
+	  	if ($_REQUEST['Action'] == "I-Groups Near Me" || $_REQUEST['Action'] == "Men Near My I-Group" ) {
+			caa_connect();
+
+	  		if ($_REQUEST['Action'] == "I-Groups Near Me" ){
+
+				if (isset ($_SESSION['war_id'] ) ) {
+					$sql = "SELECT war_zip from warrior where war_id = '$_SESSION[war_id]'";
+					$FMT['IGMAPS'] = get_value($sql);
+				}else{
+					die("NO War_id in SESSION, need to log in.\n");
+				}
+
+				spew_header($FMT);
+				spew_query_form();
+	
+				echo "<CENTER>\n";
+				echo "<P class=trace>Below is a map of all I-Groups roughly within a 60 mile";
+				echo " radius of your home zip code.";
+				echo " <BR>(That have updated their locations with zip code, latitiude, and longitude.)\n";
+				echo " <BR>Hovering over map-pins will reveal names of I-Groups";
+				//echo ", clicking on them will show day, time, and more info link";
+				echo ".</P>\n";
+
+				echo "<TABLE BORDER=5>\n";
+				echo "<TR><TD>\n";
+				echo "<DIV id=\"map_canvas\" style=\"width: 500px; height: 500px\"></DIV>\n";
+				echo "</TD>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+			}
+
+	  		if ( $_REQUEST['Action'] == "Men Near My I-Group" ) {
+
+				if ( isset ($_SESSION['igroup_id'] ) ) {
+					$FMT['MIGMAPS'] = $_SESSION['igroup_id'];
+				}else{
+					die("No igroup ID in SESSION, need to log in.\n");
+				}
+
+				spew_header($FMT);
+				spew_query_form();
+	
+				echo "<CENTER>\n";
+				echo "<P class=trace>Below is a map of all men roughly within a 60 mile";
+				echo " radius of your I-Group.";
+				echo " <BR>Hovering over map-pins will reveal names";
+				//echo " and clicking on them will contact information";
+				echo ".</P>\n";
+
+				echo "<TABLE BORDER=5>\n";
+				echo "<TR><TD>\n";
+				echo "<DIV id=\"map_canvas\" style=\"width: 500px; height: 500px\"></DIV>\n";
+				echo "</TD>\n";
+				echo "</TABLE>\n";
+
+				echo "</CENTER>\n";
+			}
+
+		}else{
+			spew_header($FMT);
+			spew_query_form();
+		}
+
+		//----------------------------------------------------------------------
+		// Add New Initiated Member from Query Roster
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Add Initiated Member" ) {
+			caa_connect();
+			$where = array();
+
+			$iid = $_REQUEST['igroup_id'];
+			$wid = $_REQUEST['warrior_id'];
+			if ( empty ($iid) ){
+				echo "<H2>ERROR: No I-Group ID. Contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			if ( empty ($wid) ){
+				echo "<H2>ERROR: No Warrior ID. Contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Get I-Group Name
+			//
+			$sql = "SELECT igroup_name from igroup where igroup_id = '$iid'";
+			$igroupname = get_value($sql);
+
+			//
+			// Get Warrior Name
+			//
+			$sql = "SELECT * from warrior where war_id = '$wid'";
+			$result = mysql_query($sql);
+			$Warrior = array();
+			$Warrior =  mysql_fetch_array($result, MYSQL_ASSOC);
+			$who = $Warrior['war_fname'] . ' ' . $Warrior['war_lname'];
+
+			//mysql> desc warrior_igroup;
+			//+------------+------------------+------+-----+---------+----------------+
+			//| Field	  | Type			 | Null | Key | Default | Extra		  |
+			//+------------+------------------+------+-----+---------+----------------+
+			//| war_ig_id  | int(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| war_ig_war | int(11) unsigned | NO   | MUL | 0	   |				|
+			//| war_ig_ig  | int(11) unsigned | NO   | MUL | 0	   |				|
+			//+------------+------------------+------+-----+---------+----------------+
+			//
+			// Update warrior_igroup
+			//
+			$sql = "INSERT INTO warrior_igroup (war_ig_war, war_ig_ig) VALUES ('$wid','$iid')";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+
+			//
+			// Update warrior_ighistory
+			//
+			$today = date('Y-m-d');
+			$sql = "INSERT INTO warrior_ighistory (warrior_id, igroup_id, start_date )";
+			$sql .= " VALUES ('$wid','$iid','$today')";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+
+			echo "<CENTER>";
+			echo "<H2>Added $who as an initiated member of $igroupname</H2>\n";
+			echo "</CENTER>";
+
+	  		$_REQUEST['Action'] = "Manage My I-Group";
+		}
+
+
+		//----------------------------------------------------------------------
+		// Add New UnInitiated Member from Query Roster
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Add UnInitiated Member" ) {
+			caa_connect();
+			$where = array();
+
+			$iid = $_REQUEST['igroup_id'];
+			$pid = $_REQUEST['pro_id'];
+			if ( empty ($iid) ){
+				echo "<H2>ERROR: No I-Group ID. Contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			if ( empty ($pid) ){
+				echo "<H2>ERROR: No Prospect ID. Contact administrator</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Get I-Group Name
+			//
+			$sql = "SELECT igroup_name from igroup where igroup_id = '$iid'";
+			$igroupname = get_value($sql);
+
+			//
+			// Get Prospect
+			//
+			$sql = "SELECT * FROM prospect where pro_id = '$pid'";
+			$result = mysql_query($sql);
+			$Prospect = array();
+			$Prospect =  mysql_fetch_array($result, MYSQL_ASSOC);
+			$who = $Prospect['pro_fname'] . ' ' . $Prospect['pro_lname'];
+
+			//mysql> desc warrior_igroup;
+			//+------------+------------------+------+-----+---------+----------------+
+			//| Field	  | Type			 | Null | Key | Default | Extra		  |
+			//+------------+------------------+------+-----+---------+----------------+
+			//| war_ig_id  | int(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| war_ig_war | int(11) unsigned | NO   | MUL | 0	   |				|
+			//| war_ig_ig  | int(11) unsigned | NO   | MUL | 0	   |				|
+			//+------------+------------------+------+-----+---------+----------------+
+			//
+			// Update warrior_igroup
+			//
+			$sql = "INSERT INTO prospect_igroup (prospect_id, igroup_id) VALUES ('$pid','$iid')";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+
+			//
+			// Update prospect_ighistory
+			//
+			$today = date('Y-m-d');
+			$sql = "INSERT INTO prospect_ighistory (prospect_id, igroup_id, start_date )";
+			$sql .= " VALUES ('$pid','$iid','$today')";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+
+			echo "<CENTER>";
+			echo "<H2>Added $who as an uninitiated member of $igroupname</H2>\n";
+			echo "</CENTER>";
+
+	  		$_REQUEST['Action'] = "Manage My I-Group";
+		}
+
+
+		//----------------------------------------------------------------------
+		// Query for New Initiated Member
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New Initiated Member" ) {
+			caa_connect();
+			$where = array();
+			$Fieldlabel = array();
+
+			$iid = $_SESSION['igroup_id'];
+			$sql = "SELECT igroup_name from igroup where igroup_id = '$iid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$Name = get_value($sql);
+
+			$Fieldlabel = get_field_labels('warrior','war');
+
+			$sql = "SELECT war_id, war_fname, war_aname, war_lname, war_city, war_state from warrior";
+
+			foreach ($Fieldlabel as $field => $label ) {
+				if ( isset ($_REQUEST[$field]) ) {
+					$val = $_REQUEST[$field];
+					if ( ! empty ($val)) {
+						$where[] = "$field = '$val'";
+					}
+				}
+			}
+			$cnt = count($where);
+			if ($cnt > 0 ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}else{
+				echo "<CENTER>\n";
+				echo "<H2>No name or email provided.<BR>Please hit back \n";
+				echo "button and fill out at least one entry in the\n";
+				echo "<I>Add Initiated Man as New Member</I> form.\n";
+				echo "</H2>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			$sql .= " ORDER BY war_lname, war_fname ";
+
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+	
+			echo "<CENTER>\n";
+			echo "<H2>Candidates to add to $Name I-Group</H2>\n";
+
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths>Add</TH>\n";
+			echo "<TH class=ths>First Name</TH>\n";
+			echo "<TH class=ths>Last Name</TH>\n";
+			echo "<TH class=ths>Animal Name</TH>\n";
+			echo "<TH class=ths>City</TH>\n";
+			echo "<TH class=ths>State</TH>\n";
+	
+			while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+				$BGC='#FFFFFF';
+				$wid = $row['war_id'];
+
+				echo "<TR>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?igroup_id=$iid&warrior_id=$wid&Action=Add+Initiated+Member>";
+				//echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>\n";
+				echo "<B>ADD</B></A>\n";
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_fname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_lname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_aname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_city]";	
+				echo "</TD>\n";
+				
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[war_state]";	
+				echo "</TD>\n";
+	
+			}
+			echo "</TABLE>\n";
+			echo "<CENTER>\n";
+			spew_footer($FMT);
+			exit;
+		}
+
+		//----------------------------------------------------------------------
+		// Query for New UnInitiated Member
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New UnInitiated Member" ) {
+			caa_connect();
+			$where = array();
+			$Fieldlabel = array();
+
+			$iid = $_SESSION['igroup_id'];
+			$sql = "SELECT igroup_name from igroup where igroup_id = '$iid'";
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$Name = get_value($sql);
+
+			$Fieldlabel = get_field_labels('prospect','pro');
+
+			$sql = "SELECT pro_id, pro_fname, pro_lname, pro_city, pro_state from prospect";
+
+			foreach ($Fieldlabel as $field => $label ) {
+				if ( isset ($_REQUEST[$field]) ) {
+					$val = $_REQUEST[$field];
+					if ( ! empty ($val)) {
+						$where[] = "$field = '$val'";
+					}
+				}
+			}
+			$cnt = count($where);
+			if ($cnt > 0 ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}else{
+				echo "<CENTER>\n";
+				echo "<H2>No name or email provided.<BR>Please hit back \n";
+				echo "button and fill out at least one entry in the\n";
+				echo "<I>Add UnInitiated Man as New Member or Visitor</I> form.\n";
+				echo "</H2>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			$sql .= " ORDER BY pro_lname, pro_fname ";
+
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+            $count = mysql_num_rows($result);
+	
+			echo "<CENTER>\n";
+			echo "<H2>UnInitiated Men candidates to add to $Name I-Group</H2>\n";
+
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths>Add</TH>\n";
+			echo "<TH class=ths>First Name</TH>\n";
+			echo "<TH class=ths>Last Name</TH>\n";
+			echo "<TH class=ths>City</TH>\n";
+			echo "<TH class=ths>State</TH>\n";
+	
+			while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+				$BGC='#FFFFFF';
+				$pid = $row['pro_id'];
+
+				echo "<TR>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?igroup_id=$iid&pro_id=$pid&Action=Add+UnInitiated+Member>";
+				echo "<B>ADD</B></A>\n";
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[pro_fname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[pro_lname]";	
+				echo "</TD>\n";
+	
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[pro_city]";	
+				echo "</TD>\n";
+				
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "$row[pro_state]";	
+				echo "</TD>\n";
+	
+			}
+            if ( $count < 1 ) {
+                echo "<TR><TD class=tdcs COLSPAN=5>Not in uninitiated man database.";
+                echo "<A HREF=/prospect.phpx?pro_fname=$_REQUEST[pro_fname]&pro_lname=";
+                echo "$_REQUEST[pro_lname]&pro_email=$_REQUEST[pro_email]";
+                echo "&igroup_id=$iid";
+                echo "&Action=New>\n";
+                echo " Add now";
+                echo "</TD>\n";
+            }
+			echo "</TABLE>\n";
+			echo "<CENTER>\n";
+			spew_footer($FMT);
+			exit;
+		}
+
+		//----------------------------------------------------------------------
+		// Process Exit of Initiated Man from I-Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Exit" ) {
+            echo "<P class=trace>Entering Exit for Initiated Men</P>\n"; // DEVONLY
+
+			caa_connect();
+			$wid = $_REQUEST['warrior_id'];
+			$iid = $_REQUEST['igroup_id'];
+
+			//
+			// Display warrior_id as real name
+			//
+			$sql = "SELECT war_fname, war_lname from warrior where war_id = '$wid'";
+			echo "<p class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			$Warrior = array();
+			$Warrior = mysql_fetch_array($result, MYSQL_ASSOC) ; 
+
+			//
+			// Display igroup_id as real name
+			//
+			$sql = "SELECT c.center_abbr, i.igroup_name from center c, igroup i";
+			$sql .= " WHERE i.igroup_cen = c.center_id AND i.igroup_id = '$iid'";
+			echo "<p class=trace>$sql</P>\n"; // DEVONLY
+			$iresult = mysql_query($sql);
+			$Igroup = array();
+			$Igroup = mysql_fetch_array($iresult, MYSQL_ASSOC) ; 
+
+			//
+			// Get warrior_ighistory fieldnames and labels
+			//
+			$fieldlabel = array();
+			$fields = array();
+			$fieldlabel = get_field_labels('warrior_ighistory','ighistory');
+			unset ($fieldlabel['ighistory_id']);
+			$fields = array_keys($fieldlabel);
+			$Val = array();
+
+			//
+			// Populate values of form to display
+			//
+			foreach ($fieldlabel as $field => $label) {
+				if (isset ($_REQUEST[$field] ) ) {
+					$Val[$field] = $_REQUEST[$field];
+				}
+			}
+
+			$today = `date +%F`;
+			$who = $Warrior['war_fname'] . ' ' . $Warrior['war_lname'];
+			$igroup = $Igroup['center_abbr'] . ': ' . $Igroup['igroup_name'];
+
+			$msql = "SELECT choice from menu where table_name = 'warrior_ighistory'";
+			$msql .= " AND field_name = 'exit_reason'";
+			echo "<p class=trace>$msql</P>\n"; // DEVONLY
+			$Reason = array();
+			$Reason = get_menu($msql);
+
+			echo "<CENTER>\n";
+			echo "<H2>Removing $who from I-Group $igroup</H2>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdl>Exit Reason</TD>\n";
+			echo "<TD>\n";
+				spew_select_menu('exit_reason','Choose','Choose',$Reason);
+			echo "<TD>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdl>Exit Date<BR>(YYYY-MM-DD)</TD>\n";
+			echo "<TD>\n";
+				echo "<INPUT TYPE=TEXT NAME=end_date VALUE=\"$today\">\n";
+			echo "</TD>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdl VALIGN=TOP>Exit Comments</TD>\n";
+			echo "<TD>\n";
+				echo "<TEXTAREA NAME=exit_comment COLS=50 ROWS=20></TEXTAREA>\n";
+			echo "<TD>\n";
+
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=$iid>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=warrior_id VALUE=$wid>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Remove Initiated Member\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			$_REQUEST['Action'] = "Manage My I-Group";
+		}
+
+		//----------------------------------------------------------------------
+		// Process Exit of Uniniated Man from I-Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Prospect Exit" ) {
+            echo "<P class=trace>Entering Prospect Exti for Uninitiated man</P>\n"; // DEVONLY
+
+			caa_connect();
+			$pid = $_REQUEST['pro_id'];
+			$iid = $_REQUEST['igroup_id'];
+
+			//
+			// Display pro_id as real name
+			//
+			$sql = "SELECT pro_fname, pro_lname from prospect where pro_id = '$pid'";
+			echo "<p class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			$Prospect = array();
+			$Prospect = mysql_fetch_array($result, MYSQL_ASSOC) ; 
+
+			//
+			// Display igroup_id as real name
+			//
+			$sql = "SELECT c.center_abbr, i.igroup_name from center c, igroup i";
+			$sql .= " WHERE i.igroup_cen = c.center_id AND i.igroup_id = '$iid'";
+			echo "<p class=trace>$sql</P>\n"; // DEVONLY
+			$iresult = mysql_query($sql);
+			$Igroup = array();
+			$Igroup = mysql_fetch_array($iresult, MYSQL_ASSOC) ; 
+
+			//
+			// Get prospect_ighistory fieldnames and labels
+			//
+			$fieldlabel = array();
+			$fields = array();
+			$fieldlabel = get_field_labels('prospect_ighistory','ighistory');
+			unset ($fieldlabel['ighistory_id']);
+			$fields = array_keys($fieldlabel);
+			$Val = array();
+
+			//
+			// Populate values of form to display
+			//
+			foreach ($fieldlabel as $field => $label) {
+				if (isset ($_REQUEST[$field] ) ) {
+					$Val[$field] = $_REQUEST[$field];
+				}
+			}
+
+			$today = `date +%F`;
+			$who = $Prospect['pro_fname'] . ' ' . $Prospect['pro_lname'];
+			$igroup = $Igroup['center_abbr'] . ': ' . $Igroup['igroup_name'];
+
+			$msql = "SELECT choice from menu where table_name = 'prospect_ighistory'";
+			$msql .= " AND field_name = 'exit_reason'";
+			echo "<p class=trace>$msql</P>\n"; // DEVONLY
+			$Reason = array();
+			$Reason = get_menu($msql);
+
+			echo "<CENTER>\n";
+			echo "<H2>Removing Uninitiated man $who from I-Group $igroup</H2>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdl>Exit Reason</TD>\n";
+			echo "<TD>\n";
+				spew_select_menu('exit_reason','Choose','Choose',$Reason);
+			echo "<TD>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdl>Exit Date<BR>(YYYY-MM-DD)</TD>\n";
+			echo "<TD>\n";
+				echo "<INPUT TYPE=TEXT NAME=end_date VALUE=\"$today\">\n";
+			echo "</TD>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdl VALIGN=TOP>Exit Comments</TD>\n";
+			echo "<TD>\n";
+				echo "<TEXTAREA NAME=exit_comment COLS=50 ROWS=20></TEXTAREA>\n";
+			echo "<TD>\n";
+
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=$iid>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=pro_id VALUE=$pid>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Remove Uninitiated Member\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			$_REQUEST['Action'] = "Manage My I-Group";
+		}
+
+
+
+
+		//----------------------------------------------------------------------
+		// Remove Initiated member from my I-Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Remove Initiated Member" ) {
+
+			caa_connect();
+
+			$Required = array (
+				'igroup_id'			=>	'I-Group ID',
+				'warrior_id'		=>	'warrior ID',
+				'exit_reason'		=>	'reason man exited I-Group'
+			);
+
+			if ( $_REQUEST['exit_reason'] == "Choose" ){
+				unset ( $_REQUEST['exit_reason']);
+			}
+
+			//
+			// Data Integrity Gauntlet
+			//
+			foreach ($Required as $f => $reason) {
+				if (! isset ( $_REQUEST[$f] )) {
+					$err .= '<LI>Please enter or include ' . $Required[$f] . '</LI>';
+				}
+			}
+			if ( isset ($err)) {
+				echo "<CENTER>";
+				echo "<TABLE>";
+				echo "<TH>Error</TH>\n";
+				echo "<TR><TD><UL>$err</UL></TD>";
+				echo "</TABLE>";
+				spew_footer($FMT);
+				exit;
+			}
+			$today = `date +%F`;
+
+			//
+			// See if there is a warrior_ighistory entry for this man
+			//
+			$wid = $_REQUEST['warrior_id'];
+			$iid = $_REQUEST['igroup_id'];
+
+			if ($_REQUEST['exit_reason'] == "Never a member") {
+				$sql = "DELETE from warrior_ighistory WHERE ";
+				$sql .= " igroup_id = '$iid' AND warrior_id = '$wid'";
+			}else{
+
+				$sql = "SELECT * from warrior_ighistory WHERE ";
+				$sql .= " igroup_id = '$iid' AND warrior_id = '$wid'";
+				$sql .= " ORDER BY ighistory_id desc limit 1";
+				echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				$result = mysql_query($sql);
+				$num = mysql_num_rows($result);
+
+			    $val = mysql_real_escape_string($_REQUEST['exit_comment']);
+
+				if ( $num > 0 ) {
+
+					$History = array();
+					$History = mysql_fetch_array($result, MYSQL_ASSOC) ; 
+					$hid = $History['ighistory_id'];
+	
+					$sql = "UPDATE warrior_history set" ;
+					$sql .= " end_date = '$today' ";
+					$sql .= " AND exit_reason = '$_REQUEST[exit_reason]'";
+
+
+					$sql .= " AND exit_comment =  '$val'";
+					$sql .= " WHERE ighistory_id = '$hid'";
+					echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				}else{
+					$sql = "INSERT INTO warrior_history ";
+					$sql .= "(warrior_id, igroup_id, end_date, exit_reason, exit_comment)";
+					$sql .= "VALUES ('$wid','$iid','$today','$_REQUEST[exit_reason]','$val')";
+					echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				}
+			}
+
+			mysql_query($sql); 	// SAFETY
+			//
+			// Update warrior_igroup
+			//
+			$sql = "DELETE FROM warrior_igroup WHERE war_ig_ig = '$iid' AND war_ig_war = '$wid'";
+			echo "<p class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql); // SAFETY
+
+			//
+			// If I am removing me, update or delete my session igroups list
+			//
+
+			if (array_key_exists('igroups', $_SESSION)){
+				echo "<P class=trace>BEFORE: $_SESSION[igroups]</P>\n"; // DEVONLY
+				$igs = array();
+				$igs = explode('|', $_SESSION[igroups]);
+				foreach ($igs as $key => $val){
+					if ($val == $iid) {
+						unset ($igs[$key]);
+					}
+				}
+				if ( count($igs) > 1 )  {
+					$_SESSION[igroups] = implode('|', $igs);
+					$igs = explode('|', $_SESSION[igroups]);
+					echo "<P class=trace>AFTER: $_SESSION[igroups]</P>\n"; // DEVONLY
+				}else{
+					unset ($_SESSION['igroups']);
+					echo "<P class=trace>AFTER.. Should be NULL: $_SESSION[igroups]</P>\n"; // DEVONLY
+				}
+			}
+
+			$_REQUEST['Action'] = "Manage My I-Group";
+		}
+
+
+
+		//----------------------------------------------------------------------
+		// Remove Uniniated member from my I-Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Remove Uninitiated Member" ) {
+
+			caa_connect();
+
+			$Required = array (
+				'igroup_id'			=>	'I-Group ID',
+				'pro_id'		=>	'Prospect ID',
+				'exit_reason'		=>	'reason man exited I-Group'
+			);
+
+			if ( $_REQUEST['exit_reason'] == "Choose" ){
+				unset ( $_REQUEST['exit_reason']);
+			}
+
+			//
+			// Data Integrity Gauntlet
+			//
+			foreach ($Required as $f => $reason) {
+				if (! isset ( $_REQUEST[$f] )) {
+					$err .= '<LI>Please enter or include ' . $Required[$f] . '</LI>';
+				}
+			}
+			if ( isset ($err)) {
+				echo "<CENTER>";
+				echo "<TABLE>";
+				echo "<TH>Error</TH>\n";
+				echo "<TR><TD><UL>$err</UL></TD>";
+				echo "</TABLE>";
+				spew_footer($FMT);
+				exit;
+			}
+			$today = `date +%F`;
+
+			//
+			// See if there is an warrior_ighistory entry for this man
+			//
+			$pid = $_REQUEST['pro_id'];
+			$iid = $_REQUEST['igroup_id'];
+			if ($_REQUEST['exit_reason'] == "Never a member") {
+				$sql = "DELETE from prospect_ighistory WHERE ";
+				$sql .= " igroup_id = '$iid' AND prospect_id = '$wid'";
+			}else{
+
+				$sql = "SELECT * from prospect_ighistory WHERE ";
+				$sql .= " igroup_id = '$iid' AND prospect_id = '$pid'";
+				echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				$result = mysql_query($sql);
+				$num = mysql_num_rows($result);
+				if ( $num > 0 ) {
+					if ( $num > 1 ) {
+						echo "<H1>ERROR: Multiple prospect_ighistory records";
+						echo " for prospect_id of $pid and igroup_id of $iid";
+						echo "</H1>\n";
+						echo "<H2>Contact Administrator</H2>\n";
+						spew_footer($FMT);
+						exit;
+					}
+					$History = array();
+					$History = mysql_fetch_array($result, MYSQL_ASSOC) ; 
+					$hid = $History['ighistory_id'];
+	
+					$sql = "UPDATE prospect_history set" ;
+					$sql .= " end_date = '$today' ";
+					$sql .= " AND exit_reason = '$_REQUEST[exit_reason]'";
+					$sql .= " AND exit_comment =  '$_REQUEST[exit_comment]'";
+					$sql .= " WHERE ighistory_id = '$hid'";
+					echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				}else{
+					$sql = "INSERT INTO prospect_history ";
+					$sql .= "(prospect_id, igroup_id, end_date, exit_reason, exit_comment)";
+					$sql .= "VALUES ('$pid','$iid','$today','$_REQUEST[exit_reason]','$_REQUEST[exit_comment]')";
+					echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				}
+			}
+
+			mysql_query($sql); 	// SAFETY
+			//
+			// Update prospect_igroup
+			//
+			$sql = "DELETE FROM prospect_igroup WHERE igroup_id = '$iid' AND prospect_id = '$pid'";
+			echo "<p class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql); // SAFETY
+
+
+			$_REQUEST['Action'] = "Manage My I-Group";
+		}
+
+		//----------------------------------------------------------------------
+		// Update Start Date
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update Start Date" ) {
+			caa_connect();
+
+			//mysql> desc warrior_ighistory;
+			//+--------------+------------------+------+-----+---------+----------------+
+			//| Field		| Type			 | Null | Key | Default | Extra		  |
+			//+--------------+------------------+------+-----+---------+----------------+
+			//| ighistory_id | int(10) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| warrior_id   | int(10) unsigned | NO   |	 | NULL	|				|
+			//| igroup_id	| int(10) unsigned | NO   |	 | NULL	|				|
+			//| start_date   | date			 | YES  |	 | NULL	|				|
+			//| end_date	 | date			 | YES  |	 | NULL	|				|
+			//| exit_reason  | varchar(30)	  | YES  |	 | NULL	|				|
+			//| exit_comment | text			 | YES  |	 | NULL	|				|
+			//+--------------+------------------+------+-----+---------+----------------+
+
+
+			$sd = $_REQUEST['start_date'];
+			$wid = $_REQUEST['warrior_id'];
+			$pid = $_REQUEST['pro_id'];
+			$iid = $_REQUEST['igroup_id'];
+
+			echo "<PRE>\n"; //DEVONLY
+			print_r($_REQUEST); // DEVONLY
+			echo "</PRE>\n"; //DEVONLY
+
+			if (empty ($sd) ) {
+				echo "<H2>Error: No Start date given</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			if (empty($wid) && empty($pid) ) {
+				echo "<H2>Error: No Warrior or Uniniated man ID given</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+
+			if (empty($iid) ) {
+				echo "<H2>Error: No I-Group ID given</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			// DATE Validation
+            $err = validate_date($sd);
+
+			if (! empty ($err)) {
+				echo "<CENTER>\n";
+				echo "<TABLE>\n";
+				echo "<TR><TD>$err</TD>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+            //===========================================================
+            // Warrior Update
+            //===========================================================
+            if ( ! empty ($wid) ) {
+
+			    //
+			    // See if warrior_ighistory exists
+			    //
+			    $sql = "SELECT * from warrior_ighistory WHERE warrior_id = '$wid' AND igroup_id = '$iid'";
+			    $sql .= " ORDER BY ighistory_id desc limit 1";
+			    $result = mysql_query($sql);
+			    $num = mysql_num_rows($result);
+                echo "<P class=trace>Warrior Update: [$sql] : Returns $num results</P>\n"; // DEVONLY
+    
+			    //
+			    // Create new entry if not
+			    //
+			    if (  $num < 1 ) {
+				    $sql = "INSERT INTO warrior_ighistory (warrior_id, igroup_id, start_date)";
+				    $sql .= " VALUES ('$wid','$iid','$sd')";
+				    echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				    mysql_query($sql);
+			    }else{ // Update if exists
+				    $History = array();
+				    $History = mysql_fetch_array($result, MYSQL_ASSOC) ;
+    
+				    echo "<PRE>\n"; //DEVONLY
+				    echo "<B>Existing History Entry</B>\n"; // DEVONLY
+				    //print_r($History); // DEVONLY
+				    echo "</PRE>\n"; //DEVONLY
+    
+				    $hid = $History['ighistory_id'];
+				    $sql = "UPDATE warrior_ighistory set start_date = '$sd' WHERE ighistory_id = '$hid'";
+				    echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				    mysql_query($sql);
+			    }
+			}
+
+            //===========================================================
+            // Prospect Update
+            //===========================================================
+            if ( ! empty ($pid) ) {
+
+			    //
+			    // See if prospect_ighistory exists
+			    //
+			    $sql = "SELECT * from prospect_ighistory WHERE prospect_id = '$pid' AND igroup_id = '$iid'";
+			    $sql .= " ORDER BY ighistory_id desc limit 1";
+			    $result = mysql_query($sql);
+			    $num = mysql_num_rows($result);
+                echo "<P class=trace>$sql : Returns $num results</P>\n"; // DEVONLY
+    
+			    //
+			    // Create new entry if not
+			    //
+			    if ( $num < 1 ) {
+				    $sql = "INSERT INTO prospect_ighistory (prospect_id, igroup_id, start_date)";
+				    $sql .= " VALUES ('$pid','$iid','$sd')";
+				    echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				    mysql_query($sql);
+			    }else{ // Update if exists
+				    $ProspectHistory = array();
+				    $ProspectHistory = mysql_fetch_array($result, MYSQL_ASSOC) ;
+    
+				    echo "<PRE>\n"; //DEVONLY
+				    echo "<B>Existing History Entry</B>\n"; // DEVONLY
+				    //print_r($ProspectHistory); // DEVONLY
+				    echo "</PRE>\n"; //DEVONLY
+    
+				    $hid = $ProspectHistory['ighistory_id'];
+				    $sql = "UPDATE prospect_ighistory set start_date = '$sd' WHERE ighistory_id = '$hid'";
+				    echo "<p class=trace>$sql</P>\n"; // DEVONLY
+				    mysql_query($sql);
+			    }
+			}
+
+			// Workflow change
+			$_REQUEST['Action'] = $_REQUEST['NA'];
+		}
+
+		//----------------------------------------------------------------------
+		// Coming in from fulllocations with new location_id
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Reference" ) {
+			// spew_query_form();
+		}
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+			$caadbh = caa_connect();
+			// Get list of fields for this table
+			$fieldlabel = get_field_labels('igroup','igroup');
+			$fields = array_keys($fieldlabel);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$goodfields = array();
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$goodfields[$f] = $_REQUEST[$altkey];
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}else{
+					if ($_REQUEST[$f]) {
+						$goodfields[$f] = $_REQUEST[$f];
+					}
+				}
+			}
+			// Delete auto_increment primary keys
+			unset ($goodfields['igroup_id']);
+
+			$fields = array_keys($goodfields);
+			sort($fields);
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $goodfields)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO igroup (';
+			foreach ($fields as $f) {
+				$sql .= $f . ',';
+			}
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sql2 .= "'" . $val . "'" . ',';
+			}
+			//chop($sql);
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update" ) {
+			if (! array_key_exists('igroup_id', $_REQUEST)) {
+				die ("No Item Id Set") ;
+			}
+			$caadbh = caa_connect();
+			// Get list of fields for this table
+			$fieldlabel = get_field_labels('igroup','igroup');
+			$fields = array_keys($fieldlabel);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$goodfields = array();
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$goodfields[$f] = $_REQUEST[$altkey];
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}else{
+					if ($_REQUEST[$f]) {
+						$goodfields[$f] = $_REQUEST[$f];
+					}
+				}
+			}
+
+			$fields = array_keys($goodfields);
+			sort($fields);
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $goodfields)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'UPDATE igroup SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sqlx =   $f . " = '" . $val . "'";
+				array_push($sqlentry, $sqlx);
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE igroup_id = '$goodfields[igroup_id]'";
+			echo "<p class=trace>$sql</p>\n";	//DEBUG
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<H3>Update successful</H3>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query" 
+			|| $_REQUEST['Action'] == "Manage My I-Group" ) {
+
+			caa_connect();
+			$parameters = array();
+			$validentries = array();
+
+			$from =  array(
+				'igroup'		=>	'i',
+				'fulllocation'	=>	'f'
+				);
+
+			// Field Labels from igroup table
+			$fieldlabel = get_field_labels('igroup','igroup');
+			$fields = array_keys($fieldlabel);
+			$fieldlabel[igroup_cen] = "Center";
+			$fieldlabel[igroup_newmembers] = "New Members";
+			$fieldlabel[igroup_reg] = "I-Group Region";
+
+			// Field Labels from fulllocation table
+			$locfieldlabel = get_field_labels('fulllocation','location');
+			$locfields = array_keys($locfieldlabel);
+
+			// Combined Field Labels
+			$allfieldlabel = array_merge($fieldlabel, $locfieldlabel);
+			$allfieldlabel['location_name'] = 'Location';
+			$allfieldlabel['igroup_name'] = 'I-Group Name';
+			$allfieldlabel['location_id'] = 'Location Name';
+
+			//echo "<PRE>\n"; 	// DEVONLY
+			//print_r($allfieldlabel); // DEVONLY
+			//echo "</PRE>\n"; 	// DEVONLY
+
+			//echo "<PRE>\n"; 	// DEVONLY
+			//print_r($_REQUEST); // DEVONLY
+			//echo "</PRE>\n"; 	// DEVONLY
+
+			$validentries = array();
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($param, $val) = explode( '=', $entry);	
+				if ( $val ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($param, $ALLFIELD) ) {
+							$parameters[$param] = $val;
+						}
+					}
+				}
+			}
+			foreach ($parameters as $key => $val ) {
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+			$drilldown = implode('&', $validentries);
+			echo "<P class=trace>Drilldown: $drilldown</P>\n"; // DEVONLY
+
+			//print '<pre>';	// DEBUG DEVONLY
+			//echo "Drilldown: [$drilldown]\n"; //DEBUG DEVONLY
+			//echo "<BR>Valid Entries\n"; // DEBUG DEVONLY
+			//print htmlspecialchars(print_r($validentries), ENT_QUOTES);	// DEBUG DEVONLY
+			//echo "<BR>Parameters\n"; // DEBUG DEVONLY
+			//print htmlspecialchars(print_r($parameters), ENT_QUOTES);	// DEBUG DEVONLY
+			//print '</pre>';	// DEBUG DEVONLY
+			//
+			// Special Lookup for Center name to id match
+			//
+			$Center = array();
+			$csql = "SELECT DISTINCT center_id, short_name FROM center";
+			$Center = get_menu_array($csql);
+
+			//
+			// Special Lookup for Region name to id match
+			//
+			$Region = array();
+			$rsql = "SELECT DISTINCT igrpreg_id, igrpreg_name from igroup_regions";
+			$Region = get_menu_array($rsql);
+
+			//echo "<PRE>\n";	//DEBUG DEVONLY
+			//print_r($Region); // DEBUG DEVONLY
+			//echo "</PRE>\n";	//DEBUG DEVONLY
+
+			$sql = "SELECT ";
+			$sql .= " i.igroup_id, i.igroup_name, i.igroup_status, i.igroup_cen,";
+			$sql .= " i.igroup_reg, i.igroup_frequency, i.igroup_night, i.igroup_mixed, i.igroup_newmembers,";
+			$sql .= " i.igroup_rep, i.igroup_time, i.igroup_visit_initiated, i.igroup_visit_uninitiated,";
+			$sql .= " f.location_id, f.center_id, f.location_state, f.location_city, f.location_country, ";
+			$sql .= " f.location_latitude, f.location_longitude,";
+			$sql .= " f.location_name, f.location_street";
+			$where = array(
+				'f.location_id = i.location_id',
+				"i.igroup_name NOT LIKE 'None:%'"	// Skip non I-Groups
+				);
+			$userwhere = array();
+
+			//
+			// Special case for Manage My I-Groups
+			//
+			if ($_REQUEST['Action'] == "Manage My I-Group" ) {
+				// Multiple I-Groups?
+				if ( isset ($_SESSION['igroups']) ) {
+					$iglist = array();
+					$igors = array();
+
+					$iglist = explode('|', $_SESSION['igroups']);
+					foreach ($iglist as $ig) {
+						$igors[] = "i.igroup_id = '" . $ig . "'";
+					}
+					$where[] = '(' . implode( ' OR ', $igors) . ')';
+				}else{
+					$where[] = "i.igroup_id = $_SESSION[igroup_id]";
+				}
+			}
+			//
+			// Go through I-Group Fields
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = $_REQUEST[$f];
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+
+					if ($val) {
+						$from['igroup'] = 'i';
+						// User readable
+						$usqlw = $allfieldlabel[$f] . " = '" . $val . "'" ;
+						if ( $f == "igroup_cen" ) {
+							$usqlw = $allfieldlabel[$f] . " = '" . $Center[$val] . "'" ;
+						}
+						if ( $f == "igroup_reg" ) {
+							$usqlw = $allfieldlabel[$f] . " = '" . $Region[$val] . "'" ;
+						}
+						$userwhere[] = $usqlw;
+
+						// Database readable
+						$cleanval = mysql_real_escape_string($_REQUEST[$f]);
+						$where[] = 'i.' . $f . "='" . $cleanval . "'" ;
+					}
+				}
+			}
+
+			//
+			// Go through Fulllocation Fields
+			//
+			foreach ($locfields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$from['fulllocation'] = 'f';
+					$val = $_REQUEST[$f];
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+
+					if ($val) {
+						$from['fulllocation'] = 'f';
+						// User readable
+						$usqlw = $locfieldlabel[$f] . " = '" . $val . "'" ;
+						$userwhere[] = $usqlw;
+
+						// Database readable
+						$cleanval = mysql_real_escape_string($_REQUEST[$f]);
+						$where[] = 'f.' . $f . "='" . $cleanval . "'" ;
+					}
+				}
+			}
+
+			$fromsql = array();
+			foreach ($from as $table => $abbreviation) {
+				$fromsql[] = $table . ' ' . $abbreviation;
+			}
+			$sql .= " FROM " . implode(', ', $fromsql);
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			//
+			// Sort/Order by
+			//
+			$SortBy = array (
+				'City'				=>	'f.location_city, f.location_name',
+				'State'				=>	'f.location_state, f.location_city',
+				'Country'			=>	'f.location_country,f.location_state',
+				'I-Group Region'	=>	'i.igroup_reg,f.location_city',
+				'State'				=>	'f.location_state,f.location_city',
+				'Name'				=>	'i.igroup_name',
+				'Location'			=>	'f.location_name,i.igroup_name',
+				'Zip'				=>	'f.location_zip,f.location_city'
+				);
+
+			$sby = $_REQUEST['Sortmeby'];
+			if ( empty($sby) ){
+				$sql .= " ORDER BY i.igroup_city ";
+			}else{
+				$sql .= " ORDER BY " . $SortBy[$sby];
+			}
+
+			//
+			// Version for User to see
+			//
+			if ( count($userwhere) ) {
+				array_unique($userwhere);
+				sort($userwhere);
+				$usersql .= 'List I-Groups where ' . implode(' AND ', $userwhere);
+			}
+
+			echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+			$result = mysql_query($sql);
+			$num = mysql_num_rows($result);
+
+	
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<P class=trace>Click on <I>I-Group Name</I> link to view roster, <I>Location Name</I> link to see location details. ";
+			echo "Purple icon shows Google Map. Other link ";
+			echo "entries &quot;drill down&quot; to narrow your query.</P>\n";
+			echo "<p class=trace>$usersql, $num entries.</p>\n";
+
+			echo "<TABLE id=igroups_query_results BORDER>\n";
+
+			echo "<TH class=ths>View</TH>\n";
+			echo "<TH class=ths>Map</TH>\n";
+			unset($fields[igroup_id]);
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$allfieldlabel[$f]</TH>\n";
+				}
+			}
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+
+					if (array_key_exists('access', $_SESSION)) {
+						if ( $_SESSION[access] >= $IGCFG[EDITLEVEL] 
+							|| $_SESSION['igroup_id'] == $row['igroup_id']
+						) {
+							echo "<A HREF=$_SERVER[PHP_SELF]?igroup_id=$row[igroup_id]";
+							echo "&Action=Edit>";
+							echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+						}
+					}
+		
+					echo "<A HREF=$_SERVER[PHP_SELF]?igroup_id=$row[igroup_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				// MAP
+				$geo = abs($row['location_latitude']) + abs($row['location_longitude']);
+				if ($geo > 0 ) {
+					$addr = $row['location_latitude'] .',+' . $row['location_longitude'] . ',';
+				}else{
+					$addr = '';
+				}
+				if (isset ($row[location_street]) && isset ($row[location_city]) && isset ($row[location_state])) {
+					$addr .= $row['location_street'] . ',' . $row['location_city'] . ',' . $row['location_state'];
+					$addr .= ',' . $row['location_country'] ;
+				}
+				$addr .= '+(' . $row[location_name] . ')&iwloc=A&hl=en';
+				$addurl = preg_replace('/\s+/', '+', $addr);
+				echo  "<A HREF=\"http://maps.google.com/maps?q=$addurl&sensor=false\">";
+				echo  "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>";
+
+				echo "</TD>\n";
+
+				foreach ($ALLFIELD as $f) {
+
+					// Stripslashes 
+					if (get_magic_quotes_gpc()) { 
+						$display = stripslashes($row[$f]); 
+					}else{
+						$display = $row[$f];
+					}
+
+					if ( $f == "igroup_cen" ) {
+						$display = $Center[$row[$f]];
+					}
+
+					if ( $f == "igroup_reg" ) {
+						$display = $Region[$row[$f]];
+					}
+
+					if ( $f == "location_id" ) {
+						$lid = $row['location_id'];
+						$display = "<A HREF=/fulllocation.phpx?location_id=$lid";
+						$display .= "&Action=View>";
+						$display .= "$row[location_name]</A>";
+
+
+
+
+					}
+
+					if ( $f == "igroup_name" ) {
+						$display = "<A HREF=/warrior.phpx?igroup_id=$row[igroup_id]";
+						$display .= "&in_igroup=Yes&center_id=$row[igroup_cen]&Action=Query>";
+						$display .= "$row[$f]</A>";
+					}
+					
+					if (in_array($f, $SHOW)) {
+						$css = "tdcs";
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+						echo "<TD VALIGN=TOP class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}&"; 
+							echo "$drilldown";
+							echo "&Action=$_REQUEST[Action]>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+
+	  		if ($_REQUEST['Action'] == "Manage My I-Group" ) {
+				show_my_igroup_roster();
+			}
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "Query")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "New" ) {
+			$caadbh = caa_connect();
+
+			$dsql = "SELECT field_name, choice from menu where table_name = 'igroup'";
+			$dsql .= " AND is_default = 'Y'";
+
+			echo "<P class=trace>$dsql</P>\n"; // DEVONLY
+			$Default = array();
+			$Default = get_menu_array($dsql);
+			print_r($Default);// DEVONLY
+
+			$menuitems = array();
+			//
+			// Get List of I-Group Reps
+			//
+			$AllRep = array();
+			$AllRep = get_rep_list();
+
+			//
+			// Get Field Labels, customize some
+			//
+			$fieldlabel = get_field_labels('igroup','igroup');
+			// TODO: Update messages table
+			$fieldlabel['location_id'] = 'Location Name';
+			$fieldlabel['igroup_cen'] = 'Center';
+			$fieldlabel['igroup_reg'] = 'I-Group Region';
+			$fieldlabel['igroup_name'] = 'I-Group Name';
+
+			// Incoming from fulllocation link
+			if (isset ($_REQUEST['location_id'] ) ) {
+				$Default['location_id'] = $_REQUEST['location_id'];
+			}
+
+			unset($fieldlabel['igroup_id']);
+			//echo "<PRE>\n"; // DEVONLY
+			//print_r($RequiredField); // DEVONLY
+			//echo "</PRE>\n"; // DEVONLY
+
+			echo "<P class=trace>If this is at a new location (not one in the picklist), to\n";
+			echo "enable the google map locator functionality,";
+			echo " <A HREF=/fulllocation.phpx?Action=New>create</A>\n";
+			echo " the location first.\n";
+			echo "</P>\n";
+
+			echo "<P class=trace>For help on registering a new I-Group, see";
+			echo " <A HREF=/help.php?table_name=igroup&context=New+Entry&Action=Help>";
+			echo " tutorial</A>, or click on row labels in left column for details on that item.";
+			echo " <BR><B>Note</B>: Your I-Group Rep must have <A HREF=$WICCFG[WICURL]/login.php>logged in</A>";
+			echo " to appear in the I-Group Rep picklist for your center.\n";
+			echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=igroups_new_form BORDER>\n";
+
+			foreach ( $RequiredField as $fieldname => $msg) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR>\n";
+				echo "<TD VALIGN=TOP CLASS=tdls>";
+				echo "<A HREF=/help.php?table_name=igroup&field_name=${fieldname}&help_type=Explanation&Action=Help>";
+				echo "$val</A></TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = get_menu($menusql);
+						sort($menuitems);
+						print "<P class=trace>Menu: $menusql</P>\n"; // DEVONLY
+						spew_select_menu($fieldname,'',$Default[$fieldname],$menuitems);
+
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_$fieldname>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = get_menu_array($menusql);
+						ksort($menuitems);
+						print "<P class=trace>MenuArray: $menusql</P>\n"; // DEVONLY
+						spew_select_hash_menu($fieldname,$Default[$fieldname],'',$menuitems);
+
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_$fieldname>";
+						}
+
+					}
+					if ($FieldType[$fieldname] == "RepMenu" ) {
+						spew_select_hash_menu($fieldname, '','',$AllRep);
+					}
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname></TEXTAREA>";
+					}
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+
+				echo "</TD>\n";
+			}
+
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Edit
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Edit")  {
+
+			//mysql> desc igroup;
+			//+--------------------------+----------------------------------------------------+------+-----+---------+----------------+
+			//| Field					| Type											   | Null | Key | Default | Extra		  |
+			//+--------------------------+----------------------------------------------------+------+-----+---------+----------------+
+			//| igroup_id				| int(11) unsigned								   | NO   | PRI | NULL	| auto_increment |
+			//| igroup_name			  | varchar(45)										| NO   |	 |		 |				|
+			//| igroup_city			  | varchar(45)										| NO   |	 |		 |				|
+			//| igroup_night			 | enum('Mon','Tues','Wed','Thurs','Fri','Sat','Sun') | YES  |	 | Mon	 |				|
+			//| igroup_status			| enum('Open','Closed')							  | YES  |	 | Open	|				|
+			//| igroup_title			 | varchar(40)										| NO   |	 |		 |				|
+			//| igroup_street			| varchar(60)										| NO   |	 |		 |				|
+			//| igroup_state			 | char(4)											| NO   |	 | CA	  |				|
+			//| igroup_country		   | char(2)											| NO   |	 | NULL	|				|
+			//| igroup_zip			   | varchar(10)										| NO   |	 |		 |				|
+			//| igroup_rep			   | int(11) unsigned								   | NO   |	 | 0	   |				|
+			//| igroup_cen			   | int(11) unsigned								   | NO   | MUL | 1	   |				|
+			//| igroup_reg			   | smallint(2) unsigned							   | NO   |	 | 0	   |				|
+			//| igroup_time			  | varchar(30)										| NO   |	 |		 |				|
+			//| igroup_history		   | text											   | NO   |	 | NULL	|				|
+			//| igroup_frequency		 | varchar(255)									   | NO   |	 | NULL	|				|
+			//| igroup_newmembers		| varchar(255)									   | NO   |	 | NULL	|				|
+			//| igroup_visit_initiated   | varchar(128)									   | NO   |	 | NULL	|				|
+			//| igroup_visit_uninitiated | varchar(128)									   | NO   |	 | NULL	|				|
+			//| igroup_mixed			 | varchar(255)									   | NO   |	 | NULL	|				|
+			//| location_id			  | int(10) unsigned								   | YES  |	 | NULL	|				|
+			//+--------------------------+----------------------------------------------------+------+-----+---------+----------------+
+
+			if (! array_key_exists('igroup_id', $_REQUEST)) {
+				die ("No I-Group Id Set") ;
+			}
+
+			$AllRep = array();
+			$FieldType['igroup_rep'] = 'RepMenu';
+			caa_connect();
+
+			//
+			// Get info on this I-Group
+			//
+			$Igroup = array();
+			$iid = $_REQUEST['igroup_id'];
+			$sql = "SELECT * FROM igroup WHERE igroup_id = '$iid'";
+			$result = mysql_query($sql);
+			$Igroup = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			if (array_key_exists('igroups', $_SESSION)) {
+				$i_am_member_of = array();
+				$i_am_member_of = explode('|', $_SESSION['igroups']);
+				print_r($i_am_member_of); // DEVONLY
+			}
+
+			if (array_key_exists('access', $_SESSION)) {
+				//-------------------------------------------------------------
+				// If you are not the rep and you don't have sufficient access
+				//-------------------------------------------------------------
+				if ( $_SESSION[access] < $IGCFG[EDITLEVEL] 
+					&& $_SESSION[war_id] != $Igroup[igroup_rep] 
+					&& $_SESSION[igroup_id] != $iid
+					&& (! in_array($iid, $i_am_member_of)) ) {
+
+					echo "<P class=trace>Your access level is $_SESSION[access].";
+					echo "You need access level (Level $IGCFG[EDITLEVEL]), or be a member of the igroup to edit.\n"; 
+					echo "</P>\n";
+	  				$_REQUEST[Action] = "View";
+				}else{
+					$AllRep = get_rep_list();
+				}
+			}else{
+				echo "<H2>For Edit capability, you will need to ";
+				echo "<A HREF=/login.phpx>Login</A></H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Get info on your rep
+			//
+			$Rep = array();
+			$repid = $Igroup['igroup_rep'];
+			$repsql = "SELECT * FROM warrior WHERE war_id = '$repid'";
+			$represult = mysql_query($repsql);
+			$Rep = mysql_fetch_array($represult, MYSQL_ASSOC) ;
+
+			//echo "<pre>\n";// DEBUG DEVONLY
+			//print_r($Rep); //DEBUG DEVONLY
+			//echo "</pre>\n";// DEBUG DEVONLY
+
+			//
+			// Special Lookup for Center name to id match
+			//
+			$Center = array();
+			$csql = "SELECT DISTINCT center_id, short_name FROM center";
+			$Center = get_menu_array($csql);
+
+			//
+			// Special Lookup for Region name to id match
+			//
+			$Region = array();
+			$rsql = "SELECT DISTINCT igrpreg_id, igrpreg_name from igroup_regions";
+			$Region = get_menu_array($rsql);
+
+			echo "<P class=trace>You will need to edit the <A HREF=/fulllocation.phpx?location_id=$Igroup[location_id]&Action=Edit>full location</A> to enable google maps</P>\n";
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=igroups_edit_form BORDER>\n";
+
+			$fieldlabel = get_field_labels('igroup','igroup');
+
+			//
+			// Kluge for pretty labels
+			//
+			$fieldlabel[igroup_cen] = "Geographical Center";
+			$fieldlabel[igroup_reg] = "I-Group Region";
+			$fieldlabel[location_id] = "Location";
+			unset($fieldlabel['igroup_id']);
+
+			foreach ($fieldlabel as $fieldname => $label) {
+
+				// Stripslashes 
+				if (get_magic_quotes_gpc()) { 
+					$display = stripslashes( $Igroup[$fieldname]) ;
+					$val = stripslashes($Igroup[$fieldname]);
+				}else{
+					$display = $Igroup[$fieldname];
+					$val = $Igroup[$fieldname];
+				}
+
+				if ( $fieldname == "igroup_rep" ) {
+					$display = $Rep[war_fname] . ' ' . $Rep[war_lname] . ', ' ;
+					$display .= "<A HREF=mailto:" . $Rep[war_email] . ">" . $Rep[war_email] . "</A>";
+					if ( $Rep[war_cphone] ) {
+						$display .= ', Cell: ' . $Rep[war_cphone];
+					}
+					if ( $Rep[war_hphone] ) {
+						$display .= ', Home: ' . $Rep[war_hphone];
+					}
+					// I-Group name link is roster from warrior table
+					if ( $f == "igroup_name" ) {
+						$display = "<A HREF=/warrior.phpx?igroup_id=$row[igroup_id]";
+						$display .= "&in_igroup=Yes&center_id=$row[igroup_cen]&Action=Query>";
+						$display .= "$row[$f]</A>";
+					}
+				}
+				//
+				// Create name and link to view location
+				//
+				if ( $fieldname == "location_id" ) {
+					$lid = $row['location_id'];
+					if (! empty ( $lid ) ) {
+						$lsql = "SELECT location_name from fulllocation where location_id = '$lid'";
+						$LocName = get_value($lsql);
+						$display = "<A HREF=/fulllocation.phpx?location_id=$lid&Action=View>";
+						$display .= "$LocName</A>";
+					}
+				}
+
+				if ( $fieldname == "igroup_reg" ) {
+					$display = $Region[$display];
+				}
+
+				if ( $fieldname == "igroup_cen" ) {
+					$display = $Center[$display];
+				}
+
+				echo "<TR><TD class=tdl>$label</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = get_menu($menusql);
+						sort($menuitems);
+						spew_select_menu($fieldname, $val,'',$menuitems);
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menuitems = get_menu_array($menusql);
+						spew_select_hash_menu($fieldname, $val,'',$menuitems);
+					}
+
+					if ($FieldType[$fieldname] == "RepMenu" ) {
+						spew_select_hash_menu($fieldname, $val,'',$AllRep);
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname>$val</TEXTAREA>";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$val\">\n";
+				}
+				echo "</TD>\n";
+			}//Endforeach
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=$_REQUEST[igroup_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View I-Group
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "View" ) {
+
+			if (! array_key_exists('igroup_id', $_REQUEST)) {
+				die ("No I-Group Id Set") ;
+			}
+
+			$AllRep = array();
+			caa_connect();
+
+			//
+			// Get info on this I-Group
+			//
+			$Igroup = array();
+			$sql = "SELECT * FROM igroup WHERE igroup_id = '$_REQUEST[igroup_id]'";
+			$result = mysql_query($sql);
+			$Igroup = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get info on the rep for this I-Group
+			//
+			$Rep = array();
+			$wsql = "SELECT * FROM warrior WHERE war_id = '$Igroup[igroup_rep]'";
+			$wresult = mysql_query($wsql);
+			$Rep = mysql_fetch_array($wresult, MYSQL_ASSOC) ;
+
+			//
+			// Special Lookup for Center name to id match
+			// TODO: Should be join... performance/scalability issue
+			//
+			$Center = array();
+			$csql = "SELECT DISTINCT center_id, short_name FROM center";
+			$Center = get_menu_array($csql);
+
+			//
+			// Special Lookup for Region name to id match
+			// TODO: Should be join... performance/scalability issue
+			//
+			$Region = array();
+			$rsql = "SELECT DISTINCT igrpreg_id, igrpreg_name from igroup_regions";
+			$Region = get_menu_array($rsql);
+
+			echo "<P class=trace>Click on name of I-Group to view current roster";
+            echo ". Click on Location link to see map and address";
+            ecoh ".</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=igroups_edit_form BORDER>\n";
+
+			$fieldlabel = get_field_labels('igroup','igroup');
+
+			//
+			// Kluge for pretty labels
+			// TODO: Should tweak this in message table
+			//
+			$fieldlabel['igroup_cen'] = "Geographical Center";
+			$fieldlabel['igroup_reg'] = "I-Group Region";
+			$fieldlabel['location_id'] = "Location";
+
+			foreach ($fieldlabel as $fieldname => $val) {
+
+				$display = stripslashes($Igroup[$fieldname]);
+
+                //
+				// Create name and link for I-Group Rep
+                //
+				if ( $fieldname == "igroup_rep" ) {
+					$display = "<A HREF=/warrior.php?war_id=$Rep[war_id]&Action=View>";
+					$display .= $Rep[war_fname] . ' ' . $Rep[war_lname] ;
+                    $display .= "</A>\n"'
+				}
+
+				//
+				// Create name and link to view/add location
+				//
+				if ( $fieldname == "location_id" ) {
+					$lid = $Igroup['location_id'];
+					if ( empty ( $lid ) ) {
+						$display = "<A HREF=/fulllocation.phpx?&Action=New>";
+						$display .= "None, click here to add</A>";
+					}else{
+						$lsql = "SELECT location_name from fulllocation where location_id = '$lid'";
+						$LocName = get_value($lsql);
+						$display = "<A HREF=/fulllocation.phpx?location_id=$lid&Action=View>";
+						$display .= "$LocName</A>";
+					}
+				}
+
+				if ( $fieldname == "igroup_reg" ) {
+					$display = $Region[$display];
+				}
+
+				if ( $fieldname == "igroup_cen" ) {
+					$display = $Center[$display];
+				}
+
+				if ( $fieldname == "igroup_name" ) {
+					$display = "<A HREF=/warrior.phpx?igroup_id=$Igroup[igroup_id]&Action=Query";
+					$display .= "&in_igroup=Yes>$Igroup[igroup_name]</A>";
+				}
+
+				echo "<TR><TD class=tdls>";
+                echo "<A HREF=/help.phpx?table_name=igroups&field_name=$fieldname&help_type=Explanation&Action=Help>";
+                echo "$val</A>";
+                echo "</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+
+			//
+			// If this I-Group is one I belong to, show me the roster
+			//
+			if ( $_SESSION['igroup_id'] == $Igroup['igrpreg_cen'] ) {
+				$show_my_igroup="True";
+			}
+			//
+			// Also Look at array $_SESSION['igroups'] (I belong to multiple I-Groups)
+			// To check membership of all possible I-Groups
+			//
+			if ( isset ($_SESSION['igroups']) ) {
+				$myig = array();
+				$myig = explode('|', $_SESSION['igroups']) ;
+				foreach ($myig as $ig ) {
+					if ($ig == $Igroup['igrpreg_cen']) {
+						$show_my_igroup="True";
+					}
+				}
+			}
+
+			if ( isset($show_my_igroup) ) {
+				show_my_igroup_roster();
+			}
+
+	  	}//if ($_REQUEST['Action'] == "View"))
+
+	}else{
+		spew_header($FMT);
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		$caadbh = caa_connect();
+		$list = array();
+		$list2 = array();
+		$list3 = array();
+		$iamrepfor ='';
+		//
+		// Add options if you are an I-Group Rep
+		//
+		//
+		if ( array_key_exists('IamIgRepFor', $_SESSION)) {
+			$iamrepfor = $_SESSION['IamIgRepFor'];
+			echo "<P class=trace>Upon entry to spew_query_form, Session IamIgRepFor is $iamrepfor</P>\n"; // DEVONLY
+		}else{
+			echo "<P class=trace>Upon entry to spew_query_form, Session IamIgRepFor NOT set</P>\n"; // DEVONLY
+			if ( array_key_exists('war_id', $_SESSION)) {
+				$wid = $_SESSION['war_id'];
+				//
+				// Verify  non-null 
+				//
+				if ( ! empty ( $wid)) { 
+					$sql = "SELECT igroup_id from igroup WHERE igroup_rep = '$wid'";
+					echo "<P class=trace>$sql</P>\n"; // DEVONLY
+					$iamrepfor = get_value($sql);
+					if ( empty ( $iamrepfor)) { 
+						echo "<P class=trace>You are clearly not an I-Group rep...</P>\n"; // DEVONLY
+					}else{
+						$_SESSION['IamIgRepFor'] = $iamrepfor;
+						echo "<P class=trace>Seeting $Rid to $iamrepfor</P>\n"; // DEVONLY
+					}
+				}
+			}
+		}
+		$igroupid = $_SESSION['igroup_id'];
+
+		//
+		// Spew Form
+		//
+		echo "<P class=trace>Select the Center, City, I-Group Region, or Zip and click on <I>Query</I> button";
+		echo " to see list of matching I-Groups. For help, see ";
+		echo " <A HREF=/help.php?table_name=igroup&field_name=Overview&Action=Help>overview</A>.\n";
+		echo "</P>\n";
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=igroups_query_form BORDER>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>Night</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>I-Group Region</TH>\n";
+		//echo "<TH class=ths>Country</TH>\n";
+		echo "<TH class=ths>Zip</TH>\n";
+		echo "<TH class=ths>Sort by</TH>\n";
+
+		echo "<TR>\n";
+
+		//
+		// Center
+		//
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT i.igroup_cen, c.short_name FROM igroup i, center c ";
+		$sql .= " WHERE i.igroup_cen = c.center_id ORDER BY c.short_name";
+		$list = get_menu_array($sql);
+		$iid = $_SESSION['center_id'];
+		if ( isset ( $_REQUEST[igroup_cen] ) ) {
+			$iid = $_REQUEST[igroup_cen];
+		}
+		spew_select_hash_menu('igroup_cen',$iid,'All',$list);
+		echo "</TD>\n";
+
+		//
+		// Night
+		//
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT igroup_night from igroup order by igroup_night";
+		$list = get_menu($sql);
+		spew_select_menu('igroup_night',$_REQUEST['igroup_night'],'All',$list);
+		echo "</TD>\n";
+
+		//
+		//
+		// City
+		//
+		echo "<TD class=tds>\n";
+		#$sql = "SELECT DISTINCT igroup_city from igroup order by igroup_city";
+		$sql = "SELECT DISTINCT f.location_city from fulllocation f, igroup i ";
+		$sql .= " WHERE f.location_id = i.location_id order by f.location_city";
+		$list = get_menu($sql);
+		spew_select_menu('location_city',$_REQUEST['location_city'],'All',$list);
+		echo "</TD>\n";
+
+		//
+		// I-Group Region
+		//
+		echo "<TD class=tds>\n";
+		$isql = "SELECT DISTINCT r.igrpreg_id, r.igrpreg_name, c.center_abbr ";
+		$isql .= " FROM igroup_regions r, center c ";
+		$isql .= " WHERE r.igrpreg_cen = c.center_id ";
+		$isql .= " ORDER BY c.center_abbr, r.igrpreg_name";
+		$rresult = mysql_query($isql);
+		$list = array();
+		while ($row =  mysql_fetch_array($rresult, MYSQL_ASSOC)) {
+			$igrid = $row['igrpreg_id'];
+			$list[$igrid] = $row['center_abbr'] . ': ' . $row['igrpreg_name'];
+		}
+		spew_select_hash_menu('igroup_reg','','All',$list);
+		echo "</TD>\n";
+
+		//
+		// Country
+		//
+		//echo "<TD class=tds>\n";
+		//$sql = "SELECT DISTINCT igroup_country from igroup order by igroup_country";
+		//$list = get_menu($sql);
+		//spew_select_menu('location_country','','All',$list);
+		//echo "</TD>\n";
+
+		//
+		// Zip
+		//
+		echo "<TD class=tds>\n";
+		#$sql = "SELECT DISTINCT igroup_zip from igroup order by igroup_zip";
+		$sql = "SELECT DISTINCT f.location_zip FROM fulllocation f, igroup i ";
+		$sql .= " WHERE i.location_id = f.location_id order by f.location_zip";
+		$list = get_menu($sql);
+		spew_select_menu('location_zip',$_REQUEST['location_zip'],'All',$list);
+		echo "</TD>\n";
+
+		//
+		// Sort By
+		//
+		echo "<TD class=tds>\n";
+		$Sortwhat = array (
+			'Zip',
+			'State',
+			'Location',
+			'Name',
+			'I-Group Region',
+			'Country',
+			'City'
+			);
+		sort($Sortwhat);
+		spew_select_menu('Sortmeby','City','City',$Sortwhat);
+		echo "</TD>\n";
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+
+		if ($_SESSION[access] >= $IGCCFG[EDITLEVEL] ) {
+			//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Full Query\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+
+		//
+		// If you are an I-Group Rep or in and I-Group
+		//
+		if ( $iamrepfor > 0 || array_key_exists('igroup_id', $_SESSION) ){
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Manage My I-Group\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Men Near My I-Group\">\n";
+		}
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"I-Groups Near Me\">\n";
+
+		echo "</FORM>\n";
+		echo "<P class=trace>Rep ID: $iamrepfor</P>\n"; // DEVONLY
+		echo "</CENTER>\n";
+	}
+	//----------------------------------------------------------------
+	// Lookup all warriors for rep list
+	// Selects warriors in your center
+	//----------------------------------------------------------------
+	function get_rep_list() {
+		caa_connect();
+		//
+		//
+		$MyAllRep = array();
+
+		$cid = $_SESSION['center_id'];
+
+		$repsql = "SELECT war_id, war_fname, war_lname from warrior";
+		if ( isset ( $cid ) ) {
+			$repsql .= " WHERE war_center = '$cid'";
+		}
+		// TODO: Narrow Rep Candidate search to active people via war_status or access_password
+		//$repsql .= " AND war_status = 'active' ";	
+		// -OR- w.war_id = access_password.warrior_id
+		$repsql .= " ORDER BY war_lname, war_fname";
+
+		echo "<P class=trace>Possible Reps: $repsql</P>\n"; // DEBUG DEVONLY
+
+		$represult = mysql_query($repsql);
+
+		while ($row =  mysql_fetch_array($represult, MYSQL_ASSOC)) {
+			$id = $row['war_id'];
+			$name = $row['war_fname'] . ' ' . $row['war_lname'];
+			$MyAllRep[$id] = $name;
+		}
+		return($MyAllRep);
+	}
+
+	//----------------------------------------------------------------
+	// Lookup all warriors for rep list
+	// Selects warriors in your center
+	//----------------------------------------------------------------
+	function show_my_igroup_roster() {
+		caa_connect();
+		$roster = array();
+		$row = array();
+		echo "<P class=trace>Entering show_my_igroup_roster</P>\n"; // DEVONLY
+
+		//=================================================================
+        // Warrior: INITIATED MEN
+		//=================================================================
+		//-----------------------------------------------------------------
+		// Provide Warrior I-Group History Information for Roster
+		//-----------------------------------------------------------------
+		//
+		$iid = $_SESSION['igroup_id'];
+		$today = date('Y-m-d');
+
+		$sql = "SELECT * from warrior_ighistory WHERE  ";
+		if (array_key_exists('igroups', $_SESSION)){
+			echo "<P class=trace>SESSION Value of igroups exists</P>\n"; // DEVONLY
+			$igs = array();
+			$ighwhere = array();
+			$igs = explode('|', $_SESSION['igroups']);
+			foreach ($igs as $i ) {
+				$igwhere[] = "igroup_id = '$i'";
+			}
+			$sql .= ' (' . implode(' OR ', $igwhere) . ')';
+		}else{
+			$sql .= " igroup_id = '$iid'";
+		}
+		$sql .= " AND end_date is NULL ";
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+		$result = mysql_query($sql);
+		$History = array();
+		while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+			$wid = $row['warrior_id'];
+			$History[$wid] = $row['start_date'];
+		}
+		//echo "<PRE>\n";		// DEVONLY
+		//print_r ($History); // DEVONLY
+		//echo "</PRE>\n";	// DEVONLY
+
+		//-----------------------------------------------------------------
+		// Provide Initiated Men Roster of I-Group Members
+		//-----------------------------------------------------------------
+		//
+        $sql = "SELECT warrior_id, start_date FROM warrior_ighistory WHERE igroup_id = '$iid'";
+        $Start = array();
+        $Start = get_menu_array($sql);
+
+		$sql = "SELECT w.war_id, w.war_fname, w.war_lname, w.war_aname, w.war_city, w.war_state ";
+		$sql .= " , i.war_ig_ig, x.igroup_name ";
+		$sql .= " FROM warrior w, warrior_igroup i, igroup x";
+		$sql .= " WHERE w.war_id = i.war_ig_war AND x.igroup_id = i.war_ig_ig";
+		if (array_key_exists('igroups', $_SESSION)){
+			$igroups = array();
+			$igwhere = array();
+			$igroups = explode('|', $_SESSION['igroups']);
+			foreach ($igroups as $ig) {
+				$igwhere[] = "i.war_ig_ig = '$ig'";
+			}
+			$sql .= " AND (" . implode(' OR ', $igwhere) . ')';
+		}else{
+			$sql .= " AND i.war_ig_ig = '$iid'";
+		}
+		$sql .= " ORDER BY x.igroup_name, w.war_lname, w.war_fname ";
+
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+		$result = mysql_query($sql);
+
+
+		//-----------------------------------------------------------------
+		// Print Add New Member Table(s)
+		//-----------------------------------------------------------------
+		//
+		echo "<P class=trace>Click on red ball to remove a man from I-Group membership, ";
+		echo "yellow ball to see contact info.\n";
+        echo " UnInitiated men shown in grey.";
+        echo "</P>\n";
+
+        $nsql = "SELECT igroup_name from igroups where igroup_id = '$iid'";
+        $name = get_value($nsql);
+
+        echo "<CENTER>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths COLSPAN=9>$name Current Roster</TH>\n";
+        echo "<TR>\n";
+
+		echo "<TH class=ths>Remove</TH>\n";
+		echo "<TH class=ths>View</TH>\n";
+		echo "<TH class=ths>First Name</TH>\n";
+		echo "<TH class=ths>Last Name</TH>\n";
+		echo "<TH class=ths>Animal Name</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Start Date</TH>\n";
+		echo "<TH class=ths>Update Start Date (YYYY-MM-DD)</TH>\n";
+
+		while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+
+			$BGC='#FFFFFF'; // Default white
+
+			$wid = $row['war_id'];
+			//
+			// Highlight I-Group Rep
+			//
+			if ($wid == $Igroup['igroup_rep']) {
+					$BGC='#AAFFFF';
+			}
+
+			echo "<TR>\n";
+
+			if ( $_SESSION['igroup_id'] == $iid ) {
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?igroup_id=$iid&warrior_id=$wid&Action=Exit>";
+				echo "<IMG SRC=/images/smallballs/redball.gif BORDER=0></A>\n";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=/warrior.phpx?war_id=$wid&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>\n";
+				echo "</TD>\n";
+
+			}else{
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<BR>";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=/warrior.phpx?war_id=$wid&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>\n";
+				echo "</TD>\n";
+			}
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[war_fname]";	
+			echo "</TD>\n";
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[war_lname]";	
+			echo "</TD>\n";
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[war_aname]";	
+			echo "</TD>\n";
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[war_city]";	
+			echo "</TD>\n";
+			
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[war_state]";	
+			echo "</TD>\n";
+
+			// Start Date
+			$dte = $History[$wid];
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$dte<BR>";	
+			echo "</TD>\n";
+
+			// Update Start Date
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<INPUT TYPE=TEXT NAME=\"start_date\" SIZE=10 MAXLENGTH=10>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=$iid>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=warrior_id VALUE=$wid>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=NA VALUE=\"Manage My I-Group\">\n";
+				echo "<INPUT TYPE=SUBMIT NAME=\"Action\" VALUE=\"Update Start Date\">\n";
+				echo "</FORM>\n";
+			echo "</TD>\n";
+
+		}//Endhile $row.. for Initiated Man I_Group Roster
+
+		//=================================================================
+        // VISITORS: UNINITIATED MEN
+		//=================================================================
+		//-----------------------------------------------------------------
+		// Provide Prospect I-Group History Information for Roster
+		//-----------------------------------------------------------------
+		//
+        $sql = "SELECT prospect_id, start_date FROM prospect_ighistory WHERE igroup_id = '$iid'";
+        $Start = array();
+        $Start = get_menu_array($sql);
+
+		$sql = "SELECT * from prospect_ighistory WHERE  ";
+		$sql .= " igroup_id = '$iid'";
+		$sql .= " AND end_date is NULL ";
+
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+		$prospectresult = mysql_query($sql);
+		$ProspectHistory = array();
+		while ($row =  mysql_fetch_array($prospectresult, MYSQL_ASSOC)) {
+			$pid = $row['prospect_id'];
+			$ProspectHistory[$pid] = $row['start_date'];
+		}
+
+		//-----------------------------------------------------------------
+		// Provide UnInitiated Men Roster of I-Group Members
+		//-----------------------------------------------------------------
+		//
+
+		$sql = "SELECT p.pro_id, p.pro_fname, p.pro_lname, p.pro_city, p.pro_state,";
+		$sql .= " i.igroup_id, x.igroup_name ";
+		$sql .= " FROM prospect p, prospect_igroup i, igroup x";
+		$sql .= " WHERE p.pro_id = i.prospect_id AND x.igroup_id = i.igroup_id";
+
+		if (array_key_exists('igroups', $_SESSION)){
+			$igroups = array();
+			$igwhere = array();
+			$igroups = explode('|', $_SESSION['igroups']);
+			foreach ($igroups as $ig) {
+				$igwhere[] = "i.igroup_id = '$ig'";
+			}
+			$sql .= " AND (" . implode(' OR ', $igwhere) . ')';
+		}else{
+			$sql .= " AND i.igroup_id = '$iid'";
+		}
+		$sql .= " ORDER BY x.igroup_name, p.pro_lname, p.pro_fname ";
+
+		echo "<P class=trace>$sql</P>\n"; // DEVONLY
+		$result = mysql_query($sql);
+
+
+		//-----------------------------------------------------------------
+		// UnInitiated Men
+		//-----------------------------------------------------------------
+		//
+		while ($row =  mysql_fetch_array($result, MYSQL_ASSOC)) {
+			$pid = $row['pro_id'];
+			$BGC='#DDDDDD';
+
+			echo "<TR>\n";
+
+			if ( $_SESSION['igroup_id'] == $iid ) {
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?igroup_id=$iid&pro_id=$pid&Action=Prospect+Exit>";
+				echo "<IMG SRC=/images/smallballs/redball.gif BORDER=0></A>\n";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=/prospect.phpx?pro_id=$pid&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>\n";
+				echo "</TD>\n";
+
+			}else{
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<BR>";
+				echo "</TD>\n";
+
+				echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<A HREF=/prospect.phpx?pro_id=$pid&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>\n";
+				echo "</TD>\n";
+			}
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[pro_fname]";	
+			echo "</TD>\n";
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[pro_lname]";	
+			echo "</TD>\n";
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "-";
+			echo "</TD>\n";
+
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[pro_city]";	
+			echo "</TD>\n";
+			
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$row[pro_state]";	
+			echo "</TD>\n";
+
+			// Start Date
+			$dte = $ProspectHistory[$pid];
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+			echo "$dte<BR>";	
+			echo "</TD>\n";
+
+			// Update Start Date
+			echo "<TD BGCOLOR=$BGC class=tdcs>";
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<INPUT TYPE=TEXT NAME=\"start_date\" SIZE=10 MAXLENGTH=10>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=$iid>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=pro_id VALUE=$pid>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=NA VALUE=\"Manage My I-Group\">\n";
+				echo "<INPUT TYPE=SUBMIT NAME=\"Action\" VALUE=\"Update Start Date\">\n";
+				echo "</FORM>\n";
+			echo "</TD>\n";
+
+		}//Endhile $row.. for UnInitiated I-Group Roster
+		echo "</TABLE>\n";
+        echo "<P>\n";
+
+		//
+		// Print form to get query list for adding new member
+		//
+
+        echo "<TABLE>\n";
+        echo "<TR><TD ALIGN=CENTER>\n";
+
+		    echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		    echo "<TABLE BORDER=3>\n";
+		    echo "<TH COLSPAN=2>Add Initiated Man as New Member</TH>\n";
+		    echo "<TR><TD class=tdls>\n";
+		    echo "First Name";
+		    echo "</TD><TD> \n";
+		    echo "<INPUT TYPE=TEXT NAME=war_fname>";
+		    echo "</TD> \n";
+    
+		    echo "<TR><TD class=tdls>\n";
+		    echo "Last Name";
+		    echo "</TD><TD> \n";
+		    echo "<INPUT TYPE=TEXT NAME=war_lname>";
+		    echo "</TD> \n";
+    
+		    echo "<TR><TD class=tdls>\n";
+		    echo "Email";
+		    echo "</TD><TD> \n";
+		    echo "<INPUT TYPE=TEXT NAME=war_email>";
+		    echo "</TD> \n";
+    
+		    echo "</TABLE>\n";
+
+		    echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=${igid}>\n";
+		    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New Initiated Member\">\n";
+		    echo "</FORM>\n";
+
+        echo "</TD><TD ALIGN=CENTER>\n";
+		    echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		    echo "<TABLE BORDER=3>\n";
+		    echo "<TH COLSPAN=2>Add UnInitiated Man as New Member or Visitor</TH>\n";
+		    echo "<TR><TD class=tdls>\n";
+		    echo "First Name";
+		    echo "</TD><TD> \n";
+		    echo "<INPUT TYPE=TEXT NAME=pro_fname>";
+		    echo "</TD> \n";
+    
+		    echo "<TR><TD class=tdls>\n";
+		    echo "Last Name";
+		    echo "</TD><TD> \n";
+		    echo "<INPUT TYPE=TEXT NAME=pro_lname>";
+		    echo "</TD> \n";
+    
+		    echo "<TR><TD class=tdls>\n";
+		    echo "Email";
+		    echo "</TD><TD> \n";
+		    echo "<INPUT TYPE=TEXT NAME=pro_email>";
+		    echo "</TD> \n";
+    
+		    echo "</TABLE>\n";
+
+		    echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=${igid}>\n";
+		    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New UnInitiated Member\">\n";
+		    echo "</FORM>\n";
+
+        echo "</TD>\n";
+        echo "</TABLE>\n";
+
+	}
+	//----------------------------------------------------------------
+	// End functions
+	//----------------------------------------------------------------
+
+
+?>

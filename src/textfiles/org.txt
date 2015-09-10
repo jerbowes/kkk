@@ -1,0 +1,41 @@
+Administrative Systems|AS
+Board of Directors|BOD
+Communication and Information Technology|CIT
+Community Relations|CR
+Constituent Council|COC
+Center Council|CC
+Elder Body|EB
+Executive Council|EC
+Financial Development|FinDev
+Financial Management|FinMgmt
+I-Group Council|IC
+I-Group Curriculum Development|ICD
+I-Group Faculty|IF
+I-Group Faculty Training|IFT
+I-Group Health, Growth and Retention|IHGR
+I-Group Invitation and Enrollment|IIE
+I-Group Leader Body|ILB
+I-Group Leader Body Certification|ILBC
+I-Group Training Delivery|ITD
+Legal And Oversight|LAO
+Lodge Keeper Society|LKS
+MarComm and Outreach|MCO
+Marketing|MKTG
+Mental Health|MH
+Mission Team|MT
+Multicultural Council|MCC
+NWTA Delivery|ND
+NWTA Invitation and Enrollment|NIE
+NWTA Leader Body|NLB
+NWTA Leader Certification|NLC
+NWTA Leader Curriculum Development|NLCD
+NWTA Leader Training|NLT
+NWTA Protocol Management|NPM
+NWTA Safety|NS
+NWTA Training Delivery|NTD
+Open Circle|OC
+Operations|Ops
+Project|Proj
+Shadow Management|SM
+Structural|Struc
+I-Group Council Steering Committee|IGCSC

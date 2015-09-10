@@ -1,0 +1,268 @@
+<?php
+	//#==================================================================
+	//# Navigation Functionality Library
+	//#------------------------------------------------------------------
+	//# Jerry Bowes, jerbowes@yahoo.com
+	//#------------------------------------------------------------------
+	//# $Source: /home/jbowes/kkk/src/php/include/RCS/nav-inc.phpx,v $
+	//# $Id: nav-inc.phpx,v 1.32 2015/08/16 19:24:55 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#------------------------------------------------------------------
+	//#==================================================================
+	//-------------------------------------------------------------------
+	// Spew Navbar
+	//-------------------------------------------------------------------
+	function spew_navbar( array $FMT ) {
+		require_once("config-inc.phpx");
+		global $KKKCFG;
+
+		$NavHandler = array (
+			'ADMIN'			=>	"$KKKCFG[BASEURL]/admin",
+			'ASSET'			=>	"$KKKCFG[BASEURL]/asset.phpx",
+			'CURRICULUM'	=>	"$KKKCFG[BASEURL]/curriculum.phpx",
+			'FAQ'			=>	"$KKKCFG[BASEURL]/faq.phpx",
+			'DATADICT'		=>	"$KKKCFG[BASEURL]/admin/datadict.phpx",
+			'CENTER'		=>	"$KKKCFG[BASEURL]/admin/center.phpx",
+	 		'HELP'			=>	"$KKKCFG[BASEURL]/help.phpx",
+			'HOME'			=>	"$KKKCFG[BASEURL]/login.phpx",
+			'LOCATION'		=>	"$KKKCFG[BASEURL]/fulllocation.phpx",
+			'LIBRARY'		=>	"$KKKCFG[BASEURL]/library.phpx",
+			'LOGIN'			=>	"$KKKCFG[BASEURL]/login.phpx",
+			'LOGOUT'		=>	"$KKKCFG[BASEURL]/login.phpx?Action=Logout",
+			'MODULE'		=>	"$KKKCFG[BASEURL]/module.phpx",
+			'MENU'  		=>	"$KKKCFG[BASEURL]/admin/menu.phpx",
+			'MYINFO'		=>	"$KKKCFG[BASEURL]/login.phpx?Action=Verify",
+			'MYPREFERENCES'	=>	"$KKKCFG[BASEURL]/mypreference.phpx",
+			'ORG'		  	=>  "$KKKCFG[BASEURL]/orgchart.phpx",
+			'ORGADMIN'  	=>	"$KKKCFG[BASEURL]/admin/orgchart.phpx",
+			'SYLLABUS'		=>	"$KKKCFG[BASEURL]/syllabus.phpx",
+			'SURVEY'		=>	"$KKKCFG[BASEURL]/survey.phpx",
+			'TRAININGS'		=>	"$KKKCFG[BASEURL]/trainings.phpx",
+			'TEMPLATE'		=>	"$KKKCFG[BASEURL]/template.phpx",
+			'TRAINING'		=>	"$KKKCFG[BASEURL]/training.phpx",
+			'PEOPLE'		=>	"$KKKCFG[BASEURL]/people.phpx",
+			'ZIPDATA'		=>	"$KKKCFG[BASEURL]/zipdata.phpx"
+		);
+		
+		// Tag map to link displayed in navbar
+		$NavName = array(
+			'ASSET'			=>	'Assets',
+			'ADMIN'			=>	'Admin',
+			'CURRICULUM'	=>	"Curricula",
+			'FAQ'			=>	'FAQ',
+			'DATADICT'		=>	'Data Dictionary',
+			'CENTER'		=>	'Center Info',
+			'HELP'			=>	'Help',
+			'HOME'			=>	'Home',
+			'LOCATION'		=>	'Locations',
+			'LIBRARY'		=>	'Library',
+			'LOGIN'			=>	'Login',
+			'LOGOUT'		=>	'Logout',
+			'MODULE'		=>	"Modules",
+			'MENU'  		=>	'Menu Admin',
+			'MYINFO'		=>	'My Info',
+			'MYPREFERENCES'	=>	'My Preferences',
+			'ORG'			=>	'Org',
+			'ORGADMIN'		=>	'Orgchart Admin',
+			'SYLLABUS'		=>	"Syllabus",
+			'SURVEY'		=>	"Surveys",
+			'TRAININGS'		=>	'Trainings',
+			'TEMPLATE'		=>	'Template',
+			'TRAINING'		=>	'Training Families',
+			'PEOPLE'		=>	'People 411',
+			'ZIPDATA'		=>	'Zip Map'
+		);
+
+		// Tag map to floating note on mouseover
+		$NavMsg = array(
+			'ADMIN'			=>	'Administrative Functionality',
+			'ASSET'			=>	'Assets',
+			'CENTER'		=>	'Center Info',
+			'CURRICULUM'	=>	'Training Curricula',
+			'DATADICT'		=>	'Database Technical Data Dictionary',
+			'FAQ'			=>	'I-Group Portal Frequently Asked Questions',
+			'HELP'			=>	'Help',
+			'HOME'			=>	'Home',
+			'LOCATION'		=>	'Physical Location Details',
+			'LIBRARY'		=>	'Reference Library',
+			'LOGIN'			=>	'Login',
+			'LOGOUT'		=>	'Logout',
+			'MENU'  		=>	'Menu Administration',
+			'MODULE'		=>	"Training Modules",
+			'MYINFO'		=>	'My Database Information and Profile',
+			'MYPREFERENCES'	=>	'Manage My Preferences',
+			'ORG'			=>	'Organization',
+			'ORGADMIN'		=>	'Orgchart Administration',
+			'SYLLABUS'		=>	"Training Syllabus",
+			'SURVEY'		=>	"Surveys",
+			'TEMPLATE'		=>	'Template',
+			'TRAININGS'		=>	'Training Registration and Calendar',
+			'TRAINING'		=>	'Training Types',
+			'PEOPLE'		=>	'People 411 Lookup Utility',
+			'ZIPDATA'		=>	'Region Zipcode Mapping'
+		);
+
+
+		//
+		// Display List: Everything in any of below groups MUST appear here to display
+		//
+		$REQUIRED_ACCESS = array (
+			'ADMIN'			=>	'3',
+			'ASSET'			=>	'2',
+			//'GROUPS'			=>	'5',
+			//'CALENDAR'			=>	'1',
+			//'HOME'				=>	'1',
+			'FAQ'				=>	'1',
+			'LOCATION'			=>	'1',
+			'LIBRARY'			=>	'1',
+			'LOGOUT'			=>	'0',
+			'MYINFO'			=>	'1',
+			'MYPREFERENCES'		=>	'1',
+			'ORG'				=>	'1',
+			'TEMPLATE'			=>	'0',	// DEVONLY
+			'SURVEY'			=>	'1',
+			'PEOPLE'			=>	'1',
+			'ZIPDATA'			=>	'1'
+		);
+
+		$ADMIN_ACCESS = array (
+			'HOME'				=>	'1',
+			'CENTER'			=>	'7',
+			'DATADICT'			=>	'1',
+			'LOGOUT'			=>	'1',
+			//'ZIPDATA'			=>	'1',
+			'MENU'				=>	'7'
+		);
+
+		// Must match value of $NavHandler
+		$DUALMENU = array (
+			'TRAININGS'			=>	'IPT'
+		);
+
+		//
+		// Training and Training Resources Secondary Menu
+		//
+		$IGT_ACCESS = array (
+			'CURRICULUM'		=>	'1',		// DEVONLY
+			'MODULE'			=>	'1',		// DEVONLY
+			'SYLLABUS'			=>	'1',	// DEVONLY
+			'TRAINING'			=>	'1'
+		);
+
+		//--------------------
+		// Determine my access
+		//--------------------
+		$my_access = '0';
+		if ( isset ( $_SESSION['access_level'])) { 
+			$my_access = $_SESSION['access_level'];
+		}
+
+		//-----------------------------------------
+		// First Navbar, Alphabetical sort by keys
+		//-----------------------------------------
+
+		$NAV = array();
+	
+		//---------------------------------------------------------------
+		// If exists second navbar, annotate the parent 
+		//---------------------------------------------------------------
+		if (isset ($FMT['NAV2'])) {
+			$NAV2 = array();
+			$nav2fmt = $FMT['NAV2'];
+
+			if ( $FMT['NAV1'] == "ADMIN" ) { 
+				// NAV2 is Set, Admin is set: not expected
+				ksort($ADMIN_ACCESS);
+				foreach ($ADMIN_ACCESS as $key => $val ) {
+					if ( $my_access >= $val ) {
+						if ( array_key_exists( $key , $NavHandler) ) {
+							$navhandlerroot = preg_replace('/(.*)\/(.*)(.phpx)/','$2$3', $NavHandler[$key]);
+							//if (isset( $DUALMENU[$key] ) && $DUALMENU[$nav2fmt] == "$navhandlerroot") {
+							if (isset( $DUALMENU[$key] ) && $FMT['MODULENAME'] == "$navhandlerroot") {
+								$NAV[$key] = "<A class=navbar2 HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\">[&nbsp;$NavName[$key]&nbsp;]</A>";
+							}else{
+								$NAV[$key] = "<A class=navbar HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\">$NavName[$key]</A>";
+							}
+						}
+					}
+				}
+			}else{
+				// NAV2 is Set, but not Admin
+				ksort($REQUIRED_ACCESS);
+
+				foreach ($REQUIRED_ACCESS as $key => $val ) {
+					if ( $my_access >= $val ) {
+						if ( array_key_exists( $key , $NavHandler) ) {
+							$navhandlerroot = preg_replace('/(.*)\/(.*)(.phpx)/','$2$3', $NavHandler[$key]);
+							if (isset( $DUALMENU[$key] ) && $FMT['MODULENAME'] == "$navhandlerroot") {
+								$NAV[$key] = "<A class=navbar2 HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\">[&nbsp;$NavName[$key]&nbsp;]</A>";
+							}else{
+								$NAV[$key] = "<A class=navbar HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\">$NavName[$key]</A>";
+							}
+						}
+					}
+				}
+			}
+			$showme = implode('&nbsp;&nbsp;|&nbsp;&nbsp;', $NAV);
+
+			//
+			//---------------------------------------------------------------
+			// Generated Secondary Menus
+			//---------------------------------------------------------------
+			//
+	
+			//
+			// Trainings
+			//
+			if ( $FMT['NAV2'] == "IGT" ) { 
+				ksort($IGT_ACCESS);
+				foreach ($IGT_ACCESS as $key => $val ) {
+					if ( $my_access >= $val ) {
+						if ( array_key_exists( $key , $NavHandler) ) {
+							$NAV2[$key] = "<A class=navbar2 HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\" >$NavName[$key] </A>";
+						}
+					}
+				}
+				$showme2 = implode('&nbsp;&nbsp;|&nbsp;&nbsp;', $NAV2);
+				$showme2 .= '<BR>&nbsp;';
+			}
+
+			if (isset ($showme2)){
+				$showme .= '<BR>' . $showme2;
+			}
+
+
+		}else{
+			// NO NAV2
+			if ( $FMT['NAV1'] == "ADMIN" ) { 
+				ksort($ADMIN_ACCESS);
+				foreach ($ADMIN_ACCESS as $key => $val ) {
+					if ( $my_access >= $val ) {
+						if ( array_key_exists( $key , $NavHandler) ) {
+							$NAV[$key] = "<A class=navbar HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\">$NavName[$key]</A>";
+						}
+					}
+				}
+			}else{
+				ksort($REQUIRED_ACCESS);
+				foreach ($REQUIRED_ACCESS as $key => $val ) {
+					if ( $my_access >= $val ) {
+						if ( array_key_exists( $key , $NavHandler) ) {
+							$NAV[$key] = "<A class=navbar HREF=$NavHandler[$key] TITLE=\"$NavMsg[$key]\">$NavName[$key]</A>";
+						}
+					}
+				}
+			}
+			$showme = implode('&nbsp;&nbsp;|&nbsp;&nbsp;', $NAV);
+		}
+
+		//-----------------------------------------
+		// Print it 
+		//-----------------------------------------
+		echo "$showme";
+
+	}//Endfunction spew_navbar
+	//--------------------------------------------------------------------
+?>

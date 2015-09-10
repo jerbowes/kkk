@@ -1,0 +1,1096 @@
+<?php
+	//#==================================================================
+	//# login
+	//#------------------------------------------------------------------
+	//# $Source: /home/jbowes/kkk/src/php/root/RCS/login.phpx,v $
+	//# $Id: login.phpx,v 1.47 2015/08/16 14:07:55 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# Jerry Bowes, jerbowes@yahoo.com
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	global $VALIDPREFERENCE;	// from config-inc.phpx
+	global $KKKCFG;				// from config-inc.phpx
+
+	//
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//
+	$FMT = array (
+		'BANNER'		=>	"Kkk Login",
+		'TITLE'			=>	"Kkk Login",
+		'MODULENAME'	=>	'login.phpx',
+		'NAV1'			=>	'INFO'
+	);
+
+	//
+	// Config parameters for this module
+	//
+	$LOGINCFG = array (
+		'EDITLEVEL'				=>	'5',	// You have to be this important to modify info
+		'CRITERIACOUNT'			=>	'2',	// Minimum number of identifiers are required for Help/reset my password form
+		'PWEXPIREDAYS'			=>	'3',	// Duration in days of temporary password validity (today + N days)
+		'UPDATEEXP'				=>	'2099-09-09',	// When we have to create a new access password
+		'DEFAULTEXPIRATION'		=>	'2111-11-11'	// Unexpiring password (in this lifetime) expiration date
+	);
+	//
+    // Import following from VALIDPREFS for defaults
+	//
+    $SESSIONPREFS = array (
+        'TIMEZONE'
+    );
+	//
+	// Config parameters for email acknowledgement
+	//
+	$LOGINEMAIL = array (
+		'subject'		=>	"Kkk Login Assistance", 
+		//'fromemail'		=>	"admin@jbowes.net",   // LIVEONLY
+		'fromemail'		=>	"jbowes@jbowes.net",   // DEV_ONLY
+		'toemail'		=>	"jerbowes@gmail.com",	// Safety, overwritten in send_emai_ack
+		'fromname'		=>	"Kkk Login Assistant" 
+	);
+
+
+	//-----------------------------------------------------------------------------
+	// Begin
+	//-----------------------------------------------------------------------------
+	$people_id=0;
+
+	if (session_status() !== PHP_SESSION_ACTIVE) {session_start();}
+
+	//
+	// No nav until logged in
+	//
+	if ( isset($_SESSION) ){
+		$people_id = $_SESSION['people_id'];
+        //
+        // Setup Defaults
+        //
+        foreach ($VALIDPREFERENCE as $key => $val) {
+            if (in_array($key, $SESSIONPREFS)) {
+                $_SESSION[$key] = $val;
+            }
+        }
+	}
+
+	if ( empty($people_id) ) {
+		$FMT['NONAV'] = "True";
+	}
+
+	//
+	// For applications sending unauthenticated users here, extract
+	// the return url for redirection return after login is complete
+	//
+	if (isset($_SERVER['QUERY_STRING'] )) {
+		if ( array_key_exists( 'RetUrl' , $_REQUEST )) {
+			$rawurl = $_REQUEST['RetUrl'];
+			$ReturnUrl = preg_replace('/\|/', '&', $rawurl);
+		}
+	}
+
+	if ( array_key_exists( 'Action' , $_REQUEST )) {
+
+
+		//-----------------------------------------------------------------------------
+		// Log Out
+		//-----------------------------------------------------------------------------
+		//
+	  	if ( $_REQUEST['Action'] == "Logout" ) {
+			kkk_session_end();
+			$FMT['NONAV'] = "True";
+
+			spew_header($FMT);
+
+			echo "<PRE>\n";			// DEBUG DEVONLY
+			print_r ($_SESSION); 	// DEBUG DEVONLY
+			echo "</PRE>\n";		// DEBUG DEVONLY
+
+			echo "<CENTER>\n";
+			echo "<H3>You have been successfully logged out.</H3>\n";
+			echo "</CENTER>\n";
+			spew_login_form();
+			spew_footer($FMT);
+			exit;
+		}
+
+		//-----------------------------------------------------------------------------
+		// With known old plaintext password or encrypted passwd from email link
+		// Provide a form to collect new password to manually change it
+		//-----------------------------------------------------------------------------
+		//
+	  	if ( $_REQUEST['Action'] == "Change My Password" 
+            || $_REQUEST['Action'] == "Change" ) {
+
+			$dbh = kkk_pdo_connect();
+
+			$FMT[BANNER] .= "<BR>Change My Password";
+
+			spew_header($FMT);
+
+			echo "<P class=trace>Change My Password</P>\n"; // DEBUG DEVONLY
+
+            if (! empty ($_SESSION['people_id']) ) {
+                $people_id = $_SESSION['people_id'];
+                $sql = "SELECT a.access_login, a.people_id from access where people_id = '$people_id'";
+
+                echo "<P class=trace>$sql</P>\n";   // DEVONLY
+				$result = $dbh->query($sql);
+
+                $Me = array();
+				$Me = $result->fetch(PDO::FETCH_ASSOC);
+
+                echo "<PRE>\n";;    // DEVONLY
+                print_r($Me);       // DEVONLY
+                echo "</PRE>\n";;    // DEVONLY
+            }
+
+			if ( empty( $_REQUEST['encpw'])) {
+				// Selection via GUI
+				echo "<P class=trace>If you have forgotten your password, click on ";
+				echo "the <B>Forgot My Password</B> button. </P>\n";
+			}else{
+				// Coming from a reset request email provided link
+				echo "<P class=trace>Your password has been previously reset. Enter a new password.</P>\n";
+			}
+
+			echo "<PRE>\n";				// DEVONLY
+			echo "Incoming REQUEST\n"; 	// DEVONLY
+			print_r($_REQUEST); 		// DEVONLY
+			echo "</PRE>\n";			// DEVONLY
+
+			echo "<CENTER>\n";
+			$oldpass = $_REQUEST['oldpass'];
+			$login = $_REQUEST['login'];
+
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF]  METHOD=POST>\n";
+			echo "<TABLE id=change_password_form BORDER>\n";
+
+			//
+			// If email link response, skip asking for username/login
+			//
+			if ( empty ($_REQUEST['login'] ) ) {
+				echo "<TR>\n";
+				echo "<TD class=tdls>Login:</TD>\n";
+				echo "<TD class=tds><input type=text name=login value=\"$Me[access_login]\"></TD>\n";
+			}
+
+			//
+			// If email link reset, don't need password
+			//
+			if ( empty ($_REQUEST['encpw'] ) ) {
+				echo "<TR>\n";
+				echo "<TD class=tdls>Old Password:</TD>\n";
+				echo "<TD class=tds><input type=password name=oldpass></TD>\n";
+			}
+
+			echo "<TR>\n";
+			echo "<TD class=tdls>New Password:</TD>\n";
+			echo "<TD class=tds><input type=password name=pass></TD>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tdls>Confirmed New Password:</TD>\n";
+			echo "<TD class=tds><input type=password name=pass2></TD>\n";
+
+			echo "</TABLE>\n";
+
+			if (!  empty ($_REQUEST['login'] ) ) {
+				echo "<input type=HIDDEN name=login value=\"$login\">\n";
+				echo "<P class=trace>Setting hidden field login to $login</P>\n"; // DEVONLY
+            }
+
+			if ( ! empty( $_SESSION['people_id'])) {
+				$people_id = $_SESSION['people_id'];
+				echo "<input type=HIDDEN name=people_id value=\"$people_id\">\n";
+				echo "<P class=trace>Setting hidden field people_id to $people_id</P>\n"; // DEVONLY
+			}
+
+			if ( ! empty( $_REQUEST['people_id'])) {
+				$people_id = $_REQUEST['people_id'];
+				echo "<input type=HIDDEN name=people_id value=\"$people_id\">\n";
+				echo "<P class=trace>Setting hidden field people_id to $people_id</P>\n"; // DEVONLY
+			}
+
+			if ( ! empty( $_REQUEST['encpw'])) {
+				$encpw = $_REQUEST['encpw'];
+				echo "<input type=HIDDEN name=encpw value=\"$encpw\">\n";
+				echo "<P class=trace>Setting hidden field encpw to $encpw</P>\n"; // DEVONLY
+			}
+
+			echo "<input type=HIDDEN name=RetUrl value=\"$ReturnUrl\">\n";
+			echo "<input type=SUBMIT name=Action value=\"Update My Password\">\n";
+
+			if ( empty( $_REQUEST['encpw'])) {
+				echo "<input type=SUBMIT name=Action value=\"Forgot My Password\">\n";
+			}
+
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+			spew_footer($FMT);
+			exit;
+		}
+
+		//-----------------------------------------------------------------------------
+		// Update My Password 
+		// All of this goes on prior to spew_header so that if this is an authentication
+		// referral, we can just redirect to the requester after authentication
+		//-----------------------------------------------------------------------------
+		//
+	  	if ( $_REQUEST['Action'] == "Update My Password" 
+            || $_REQUEST['Action'] == "Update" ) {
+
+			$FMT[BANNER] .= "<BR>Update My Password";
+
+			$dbh = kkk_pdo_connect();
+
+			$login = $_REQUEST['login'];
+			$people_id = $_REQUEST['people_id'];
+			$encpw = $_REQUEST['encpw'];
+			$pass = $_REQUEST['pass'];
+			$pass2 = $_REQUEST['pass2'];
+			$oldpass = $_REQUEST['oldpass'];
+
+			$trace .= "<P class=trace>Login: $login, people_id: $people_id, Pass: $pass, Pass2:$pass2, Oldpass: $oldpass</P>\n";// DEBUG DEVONLY
+
+			//
+			// Error Checking
+			//
+
+			if (empty( $login )) {
+				if ( empty( $people_id ) ) {
+					$err .= "<LI>No login or people_id provided.</LI>\n";
+				}
+			}
+
+			if (empty( $pass) ) {
+				$err .= "<LI>No password provided.</LI>\n";
+			}else{
+				if ( $pass !== $pass2 ) {
+					$err .= "<LI>Passwords do not match.</LI>\n";
+				}
+			}
+
+			//
+			// Error Notification
+			//
+			if ( isset ($err)  ) {
+				spew_header($FMT);	
+				echo "$trace"; // DEBUG DEVONLY
+				bail($err);
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Original encrypted password
+			//
+			if ( empty($encpw) ) {
+				if (empty($oldpass)) {
+					$err .= "<LI>No original password provided</LI>\n";
+				}else{
+					$encoldpass = md5($oldpass);
+				}
+			}else{
+				$encoldpass = $encpw;
+			}
+			//
+			// Encrypt new password
+			//
+			$encdbpass = md5($pass);
+	
+			//------------------------------------------------------------------
+			// Q1: First Query 
+			// See if there exists a login entry in access
+			// With this encrypted password
+			//------------------------------------------------------------------
+			//
+			$where = array();
+
+			$sql = "SELECT * FROM  access a  WHERE ";
+			$where[] = "a.access_password = '$encoldpass'";
+
+			//
+			// See if there is a login form field entry
+			//
+			if (isset ($_REQUEST['login'])) {
+				if (! empty ( $_REQUEST['login'])) {
+					$wlogin = $dbh->quote($login);
+					$where[] =  'a.access_login = ' . $wlogin;
+				}
+			}
+
+			//
+			// See if there is a people_id form field entry 
+			//
+			if ( isset ($_REQUEST['people_id']) ) {
+				if (! empty( $_REQUEST['people_id'] ) ) {
+					$people_id = $_REQUEST['people_id'];
+					$where[] = "a.people_id = '$people_id'";
+				}
+			}
+			$sql .= implode(' AND ', $where);
+
+			$trace .=  "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+
+
+			$result = $dbh->query($sql);
+			$num = $result->rowCount();
+
+			$trace .=  "<P class=trace>Query returned [$num] records</P>\n"; //DEBUG DEVONLY
+
+			//
+			//-----------------------------------------------------------------------------
+			// Q1 Error checking: number of matching records found in access
+			//-----------------------------------------------------------------------------
+			//
+			$Access = array();
+			if ($num == 1) {
+				$Access = $result->fetch(PDO::FETCH_ASSOC);
+				$people_id = $Access['people_id'];
+
+				if ( empty($people_id) ) {
+					die("Error: Unexpected problem. Password failure, no people_id specified");
+				}
+
+				//
+				// Update access
+				//
+				$exp = $LOGINCFG['DEFAULTEXPIRATION'];
+
+				$updatesql = "UPDATE access SET access_password = ?,";
+				$updatesql .= " expiration_date = ? ";
+				$updatesql .= " WHERE people_id = ?";
+
+				$updateresult = $dbh->prepare($updatesql);
+				$updateresult->execute(array(md5($pass), $exp, $people_id));
+				$trace .=  "<P class=trace>$updatesql</P>\n"; //DEBUG DEVONLY
+
+			}else{
+				//-------------------------------------------------------------
+				// No matching records found in access_password
+				//-------------------------------------------------------------
+				$err .= "<LI>Login and/or old password incorrect</LI>";
+			}
+
+			if ( isset ($err) ) {
+				spew_header($FMT);
+				echo "$trace\n";		// DEBUG DEVONLY
+				bail($err);
+			}
+	
+			kkk_session_start($people_id);
+
+			spew_header($FMT);
+			echo "<CENTER>\n";
+			echo "<H2>Password updated.</H2>\n";
+			echo "</CENTER>\n";
+			echo "$trace\n";		// DEBUG DEVONLY
+				now_what($people_id);
+			spew_footer($FMT);
+	  	}//Endif Action = 'Update My Password'
+
+
+		//-----------------------------------------------------------------------------
+		// Collect all debug info in $trace string as we are pre-header for
+		// session processing. 
+		//-----------------------------------------------------------------------------
+	  	if ( $_REQUEST['Action'] == "Login" 
+			|| $_REQUEST['Action'] == "Authenticate" ) {
+
+			$FMT['BANNER'] .= "<BR>" . $_REQUEST['Action'];
+
+			global $ReturnUrl;
+			global $KKKCFG;
+			$people = array();		// Lookup info for retreived people info
+			$where = array();		// Assembly of all sql where clauses
+
+			$dbh = kkk_pdo_connect();
+
+			$trace = "<P>";
+			$trace .=  "<H3>Form Processing</H3>\n"; //DEBUG DEVONLY
+            $trace .= "<P class=trace>Returnurl: $_REQUEST[Returl]</P>\n"; // DEVONLY
+
+
+			$login = $_REQUEST['login'];
+			$trace .= "<P class=trace>Login: $login</P>";;	// DEVONLY
+			$pass = $_REQUEST['pass'];
+
+			//-----------------------------------------------------------------------------
+			// Error Checking
+			//-----------------------------------------------------------------------------
+
+			if (empty($login) ) {
+				$err .= "<LI>No login provided.</LI>\n";
+			}
+
+			if (empty($pass) ) {
+				$err .= "<LI>No password provided.</LI>\n";
+			}
+
+			// Error Notification
+			if ( isset($err)  ) {
+				spew_header($FMT);
+				echo "$trace\n";
+				bail($err);
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Encrypt password
+			//
+			$trace .=  "<P class=trace>Password : [$pass]</P>\n"; //DEBUG DEVONLY
+			$encdbpass = md5($pass);
+			$trace .=  "<P class=trace>Encrypted Password : [$encdbpass]</P>\n"; //DEBUG DEVONLY
+
+			//
+			// See if there is a login entry in access
+			//
+
+			$initialsql = "SELECT * FROM access a WHERE ";
+
+			$wlogin = $dbh->quote($login);
+
+			$where[] = "a.access_login = " . $wlogin;
+			$where[] = "a.access_password = '$encdbpass'";
+
+			$initialsql .= implode(' AND ', $where);
+
+			$trace .=  "<P class=trace>Query: $initialsql</P>"; //DEBUG DEVONLY
+
+
+			$initialresult = $dbh->query($initialsql);
+			$num = $initialresult->rowCount();
+
+			$trace .=  "<P class=trace>Initial query with password returned [$num] records</P>";//DEBUG DEVONLY
+	
+			//
+			//-----------------------------------------------------------------------------
+			// Error checking on number of records found for query to access_password
+			//-----------------------------------------------------------------------------
+			//
+			if ( $num < 1) {
+				//-------------------------------------------------------------------------
+				// If no valid matching entries found in access_password table, EITHER:
+				// - There is no access_password entry that matches that people entry
+				// - There is no people entry for that username
+				// - Login is bogus
+				// - Password is bogus
+				//-------------------------------------------------------------------------
+				// Verify there is no record in access_password with that Login
+				//-------------------------------------------------------------------------
+				//
+
+				$sqlverify = "SELECT * FROM access WHERE access_login = $wlogin" ;
+				$trace .= "<p class=trace>Initial fail, attempting to verify access_password entry</P>"; // DEVONLY
+
+				$resultverify = $dbh->query($sqlverify);
+				$numverify = $resultverify->rowCount();
+
+				$trace .= "<p class=trace>$sqlverify delivered [$numverify] records</P>"; // DEVONLY
+
+				//-------------------------------------------------------------------------
+				//-------------------------------------------------------------------------
+				//
+				if ($numverify < 1 ) {
+					$trace .= "<P class=trace>numverify < 1: $numverify</P>\n"; //DEVONLY
+					// Not in access_password
+					$err .= "<LI>No record of an account for  [$login].</LI>";
+				}else{
+					// Already in access_password, so failure due to user mis-authentication
+					$err .= "<LI>No valid login records matching login of [$login] and that password were found</LI>";
+				}
+			}elseif ( $num == 1) {
+				//
+				// Check for Expired Password (Gregorian prevents end of unix epoch failure in 2038)
+				//
+
+				$people = array();
+				$people = $initialresult->fetch(PDO::FETCH_ASSOC);
+
+				$today = date('Y-m-d');	// YYYY-MM-DD
+
+				list($yr,$mo,$day) = explode('-', $today);
+
+				$now  = gregoriantojd($mo,$day,$yr);
+				list($yr,$mo,$day) = explode('-', $people['expiration_date']);
+				$expiration = gregoriantojd($mo,$day,$yr);
+				$trace.= "<P class=trace>Now: $today : $now , Expiration $people[expiration_date] : $expiration</P>\n"; // DEVONLY
+
+				if ( $now > $expiration ) {
+					$trace .= "<P class=trace> Excactly one access_password entry, but expired password</P>\n"; // DEVONLY
+					$err .= "<LI>Your password expired on $people[expiration_date].</LI>";
+				}else{
+					$trace .= "<P class=trace> Exactly one access_password entry, no expired password</P>\n"; // DEVONLY
+					$people_id = $people['people_id'];
+					$trace .= "<P class=trace>$initialsql</P>\n"; // DEVONLY
+				}
+
+			}else{ // Implicit num > 1 e.g. 
+				$err .= "<LI>Multiple records matching login of [$login] and that password were found. Contact administrator.</LI>";
+			}
+
+			if ( isset ( $err) ) {
+				spew_header($FMT);
+				echo "$trace\n";
+				bail($err);
+			}else{
+				//
+				// Retrieve People Info to setup session
+				//
+				$people_id = $people['people_id'];
+				$trace .=  "<BR>Retrieved people_id: $people_id\n"; //DEBUG DEVONLY
+
+				//
+				// kkk_session_start loads all the data from database into session
+				//
+				$mysessiondata = array();
+				$mysessiondata = kkk_session_start($people_id);
+
+				//
+				// Standalone login or enroute to authenticate some other application
+				//
+				if ( empty($ReturnUrl) ) {
+                    unset($FMT['NONAV']);           // ASSUME authentication successful
+
+					spew_header($FMT);
+					echo "$trace\n";				// DEVONLY
+
+					echo "<PRE>\n"; 				// DEVONLY
+
+					echo "Incoming Session\n";		// DEVONLY
+					print_r($_REQUEST);				// DEVONLY
+
+					echo "Current Session Data\n";	// DEVONLY
+					echo "$mysessiondata";		// DEVONLY
+
+					echo "Session\n";				// DEVONLY
+					print_r($_SESSION);				// DEVONLY
+
+					echo "</PRE>\n";				// DEVONLY
+
+					now_what($people_id);
+
+					// Show my Information
+					$a = $_REQUEST['Action'];						// DEVONLY
+					echo "<P class=trace>[$a]</P>\n";				// DEVONLY
+
+					spew_footer($FMT);
+					exit;
+				}else{
+					if ( preg_match('/http/', $ReturnUrl) ) {
+						header("Location: ${ReturnUrl}");
+					}else{
+						header("Location: $KKKCFG[BASEURL]${ReturnUrl}");
+					}
+                    spew_footer($FMT);
+				}
+				exit;
+			}
+		}// Endif ( $_REQUEST['Action'] == "Login" ) 
+
+		//-----------------------------------------------------------------------------
+		// Forgot My Password Help Explanation and Form
+		//-----------------------------------------------------------------------------
+		//
+	  	if ( $_REQUEST['Action'] == "Forgot My Password" ) {
+			$FMT['BANNER'] .= "<BR>Forgot My Password";
+			spew_header($FMT);
+			echo "<P class=trace>Submitting to $_SERVER[PHP_SELF]</P>\n"; // DEBUG DEVONLY
+
+
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=\"$_SERVER[PHP_SELF]\"  METHOD=POST>\n";
+
+			echo "<P class=trace>All employees have an account, your login is the first part of your email (e.g. bjones part of bjones@jbowes.net).\n";
+            echo "<BR>If you have forgotten your username, or need to reset your password, enter your email below and click on the <I>Reset My Password</I> button.\n";
+            echo "<BR>When you click on the <I>Reset My Password</I> button\n";
+            echo " your login and temporary password will be emailed to you.";
+            //echo "<P class=trace>For more information, see ";
+            //echo "<A HREF=/help.php?application=Login&module=login.php&context=Forgotten+Password&Action=Help>help</A>.";
+            echo "</P>\n";
+
+			echo "<TABLE id=login_iforgot_form BORDER>\n";
+			echo "<TH COLSPAN=2>Enter Your Full Email</TH>\n";
+			echo "<TR><TD class=tdls>Email</TD><TD><input type=text name=email_1></TD>\n";
+			echo "</TABLE>\n";
+
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Reset My Password\">\n";
+			echo "<input type=HIDDEN name=RetUrl value=\"$ReturnUrl\">\n";
+			echo "</FORM>\n";
+
+			echo "<CENTER>\n";
+			spew_footer($FMT);
+			exit;
+	  	}
+
+		//-----------------------------------------------------------------------------
+		// Take identifying input from Help form, identify the exactly one people that
+		// wants his password reset, change the password in access_password table with
+		// and expiration date defined by LOGINCFG[PWEXPIREDAYS] and send an email
+		// with the new PW and a link to reset their password which goes to the
+		// section of Action='Change'
+		//-----------------------------------------------------------------------------
+		//
+	  	if ( $_REQUEST['Action'] == "Reset My Password" || $_REQUEST['Action'] == "Reset" ) {
+			$FMT['BANNER'] .= "<BR>Password Reset";
+
+			spew_header($FMT);
+			echo "<P class=trace>Entering <B>Reset My Password</B></P>\n"; // DEBUG DEVONLY
+			print_r($_REQUEST);	// DEVONLY
+
+			$dbh = kkk_pdo_connect();
+
+			$criteria = array ( 
+				'access_login'	=>	'a.access_login',
+				'last_name'		=>	'p.last_name',
+				'people_id'		=>	'p.people_id',
+				'first_name'	=>	'p.first_name',
+				'email_1'		=>	'p.email_1',
+				'encpw'			=>	'a.access_password',
+				'email_2'		=>	'p.email_2'
+			);
+			print_r($criteria);	// DEVONLY
+
+			$where = array(
+				'a.people_id = p.people_id'
+			);
+			$err = '';
+
+			//------------------------------------------------------
+			// Query people info assuming he is in access_password
+			//------------------------------------------------------
+			$sql = "SELECT p.people_id,  p.first_name, p.last_name, p.email_1, p.email_2, ";
+			$sql .= " a.access_password, a.access_login ";
+			$sql .= " FROM people p, access a WHERE ";
+
+			foreach ($criteria as $form => $dbfield ) {
+				if (!empty( $_REQUEST[$form] ) ) {
+					$sqlw = "$dbfield = " ; 
+					$sqlw .= $dbh->quote($_REQUEST[$form]);
+					$sqlw .= "";
+					$where[] =  $sqlw;
+				}
+			}
+
+			echo "<PRE>\n"; // DEBUG DEVONLY
+			echo "<B>WHERE: W2</B><BR>\n"; // DEBUG DEVONLY
+			print_r($where);	// DEBUG DEVONLY
+			echo "</PRE>\n"; // DEBUG DEVONLY
+			
+			$criteriacnt = count($where);
+			echo "<P class=trace>Access Password Criteria Count: $criteriacnt </P>\n"; //DEBUG DEVONLY
+
+			$sql .= implode (' AND ', $where);
+			echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+
+			$result = $dbh->query($sql);
+			$num = $result->rowCount();
+			echo "<P class=trace>For $criteriacnt criteria, query returned [$num] records</P>\n"; //DEBUG DEVONLY
+
+			echo "<P class=trace>Access Password NUM is $num</P>\n"; //DEBUG DEVONLY
+
+			//
+			// No matches with ACCess Password
+			//
+			if ($num < 1){
+			    $where = array();
+			    $err = '';
+
+			    //------------------------------------------------------
+			    // Query people info assuming he is NOT in access_password
+			    //------------------------------------------------------
+			    $sql = "SELECT p.people_id,  p.first_name, p.last_name, p.email_1, p.email_2 ";
+			    $sql .= " FROM people p WHERE ";
+
+				$criteria['people_id']	=	'p.people_id';
+     
+		        foreach ($criteria as $form => $dbfield ) {
+			        if (!empty( $_REQUEST[$form] ) ) {
+				        $sqlw = "$dbfield = " ; 
+				        $sqlw .= $dbh->quote($_REQUEST[$form]);
+				        $sqlw .= "";
+				        $where[] =  $sqlw;
+			        }
+		        }
+    
+			    echo "<PRE>\n";		// DEBUG DEVONLY
+			    echo "<PRE>\n";	 // DEBUG DEVONLY
+			    echo "<B>WHERE: W3</B><BR>\n"; // DEBUG DEVONLY
+			    print_r($where);	// DEBUG DEVONLY
+			    echo "</PRE>\n";	// DEBUG DEVONLY
+
+			    if ( $criteriacnt >= $LOGINCFG['CRITERIACOUNT'] ) {
+				    $sql .= implode (' AND ', $where);
+				    echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+
+					$result = $dbh->query($sql);
+				    $num = $result->rowCount();
+				    echo "<P class=trace>For $criteriacnt criteria, query returned [$num] records</P>\n"; //DEBUG DEVONLY
+			    }else{
+				    echo "<P class=trace>Need to specifiy at least two search criteria</P>\n";
+				    $err .= "<LI>Insufficient search criteria specified, please try again.</LI>";
+				    $num = "77777";	// Random bogus number above 2
+			    }
+
+			};
+			echo "<P class=trace>NO Access Password NUM is $num</P>\n"; //DEBUG DEVONLY
+			
+
+			if ($num < 1){
+				$err .= "<LI>No records  were found</LI>";
+				if (!empty( $_REQUEST[access_login] )) {
+					$err .= "<LI>No login records matching login of";
+					$err .= " $_REQUEST[access_login] and password were found</LI>";
+				}
+				if (!empty( $_REQUEST[email_1] )) {
+					$err .= "<LI>No login records matching primary email address";
+					$err .= " of $_REQUEST[email_1] were found</LI>";
+				}
+				if ( !empty ($_REQUEST[email_2]) ) {
+					$err .= "<LI>No login records matching alternate email address";
+					$err .= " of $_REQUEST[email_2] were found</LI>";
+				}
+			}
+
+			//
+			// Multiple matches no joy
+			//
+			if ($num > 1){
+				$err .= "<LI>Multiple login records were found. Please try again with more information.";
+			}
+
+			//
+			// Gauntlet passed, assume 1 match
+			//
+			if ( empty ($err) ) {
+				//----------------------------
+				// Assuming num == 1
+				// Create new random password
+				//----------------------------
+				//
+				list($newpw,$phonetic) = generate_password();
+				$newencpw = md5($newpw);
+				echo "<P class=trace>New Password: $newpw ($newencpw)</P>\n"; //DEBUG DEVONLY
+
+				$people = array();
+
+				//$people = mysql_fetch_array($result, MYSQL_ASSOC);
+				$people = $result->fetch(PDO::FETCH_ASSOC);
+
+				echo "<pre>\n"; // DEVONLY
+				print_r($people);	// DEVONLY
+				echo "</pre>\n"; // DEVONLY
+
+				//
+				// Determine expiration date
+				//
+				$today = date('Y-m-d');;	// YYYY-MM-DD
+				$expsql = "SELECT allcal_id from allcal where calendar_date = '$today'";
+				$today_id = get_value($expsql);
+				echo "<P class=trace>$expsql retrieved $today_id</P>\n"; //DEBUG DEVONLY
+
+				$idx = ($today_id + $LOGINCFG[PWEXPIREDAYS] );
+				$expsql = "SELECT calendar_date from allcal where allcal_id = '$idx'";
+				$expdate = get_value($expsql);
+				echo "<P class=trace>$expsql returned $expdate</P>\n"; //DEBUG DEVONLY
+
+
+				//
+				// Update access
+				//
+				$updatesql = "UPDATE access set ";
+				$updatesql .= " access_password = '$newencpw', expiration_date = '$expdate' ";
+				$updatesql .= " WHERE people_id = '$people[people_id]'";
+
+				echo "<P class=trace>$updatesql</P>\n"; //DEBUG DEVONLY
+				$result = $dbh->query($updatesql);
+
+				//
+				// Add to $people array to give to email_ack
+				//
+				$people[expiration_date] = $expdate;
+				$people[password] = $newpw;
+				$people[encrypted_password] = $newencpw;
+				$people[login] = $people[access_login];
+				$people[phonetic] = $phonetic;
+
+				//
+				// Send Email
+				//
+				send_email_ack($people);
+			    spew_login_form();
+				spew_footer($FMT);
+				exit;
+			}else{
+				$err . "<LI> . $trace . </LI>";
+				bail($err);
+			}
+		}
+
+		//-----------------------------------------------------------------------------
+		// Endif ( $_REQUEST['Action'] == "Reset My Password" ) 
+		//-----------------------------------------------------------------------------
+
+	}else{
+		//-----------------------------------------------------------------------------
+		// No Action Parameter
+		//-----------------------------------------------------------------------------
+
+		if (array_key_exists( 'people_id', $_SESSION)) {
+			if (  empty ( $ReturnUrl ) ) {
+				spew_header($FMT);
+
+				echo "<PRE>\n"; //DEBUG DEVONLY
+				echo "No Action Parameter, no return url\n"; // DEBUG DEVONLY
+				echo "Request"; // DEBUG DEVONLY
+				print_r($_REQUEST); //DEBUG DEVONLY
+
+				echo "Current Session Values\n";// DEBUG DEVONLY
+				print_r($_SESSION); //DEBUG DEVONLY
+				echo "</PRE>\n"; //DEBUG DEVONLY
+
+                $mypeople_id = $_SESSION['people_id'];
+				now_what($mypeople_id);
+
+			}else{
+				header("Location: $KKKCFG[BASEURL]${ReturnUrl}");
+				exit;
+			}
+		}else{
+			spew_header($FMT);
+			spew_login_form();
+		}
+		spew_footer($FMT);
+		exit;
+	}
+
+	//=========================================================================
+	// Begin Functions
+	//=========================================================================
+
+	//----------------------------------------------------------------
+	// Display basic login subform
+	//----------------------------------------------------------------
+	function spew_login_form() {
+		global $FMT;
+		global $ReturnUrl;
+		global $url;
+		global $rawurl;
+
+		echo "<PRE>\n";     // DEBUG DEVONLY
+		echo "Session:\n";  // DEBUG DEVONLY
+		print_r($_SESSION); // DEBUG DEVONLY
+
+		echo "Request:\n";  // DEBUG DEVONLY
+		print_r($_REQUEST); // DEBUG DEVONLY
+
+		echo "rawurl: [$rawurl]\n";	// DEBUG DEVONLY
+		echo "Return url: [$ReturnUrl]\n";	// DEBUG DEVONLY
+		echo "</PRE>\n";    // DEBUG DEVONLY
+
+		//echo "<P class=trace>\n";	// DEVONLY
+		//echo "Development Test Drive Login: demo, Password: anchorfree123\n";	// DEVONLY
+		//echo "</P>\n";	//	DEVONLY
+
+		echo "<P class=trace>\n";
+        echo "Enter your login (part of your email ahead of the '@' sign, all lower case) and password.\n";
+		echo "<BR>(Your password is independent of your Active Directory email password and must be set here).\n";
+		echo "<BR>Click on <A HREF=$_SERVER[PHP_SELF]?Action=Forgot+My+Password>Forgot My Password</A> button ";
+		echo "if you need to (re)set your password.";
+		echo "</P>\n";
+
+		if ( isset ($_SESSION['people_id']) ) {
+			echo "<CENTER>\n";
+			echo "<TABLE id=login_login_default BORDER=4>\n";
+			//
+			// If you have admin privileges
+			//
+			if ($_SESSION['access'] >= $LOGINCFG['SPOOFCENTERLEVEL'] ) {
+				echo "<TH>Login</TH>\n";
+				echo "<TH>Center View</TH>\n";
+				echo "<TR><TD VALIGN=TOP ALIGN=CENTER>\n";
+					spew_login_subform();
+				echo "</TD>\n";
+				echo "<TD VALIGN=TOP ALIGN=CENTER>\n";
+					spew_center_subform();
+				echo "</TD>\n";
+			}else{
+				echo "<TH>Login</TH>\n";
+				echo "<TR><TD VALIGN=TOP ALIGN=CENTER>\n";
+					spew_login_subform();
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+		}else{
+
+			echo "<CENTER>\n";
+
+			echo "<TABLE id=login_default_login BORDER=4>\n";
+			echo "<TH>Login</TH>\n";
+			echo "<TR><TD VALIGN=TOP ALIGN=CENTER>\n";
+				spew_login_subform();
+			echo "</TD>\n";
+			echo "</TABLE>\n";
+
+			echo "</CENTER>\n";
+		}
+	}
+
+
+	//----------------------------------------------------------------
+	// Display login subform
+	//----------------------------------------------------------------
+	function spew_login_subform() {
+		global $ReturnUrl;
+		echo "<form action=$_SERVER[PHP_SELF]  method=post>\n";
+		echo "<TABLE id=login_login_form BORDER>\n";
+		echo "<TR><TD class=tdls>Login:</TD><TD class=tds><input type=text name=login></TD>\n";
+		echo "<TR><TD class=tdls>Password:</TD><TD class=tds><input type=password name=pass></TD>\n";
+		echo "</TABLE>\n";
+
+		if ( empty ($ReturnUrl) ) {
+			echo "<input type=SUBMIT name=Action value=\"Login\">\n";
+			//echo "<input type=SUBMIT name=Action value=\"Login To My KKK\">\n";
+		}else{
+			echo "<input type=SUBMIT name=Action value=\"Authenticate\">\n";
+			echo "<input type=HIDDEN name=RetUrl value=\"$ReturnUrl\">\n";
+		}
+
+		echo "<HR>\n";
+
+        echo "<P class=trace>More information, see";
+        echo " <A HREF=/help.php?application=Login&context=Password+Recovery&Action=Help>";
+        echo " help</A>.</P>\n";
+
+		echo "<input type=SUBMIT name=Action value=\"Forgot My Password\">\n";
+		echo "<input type=SUBMIT name=Action value=\"Change My Password\">\n";
+		echo "</form>\n";
+	}
+
+
+	//----------------------------------------------------------------
+	// Function bail: Gracefull exit
+	//----------------------------------------------------------------
+	function bail ( $err ) {
+			global $FMT;
+			echo "<CENTER>\n";
+			echo "<TABLE id=error_form_incomplete BORDER=3 CELLSPACING=5 CELLPADDING=5>\n";
+			echo "<TH>There was a problem</TH>\n";
+			echo "<TR><TD>\n";
+			echo "<UL>\n";
+			echo "$err\n";
+			echo "</UL>\n";
+			echo "Please click on appropriate link\n";
+			echo "<UL>\n";
+			echo "<LI>Try to <A HREF=/login.phpx>login</A> again. Select <B>Forgot My Password</B> button ";
+			echo "if you forgot your password. At the form, enter you last name and email address and click";
+            echo " on the <B>Reset My Password</B> button.\n";
+            echo "</LI>\n";
+			echo "</UL>\n";
+			echo "</TD>\n";
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+			spew_footer($FMT);
+			exit;
+	}
+	//----------------------------------------------------------------
+	// Function now_what: Provide list of Links/options
+	//----------------------------------------------------------------
+	function now_what($people_id) {
+		global $KKKCFG;
+		global $FMT;
+
+		require_once("./include/nav-inc.phpx");
+		require_once("./include/looknfeel-inc.phpx");
+
+		echo "<P class=trace>Entering now_what with people_id of $people_id</P>\n"; // DEVONLY
+
+		echo "<CENTER>\n";
+		echo "<H2>Welcome to Kkk Management Console</H2>\n";
+		echo "<TABLE id=login_link_roster BORDER CELLAPACING=3 CELLPADDING=3>\n";
+
+		//----------------------------
+		// Columns
+		//----------------------------
+		echo "<TH>Links</TH>\n";
+
+		echo "<TR>\n";
+		//----------------------------
+		// Links
+		//----------------------------
+		echo "<TD>\n";
+        echo "<UL>\n";
+		echo "<LI><A HREF=$KKKCFG[BASEURL]/printenv.phpx>Printenv</A></LI>\n";	// DEVONLY
+		echo "<LI><A HREF=$KKKCFG[BASEURL]>Home</A></LI>\n";
+		echo "<LI><A HREF=$KKKCFG[BASEURL]/login.phpx>Kkk Login Console</A></LI>\n";
+        echo "</UL>\n";
+		echo "</TD>\n";
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack ( array $data ) {
+		return; 	// DEBUG DEMO
+		global $KKKCFG;
+		global $LOGINEMAIL;
+
+		if ( $data[email_1] ) {
+			$LOGINEMAIL[toemail] = $data[email_1];
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $data[email_1]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "LOGINEMAIL<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($LOGINEMAIL), ENT_QUOTES);	//DEBUG DEVONLY
+		echo "Incoming Data<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($data), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		$fd = popen($KKKCFG[MAILER],"w"); 
+		fputs($fd, "From: $LOGINEMAIL[fromname] <$LOGINEMAIL[fromemail]>\n"); 
+		fputs($fd, "To: $LOGINEMAIL[toemail]\n"); 
+
+		if ( $data[email_2] ) {
+			fputs($fd, "Cc: $data[email_2]\n"); 
+			echo "<CENTER>\n";
+			echo "<H2>A copy has also been sent to your alternate email $data[email_2]</H2>\n";
+			echo "</CENTER>\n";
+		}
+		fputs($fd, "Bcc: $jerbowes@jbowes.net\n"); 	 // DEVONLY
+
+		fputs($fd, "Subject: $LOGINEMAIL[subject]\n\n"); 
+		fputs($fd, "Your login password has been reset. Below is  login and temporary password.\n\n"); 
+		fputs($fd, "Login : $data[access_login]\n");
+		fputs($fd, "Password: $data[password]\n\n");
+		fputs($fd, "Phonetic: $data[phonetic]\n\n");
+		fputs($fd, "Expiration Date: $data[expiration_date]\n\n");
+		fputs($fd, "You must log in and reset your password before the above expiration date.\n");
+		fputs($fd, "Click on the following link or enter it into your browser to log in and reset your password\n\n");
+		fputs($fd, "$KKKCFG[BASEURL]/login.phpx?people_id=$data[people_id]&encpw=$data[encrypted_password]&login=$data[login]&Action=Change\n\n");
+		fputs($fd, "Do not reply to this email\n");
+
+		pclose($fd); 
+	}//End function send_email_ack
+
+
+	//=========================================================================
+	// END Functions
+	//=========================================================================
+?>
+

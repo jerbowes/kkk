@@ -1,0 +1,32 @@
+Administrative Assistant|AA
+Administrator|Adm
+Asset Manager|AM
+Chairman|Chair
+Chief Financial Officer|CFO
+Content Manager|CM
+Coordinator|Coord
+Director|Dir
+Delivery Coordinator|DC
+Editor|Ed
+Envoy|Env
+Enrollment Coordinator|EC
+Executive Director|ED
+Headman|Hm
+Information Coordinator|IC
+IT Systems Administrator|ITSA
+Liason|Lia
+Manager|Mgr
+Member|Mem
+Outreach Coordinator|OC
+President|P
+Protocol Coordinator|PC
+Registrar|Reg
+Representative|Rep
+Ritual Elder Coordinator|REC
+Secretary|Sec
+Treasurer|Tres
+Trustee|Trst
+Vice Chairman|VC
+Vice President|VP
+Web Data Administrator|WDA
+Webmaster|Wm

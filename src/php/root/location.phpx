@@ -1,0 +1,608 @@
+<?php
+	//#==================================================================
+	//# CAA Legacy location table query tool
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/23 23:58:23 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/location.phpx,v $
+	//# $Id: location.phpx,v 1.3 2012/12/23 23:58:23 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	//#------------------------------------------------------------------
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------
+	// Look and feel
+	//------------------------------------------------------------------------
+
+	$FMT = array (
+		'BANNER'	=>	'MKP CAA Legacy Locations',
+		'TITLE'		=>	'MKP CAA Legacy Locations'
+	);
+
+	$ALLFIELD = array(
+		'loc_id',
+		'loc_name',
+		'loc_title',
+		'loc_description',
+		'loc_cen'
+	);
+
+	$SHOW = array(
+		'loc_name',
+		'loc_title',
+		'loc_cen'
+	);
+
+	// Fields that can have query drill down links on display
+	$LINK = array(
+		'loc_cen'
+	);
+
+	// Fields that are from a Menu Picklist that can have new members
+	$EXTEND = array(
+	);
+
+	// Required for New Entry
+	$RequiredField = array(
+		'loc_name'		=> 	'enter location name',
+		'loc_title'		=> 	'enter location title',
+		'loc_description'		=> 	'enter location description',
+		'loc_cen'			=> 	'enter geographical center'
+	);
+
+	// Global query choices
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	// Edit record fields with edit disabled
+	$NoEdit = array(
+		'loc_id'
+	);
+	$FieldType = array(
+		'loc',		'Menu',
+		'loc2',		'Menu'
+	);
+	$Menu = array(
+		"loc" => "SELECT DISTINCT loc from loc"
+	);
+	// Display exceptions from default tdcs centered display table cell
+	$JustifyCss = array(
+		'summary',	'tds'	// small left justified
+	);
+	// Semi Global Arrays
+	$Who = array();
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	spew_header($FMT);
+	if (array_key_exists(Action, $_REQUEST)) {
+		spew_query_form();
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Entry" ) {
+			caa_connect();
+			// Get list of fields for this table
+			$fieldlabels = get_field_labels('loc');
+			$fields = array_keys($fieldlabels);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$goodfields = array();
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$goodfields[$f] = $_REQUEST[$altkey];
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}else{
+					if ($_REQUEST[$f]) {
+						$goodfields[$f] = $_REQUEST[$f];
+					}
+				}
+			}
+			// Delete auto_increment primary keys
+			unset ($goodfields['loc_id']);
+
+			$fields = array_keys($goodfields);
+			sort($fields);
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $goodfields)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO loc (';
+			foreach ($fields as $f) {
+				$sql .= $f . ',';
+			}
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sql2 .= "'" . $val . "'" . ',';
+			}
+			//chop($sql);
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+			if (! array_key_exists('loc_id', $_REQUEST)) {
+				die ("No Item Id Set") ;
+			}
+			caa_connect();
+			// Get list of fields for this table
+			$fieldlabels = get_field_labels('loc');
+			print '<pre>';	// DEBUG DEVONLY
+			echo "FOO\n"; // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabels), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	// DEBUG DEVONLY
+			$fields = array_keys($fieldlabels);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			$goodfields = array();
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$goodfields[$f] = $_REQUEST[$altkey];
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}else{
+					if ($_REQUEST[$f]) {
+						$goodfields[$f] = $_REQUEST[$f];
+					}
+				}
+			}
+
+			$fields = array_keys($goodfields);
+			sort($fields);
+
+			// Requred fields gauntlet
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $goodfields)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'UPDATE loc SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				$val = mysql_real_escape_string($_REQUEST[$f]);
+				$sqlx =   $f . " = '" . $val . "'";
+				array_push($sqlentry, $sqlx);
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE loc_id = '$goodfields[loc_id]'";
+			echo "<p class=trace>$sql</p>\n";	//DEBUG
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<H3>Update successful</H3>\n";
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Query or Full Query
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Query" ) {
+			caa_connect();
+			$fieldlabels = get_field_labels('location','loc');
+			$fields = array_keys($fieldlabels);
+
+
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			$validentries = array();
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($param, $val) = explode( '=', $entry);	
+				if ( $val ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($param, $ALLFIELD) ) {
+							$parameters[$param] = $val;
+						}
+					}
+				}
+			}
+			// Uniquify for duplicate entries
+			foreach ($parameters as $key => $val ) {
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+			// Must end with '&'
+			$drilldown .= '&';
+
+			$sql = 'SELECT DISTINCT l.loc_id, l.loc_cen, l.loc_title, l.loc_name, c.center_name FROM location l, center c';
+			$where = array(
+				'l.loc_cen = c.center_id'
+				);
+
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( $val ) {
+						$where[] = 'l.' . $f . "='" . $val . "'" ;
+					}
+				}
+			}
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			if ( $_REQUEST[Sortmeby] == 'City') {
+				$sql .= ' ORDER BY l.loc_city ';
+			}
+			if ( $_REQUEST[Sortmeby] == 'Center') {
+				$sql .= ' ORDER BY c.center_name ';
+			}
+
+			echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($sql);
+	
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<TABLE id=location_query_results BORDER>\n";
+			echo "<TH class=ths>Edit</TH><TH class=ths>View</TH>\n";
+			unset($fields['loc_id']);
+			foreach ($fields as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabels[$f]</TH>\n";
+				}
+			}
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?loc_id=$row[loc_id]";
+				echo "&Action=Edit>";
+				echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A></TD>\n";
+	
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?loc_id=$row[loc_id]";
+				echo "&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A></TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$display = $row[$f];
+					// Display Exceptions (lookup)
+					if ( $f  == 'loc_cen' ) {
+						$display = $row[center_name];
+					}
+					if ($_REQUEST[Action] == "Full Query" ) {
+							$css = "tdcs";
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								echo "$f=$row[$f]&"; 
+								echo "$drilldown";
+								echo "Action=$_REQUEST[Action]>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+					}else{
+						if (in_array($f, $SHOW)) {
+							$css = "tdcs";
+							if (array_key_exists($f, $JustifyCss)) {
+								$css = $JustifyCss[$f];
+							}
+							echo "<TD VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								echo "$f=$row[$f]&"; 
+								echo "$drilldown";
+								echo "Action=$_REQUEST[Action]>";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+							echo "<BR></TD>\n";
+						}
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "New" ) {
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=location_new_form BORDER>\n";
+
+			$fieldlabels = get_field_labels('loc');
+			unset($fieldlabels['loc_id']);
+			foreach ($fieldlabels as $fieldname => $val) {
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					// If Menu type of Menu
+					if ( $FieldType[$fieldname] == "Menu" || $FieldType[$fieldname] == "MenuArray" ) {
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							//echo "<BR>$menusql\n";//DEBUG
+							$menuitems = get_menu($menusql);
+							sort($menuitems);
+							print '<pre>';	// DEBUG DEVONLY
+							print htmlspecialchars(print_r($menuitems), ENT_QUOTES);	// DEBUG DEVONLY
+							print '</pre>';	// DEBUG DEVONLY
+							spew_select_menu($fieldname, $val,'All',$menuitems);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = mysql_query_array($result, MYSQL_ASSOC);
+							ksort($menuitems);
+							print '<pre>';	// DEBUG DEVONLY
+							print htmlspecialchars(print_r($menuitems), ENT_QUOTES);	// DEBUG DEVONLY
+							print '</pre>';	// DEBUG DEVONLY
+							spew_select_hash_menu($fieldname, '$val','All',$menulist);
+						}
+
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_$fieldname>";
+						}
+					}
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+		//----------------------------------------------------------------------
+	  	// Edit or View
+		//----------------------------------------------------------------------
+	  	if (($_REQUEST[Action] == "Edit") || ($_REQUEST[Action] == "View" )) {
+            $menulist = array();
+
+			if (! array_key_exists('loc_id', $_REQUEST)) {
+				die ("No Location Id Set") ;
+			}else{
+                $lid = $_REQUEST['loc_id'];
+            }
+
+			caa_connect();
+
+			$sql = "SELECT * FROM location WHERE loc_id = '$lid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=location_edit_form BORDER>\n";
+
+			$fieldlabels = get_field_labels('location','loc');
+
+			foreach ($fieldlabels as $fieldname => $val) {
+				echo "<TR>\n";
+                echo "<TD VALIGN=TOP class=tdls>";
+                echo "$val";
+                echo "</TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+				if ($_REQUEST[Action] == "Edit") {
+						if ( $FieldType[$fieldname] == "Menu" || $FieldType[$fieldname] == "MenuArray" ) {
+							if ( $FieldType[$fieldname] == "Menu" ) {
+								$menusql = $Menu[$fieldname];
+								$menulist = get_menu($menusql);
+								sort($menulist);
+								spew_select_menu($fieldname, $val,'All',$menulist);
+							}
+
+							if ($FieldType[$fieldname] == "MenuArray" ) {
+								$menusql = $Menu[$fieldname];
+								$menulist = get_menu_array($menusql);
+								spew_select_hash_menu($fieldname, '$val','All',$menulist);
+							}
+					}else{
+						if (in_array($fieldname, $NoEdit)) {
+							echo "$row[$fieldname]<BR>";
+						}else{
+							echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+						}
+					}
+				}else{
+					echo "$row[$fieldname]<BR>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+	  	}//if ($_REQUEST[Action] == "Edit") || ($_REQUEST[Action] == "View"))
+
+	  	if ($_REQUEST[Action] == "View" ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+	  	}//if ($_REQUEST['Action] == "View" )
+
+	  	if ($_REQUEST[Action] == "Edit") {
+			echo "<INPUT TYPE=HIDDEN NAME=loc_id VALUE=$_REQUEST[loc_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+            if ( $_SESSION['access'] >= $LOCCFG['EDITLEVEL'] ) {
+			    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+            }
+	  	}//if ($_REQUEST[Action] == "Edit")
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}else{
+		spew_query_form();
+	}
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+        $list = array();
+		caa_connect();
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=location_query_form BORDER>\n";
+		echo "<TH class=ths>Name</TH>\n";
+		echo "<TH class=ths>Title</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		// Name
+		echo "<TR>\n";
+        echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT loc_name from location order by loc_name";
+		$list = get_menu($sql);
+		spew_select_menu('loc_name','','All',$list);
+		echo "</TD>\n";
+
+		// Title
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct loc_title from location";
+		$list = get_menu($sql);
+		sort ($titlelist);
+		spew_select_menu('loc_title','','All',$list);
+		echo "</TD>\n";
+
+		// Center
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct center_id, center_name from center c, location l where l.loc_cen = c.center_id";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('loc_cen','All','All',$list);
+		echo "</TD>\n";
+
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Name',
+			'Center'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Center',$sortby);
+		echo "</TD>\n";
+
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Full Query\">\n";
+		//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+	}
+?>

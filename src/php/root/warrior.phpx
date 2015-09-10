@@ -1,0 +1,3513 @@
+<?php
+	//#==================================================================
+	//# Warrior 411 Query and Management 
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Rev$
+	//# $Date: 2013/04/08 03:54:59 $
+	//# RCS Headers
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/warrior.phpx,v $
+	//# $Id: warrior.phpx,v 1.43 2013/04/08 03:54:59 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+	require_once('./include/session-inc.phpx');
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------
+	// Look and Feel formatting
+	//------------------------------------------------------------------------
+	$FMT = array (
+		'BANNER'		=>	'CAA Database Warrior Finder',
+		'TITLE'			=>	'CAA Database Warrior Finder',
+		'MODULENAME'	=>	'warrior.phpx',
+		'NAV1'			=>	'INFO'
+	);
+
+	//--------------------------------------------------------------------------
+	// Local Config
+	//--------------------------------------------------------------------------
+	$WARCFG = array (
+		'MINQUERYCRITERIA'		=>	'1',	// Number of query qualifications
+		'VIEWLEVEL'				=>	'3',	// What access can see advanced features
+		'EDITLEVEL'				=>	'5',	// What access can edit
+		'ADMINLEVEL'			=>	'7',	// Hotwire query criteria limits
+		'INITIATIONDATEHORIZON'	=>	'2010-01-01',	// Beginning of initiations to have in picklist (stub)
+		'PERMADMINLEVEL'		=>	'7',	// What access can edit permissions
+		'MAXDISPLAYROWS'		=>	'200'	// Max Display
+	);
+
+	//
+	// Set new brother NWTA horizon to be from the beginning of last year
+	//
+	$thisyear = date('Y');
+	$lastyear = ($thisyear - 1);
+	$WARCFG['INITIATIONDATEHORIZON'] = $lastyear . '-01-01';
+
+	//
+	// Togle the advanced feature search criteria
+	//
+	$ModeList = array (
+		'Mode_Training',
+		'Mode_Region',
+		'Mode_AnIgroup',
+		'Mode_Job',
+		'Mode_Email',
+		//'Mode_Igroup',
+		'Mode_Newbrother',
+		'Mode_Preference',
+		'Mode_Bday'
+		);
+
+	// warrior table base field roster, in display order
+
+	$ALLFIELD = array(
+		'war_id',
+		'war_username',
+		'war_fname',
+		'war_nname',
+		'war_mname',
+		'war_lname',
+		'war_suffix',
+		'war_aname',
+		'war_sname',
+		'war_password',
+		'war_email',
+		'war_email2',
+		'war_street',
+		'war_street2',
+		'war_street3',
+		'war_city',
+		'war_state',
+		'war_zip',
+		'war_country',
+		'war_hphone',
+		'war_wphone',
+		'war_cphone',
+		'war_fphone',
+		'war_status',
+		'war_center',
+		'war_new',
+		'war_log',
+		'war_change',
+		'war_whoch',
+		'nid',
+		'vid',
+	);
+
+	$PRIVATE = array(
+		'war_email',
+		'war_email2',
+		'war_street',
+		'war_street2',
+		'war_street3',
+		'war_hphone',
+		'war_wphone',
+		'war_cphone',
+		'war_fphone'
+	);
+
+
+	$INITIATIONFIELD = array (
+		'initiation_id',
+		'initiation_day',
+		'initiation_date',
+		'initiation_center',
+		'initiation_camp',
+		'initiation_loc',
+		'initiation_city',
+		'initiation_state',
+		'initiation_country'
+	);
+	$TRAININGSFIELD = array (
+		'trg_id',
+		'trg_name',
+		'trg_date',
+		'trg_loc',
+		'trg_city',
+		'trg_state',
+		'trg_center',
+		'trg_country'
+	);
+	$DETAILSFIELD = array (
+		'war_de_id',
+		'occupation',
+		'business_name',
+		'business_title',
+		'mission',
+		'mission_shad',
+		'birthdate',
+		'website',
+		'lks',
+		'leader',
+		'staffings',
+		'mos',
+		'bio',
+		'notes',
+		'newsletter'
+	);
+
+	$SHOW = array(
+		'war_fname',
+		'war_lname',
+		'war_email',
+		'war_city',
+		'war_state',
+		'war_zip',
+		'war_country',
+		'war_hphone',
+		'war_wphone',
+		'war_cphone',
+	);
+	// Fields that can have query drill down links on display
+	$LINK = array(
+		'war_city',
+		'war_state',
+		'war_zip',
+		'war_country',
+		'war_center'
+	);
+
+	//
+	// Cloak fields in pseudo-sql statement for endusers
+	//
+	$NoTell = array (
+		'war_center'
+		);
+
+	// Required for New Entry
+	$RequiredField = array(
+		'war_username'		=>	'enter user name',
+		'war_fname'			=>	'enter first name',
+		'war_nname'			=>	'enter nickname',
+		'war_mname'			=>	'enter middle name',
+		'war_lname'			=>	'enter last name',
+		'war_aname'			=>	'enter animal name',
+		'war_email'			=>	'enter primary email address',
+		'war_street'		=>	'enter street address',
+		'war_city'			=>	'enter city',
+		'war_state'			=>	'enter state',
+		'war_zip'			=>	'enter zip or postal code',
+		'war_country'		=>	'enter country',
+		'war_hphone'		=>	'enter home or evening phone',
+		'war_wphone'		=>	'enter work or day phone',
+		'war_cphone'		=>	'enter cell or mobile phone',
+		'war_status'		=>	'enter status',
+		'war_center'		=>	'enter center'
+	);
+	// Global query choices
+	$InValidChoice = array(
+		'All',
+		'Any',
+		' ',
+		'',
+		'None',
+		'Choose'
+	);
+	// Edit record fields with edit disabled
+	$NoEdit = array(
+		'war_id',
+		'war_username',
+		'war_password'
+	);
+
+	$FieldType = array(
+		'trg_id'		=>		'MenuArray',
+		'war_center'	=>		'MenuArray'
+	);
+
+	$Menu = array(
+		"war_center" => "SELECT center_id, center_name FROM center",
+		"trg_id" => "SELECT trg_id, trg_name FROM trainings",
+	);
+
+	//
+	// Display exceptions from default tds centered display table cell
+	//
+	$CenterCss = array(
+		'war_country'   =>	'tdcs',
+		'war_county'	=>	'tdcs',
+		'war_email'	 =>	'tdcs',
+		'war_cphone'	=>	'tdcs',
+		'war_hphone'	=>	'tdcs',
+		'war_wphone'	=>	'tdcs',
+		'war_state'	 =>	'tdcs'
+	);
+	//
+
+	//--------------------------------------------------------------------------
+	// Begin
+	//--------------------------------------------------------------------------
+
+
+	spew_header($FMT);
+
+		echo "<P class=trace> Return Url for Login: Location: "; 	// DEVONLY
+		echo " $WICCFG[WICURL]/login.phpx?RetUrl=$returl</P>\n";	// DEVONLY
+		print '<pre>';	// DEBUG DEVONLY
+
+		echo "Parameters: Request\n"; // DEBUG DEVONLY
+		print htmlspecialchars(print_r($_REQUEST), ENT_QUOTES);	// DEBUG DEVONLY
+
+		echo "Parameters: Post\n"; // DEBUG DEVONLY
+		print htmlspecialchars(print_r($_POST), ENT_QUOTES);	// DEBUG DEVONLY
+
+		echo "Parameters: Get\n"; // DEBUG DEVONLY
+		print htmlspecialchars(print_r($_REQUEST), ENT_QUOTES);	// DEBUG DEVONLY
+
+		print '</pre>';	// DEBUG DEVONLY
+
+	if (array_key_exists('Action', $_REQUEST)) {
+	  	if ( $_REQUEST['Action'] == "Warrior Lookup" ) {
+            spew_query_form();
+        }
+
+		//----------------------------------------------------------------------
+	  	// Add I-Group Member (purple ball)
+		//----------------------------------------------------------------------
+
+		//mysql> desc warrior_igroup;
+		//+------------+------------------+------+-----+---------+----------------+
+		//| Field	  | Type			 | Null | Key | Default | Extra		  |
+		//+------------+------------------+------+-----+---------+----------------+
+		//| war_ig_id  | int(11) unsigned | NO   | PRI | NULL	| auto_increment |
+		//| war_ig_war | int(11) unsigned | NO   | MUL | 0	   |				|
+		//| war_ig_ig  | int(11) unsigned | NO   | MUL | 0	   |				|
+		//+------------+------------------+------+-----+---------+----------------+
+
+	  	if ( $_REQUEST['Action'] == "Add Member" ) {
+			caa_connect();
+			$wid = $_REQUEST['war_id'];
+			$igid = $_REQUEST['igroup_id'];
+			if ( is_numeric($wid) && is_numeric($igid)){
+				$sql = "INSERT INTO warrior_igroup (war_ig_war, war_ig_ig) VALUES (";
+				$sql .= "'$wid','$igid')";
+				echo "<P class=trace>$sql</P>\n"; // DEVONLY
+				run_sql($sql);
+			}else{
+				echo "<P class=trace>ERROR: Need war_id and igroup_id</P>\n";
+			}
+
+			$_REQUEST['Action'] = "New Member";
+			unset  ( $_REQUEST['war_id']);
+
+			$_REQUEST['in_igroup'] = "Yes";
+			$_REQUEST['Mode_Igroup'] = "Yes";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Show New Warrior Stuff
+		//----------------------------------------------------------------------
+	  	if ( $_REQUEST['Action'] == "New Warriors" ) {
+			spew_query_form();
+			spew_footer($FMT);
+			exit;
+		}
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Insert New Entry" ) {
+			caa_connect();
+			// Get list of fields for this table
+			$fieldlabel = array();
+			$fieldlabel = get_field_labels('warrior', 'war');
+			$fields = array_keys($fieldlabel);
+
+			// Eliminate all keys that have invalid answers
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+			// Delete auto_increment primary keys
+
+			$fields = array_keys($ALLFIELD);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO warrior (';
+			$sqlfields = array();
+			$sqlfieldval = array();
+			foreach ($fields as $f) {
+				if (! empty( $_REQUEST[$f] ) ){
+					array_push($sqlfields, $f);
+				}
+			}
+			foreach ($fields as $f) {
+				if (! empty( $_REQUEST[$f] ) ){
+					$val = mysql_real_escape_string(urldecode($_REQUEST[$f]));
+					$val = preg_replace("/\\\'/", "''", $val);	// O\'Neil -> O''Neil
+					$sql2 .= "'" . $val . "'";
+					array_push($sqlfieldval, $sql2);
+				}
+			}
+			$sql .= implode(',', $sqlfields) .  ') VALUES (' .  implode(',', $sqlfieldval) . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+			spew_query_form();
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Update" ) {
+			if ( array_key_exists('war_id', $_REQUEST)) {
+				$mywarid = $_REQUEST['war_id'];
+			}else{
+				die ("Update failed: No Warrior Id Set") ;
+			}
+
+			if ( array_key_exists('table_name', $_REQUEST)) {
+				$mytable = $_REQUEST['table_name'];
+			}else{
+				die ("Update failed: No table name specified ") ;
+			}
+
+			$fieldlabel = array();
+			$Orig = array();
+			$fields = array();
+
+			caa_connect();
+			// Get list of fields for this table
+
+			//
+			// Base warrior table update
+			//
+			if ( $mytable == "warrior" ) {
+				$fieldlabel = get_field_labels($mytable,'war');
+				$war_id_key = 'war_id';
+				$NoEdit = array (
+					'warrior_id',
+					'warrior_username',
+					'warrior_password'
+				);
+				if (array_key_exists('war_id', $_SESSION)) {
+					$_REQUEST['war_whoch'] = $_SESSION['war_id'];
+				}
+				$_REQUEST['war_change'] =  date('Y-m-d h:m:s'); 
+				echo "<P class=trace>Setting war_change to $_REQUEST[war_change]</P>\n"; // DEVONLY
+			}
+
+			//
+			// Warrior Details table update
+			//
+			if ( $mytable == "warrior_details" ) {
+				$war_id_key = 'war_de_id';
+				$fieldlabel = get_field_labels($mytable,'war');
+				$NoEdit = array (
+					'war_de_id'
+				);
+			}
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Required fields gauntlet
+			//
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE id=error_form_incomplete BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Set Original Entry for comparison
+			//
+			$sqlorig = "SELECT * FROM $mytable WHERE $war_id_key = '$mywarid'";
+			echo "<P class=trace>$sqlorig</P>\n";// DEBUG DEVONLY
+			$resultorig = mysql_query($sqlorig);
+			$Orig = mysql_fetch_array($resultorig, MYSQL_ASSOC);
+
+			echo "<PRE>\n";		// DEBUG DEVONLY
+			print_r($Orig);		// DEBUG DEVONLY
+			echo "</PRE>\n";	// DEBUG DEVONLY
+
+			//
+			// Set Table Name
+			//
+
+			$sql = "UPDATE $mytable SET ";
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+			  if (! empty ($_REQUEST[$f]) ) {
+				if (! in_array($f, $NoEdit)) {
+					echo "<P class=trace>Orig: |$Orig[$f]| New: |$_REQUEST[$f]|</P>\n";//DEBUG DEVONLY
+					if ( $Orig[$f] != $_REQUEST[$f] ) {
+						echo "<P class=trace> Before: $_REQUEST[$f]\n";	// DEVONLY
+						$val = mysql_real_escape_string(urldecode($_REQUEST[$f]));
+						echo "After: $val\n";	// DEVONLY
+						$val = preg_replace("/\\\'/", "''", $val);	// O\'Neil -> O''Neil
+						echo "After2: $val</P>\n";	// DEVONLY
+						$sqlx =   $f . " = '" . $val . "'";
+						echo "<P class=trace>NOMATCH $sqlx</P>\n";//DEBUG DEVONLY
+						$sqlentry[] = $sqlx;
+					}
+				}else{
+					echo "<P class=trace>NoEdit: $f</P>\n";//DEBUG DEVONLY
+				}
+			  }
+			}
+            if (count($sqlentry)){
+			    $sql .= implode (', ', $sqlentry);
+			    $sql .= " WHERE $war_id_key = '$mywarid'";
+			    echo "<p class=trace>$sql</p>\n"; // DEVONLY
+			    $result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			    echo "<CENTER><H3>Update successful<e/H3></CENTER>\n";
+            }else{
+			    echo "<CENTER><H3>No changes to update.</H3></CENTER>\n";
+            }
+			$_REQUEST['Action'] = "View";
+		}
+
+
+		//----------------------------------------------------------------------
+	  	// Query Results 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query"  
+			|| $_REQUEST['Action'] == "List"  
+			|| $_REQUEST['Action'] == "New Member"  
+			) {
+			caa_connect();
+
+			$SelectWhat = array();	// List of sql fields to select
+			$TellMeWhat = array();	// Verbal 'sql-like' query info for user feedback
+
+
+			//
+			// Identify warriors who do not want their contact information shown
+			//
+			$CloakMe = array();	
+			$cloaksql = "SELECT warrior_id from warrior_preference where preference_id = '97' and preference_value = 'No'";
+			echo "<P class=trace>$cloaksql</P>\n";	// DEVONLY
+			$CloakMe = get_menu($cloaksql);
+			print_r($CloakMe);	// DEVONLY
+
+			//
+			// Center Name to ID lookup table
+			//
+			$CenterName = array();	
+			$csql = "SELECT center_id, short_name from center";
+			$CenterName = get_menu_array($csql);
+
+			//
+			// Find Out I-Group Region Reps
+			//
+			$RegionRep = array();	
+			$rrsql = "SELECT igrpreg_rep, igrpreg_id from igroup_regions";
+			$RegionRep = get_menu_array($rrsql);
+
+			//
+			// Load up SelectWhat with default warrior fields
+			//
+			foreach ($SHOW as $f ) {
+				$SelectWhat[] = 'w.' . $f;
+			}
+			$SelectWhat[] = 'w.war_id';
+
+			$fieldlabel = array();
+			$fieldlabel = get_field_labels('warrior', 'war');
+
+			$fields = array();
+			$warfields = array();
+			$fields = array_keys($fieldlabel);
+			$warfields = array_keys($fieldlabel);
+
+			echo "<H3>Request Array</H3>\n";// DEBUG DEVONLY
+			echo "<PRE>\n"; 				// DEBUG DEVONLY
+			print_r($_REQUEST); 			// DEBUG DEVONLY
+			echo "</PRE>\n";				// DEBUG DEVONLY
+
+			//
+			// Kluge for retarded way MKP1 handles apostrophes
+			// Yes, could use stripslashes()
+			//
+			foreach ($_REQUEST as $key => $val ) {
+				$val = preg_replace("/\\\'/", "'", $val);	// O\'Neil -> O'Neil
+				$_REQUEST[$key] = $val;
+			}
+			echo "<H3>After Unescape Apostrophes on Request Array</H3>\n";// DEBUG DEVONLY
+			echo "<PRE>\n"; 				// DEBUG DEVONLY
+			print_r($_REQUEST); 			// DEBUG DEVONLY
+			echo "</PRE>\n";				// DEBUG DEVONLY
+
+			spew_query_form();
+			//---------------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//---------------------------------------------------------------
+
+			if (! empty( $_SERVER['QUERY_STRING'] )) {
+				$validentries = array();
+				$parameters = array();
+				$queryentries = array();
+				$where = array();
+				$from = array(
+					'warrior'	=>	'w'
+				);
+				$validkeys = array();	// Table fields in URI_STRING
+				$SHOWSQL = array();		// Fields displayed in query output
+				if (isset($_REQUEST['show_email'])){
+					$SHOWSQL[] = 'war_email';
+				}
+				if (isset($_REQUEST['show_username'])){
+					$SHOWSQL[] = 'war_username';
+					$SHOW[] = 'war_username';
+					$SelectWhat[] = 'w.war_username';
+				}
+
+				$queryentries = explode( '&', $_SERVER['QUERY_STRING'] );
+			    echo "<PRE>\n"; 				// DEBUG DEVONLY
+                echo "Queryentries\n";          // DEBUG DEVONLY
+			    print_r($queryentries); 		// DEBUG DEVONLY
+			    echo "</PRE>\n";				// DEBUG DEVONLY
+		
+				foreach ( $queryentries as $entry ) {
+					list($key, $val) = explode( '=', $entry);	
+                    print "<P class=trace>X1 Key: $key, Val: $val</P>\n"; // DEVONLY
+					if (! empty ( $val )) {
+						if (! in_array($val, $InValidChoice)) {
+							if (in_array($key, $ALLFIELD) ) {
+								$parameters[$key] = $val;
+							}
+							if (in_array($key, $INITIATIONFIELD) ) {
+								$parameters[$key] = $val;
+							}
+							if (in_array($key, $TRAININGSFIELD) ) {
+								$parameters[$key] = $val;
+							}
+							if (in_array($key, $DETAILSFIELD) ) {
+								$parameters[$key] = $val;
+							}
+						}
+					}
+				}
+				//
+				// Add Action in drilldown list
+				//
+				if (array_key_exists('Action', $_REQUEST)){
+					if (! empty($_REQUEST['Action'] )  ) {
+						$parameters['Action'] = $_REQUEST['Action'];
+					}
+				}
+	
+				//------------------------------------------------
+				// Uniquify in case of duplicate entries
+				//------------------------------------------------
+				foreach ($parameters as $key => $val ) {
+					if ( ! empty( $val ) ) {
+						$nval = preg_replace('/\s+/', '+', $val);
+						$validentries[] = $key . '=' . $nval;
+                        print "<P class=trace>X2 Key: $key, Val: $val NVal: $nval</P>\n"; // DEVONLY
+						$validkeys[] = $key;
+					}
+				}
+				if (count($validentries)) {
+					$drilldown = implode('&', $validentries);
+				}
+
+			}// If QUERY_STRING
+			// End Drilldown calculation
+
+			//--------------------------------------------------
+			// Construct query section for warrior fields
+			//--------------------------------------------------
+			// 
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $validkeys)){
+					if ( ! empty($_REQUEST[$f]) ) {
+						$lval =  mysql_real_escape_string(urldecode($_REQUEST[$f]));
+						$lval = preg_replace("/\\\'/", "''", $lval);	// O\'Neil -> O''Neil
+						$SelectWhat[] = 'w.' . $f;
+						$SHOWSQL[] = $f;
+
+						if (preg_match('/%/', $lval) ) {
+							$where[] = 'w.' . $f . " LIKE '" .  $lval . "'";
+							if (! in_array($f, $NoTell)) {
+								$TellMeWhat[] = "$fieldlabel[$f] LIKE $lval";
+							}
+						}else{
+							$where[] = 'w.' . $f . "= '" .  $lval . "'";
+							if (! in_array($f, $NoTell)) {
+								$TellMeWhat[] = "$fieldlabel[$f] = $lval";
+							}
+						}
+					}
+				}
+			}// End foreach ALLFIELD
+			
+			//--------------------------------------------------
+			// Construct query section for initiation
+			//--------------------------------------------------
+
+			if (array_key_exists('initiation_id', $_REQUEST)) { 
+				if (in_array( $_REQUEST[initiation_id], $InValidChoice)) {
+					unset ( $_REQUEST[initiation_id]  );
+				}
+				if ( ! empty ( $_REQUEST[initiation_id] ) ) {
+					if (! is_numeric($_REQUEST[initiation_id]) ) {
+						die ("Initiation ID is not numeric");
+					}
+
+					//
+					// Retrieve labels, names, center abbreviation for TellMeWhat
+					//
+					$lval =  mysql_real_escape_string( $_REQUEST['initiation_id'] );
+					$lsql =  "SELECT n.initiation_id, n.initiation_date, n.initiation_center, n.initiation_camp, ";
+					$lsql .= " c.short_name, c.center_abbr ";
+					$lsql .= " FROM ";
+                    $lsql .= " initiation n, ";
+                    $lsql .= " warrior w, ";
+                    $lsql .= " center c, ";
+                    $lsql .= " warrior_initiation j ";
+					$lsql .= " WHERE n.initiation_id = '$lval'";
+					$lsql .= " AND n.initiation_center = c.center_id ";
+					$lsql .= " AND w.war_center = c.center_id ";
+					$lsql .= " AND n.initiation_id = j.initiation ";
+					echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			
+					$initresult = mysql_query($lsql);
+					$Init = array();
+					$Init = mysql_fetch_array($initresult, MYSQL_ASSOC) ;
+					$TellMeWhat[] = "they initiatiatied at " .  $Init[center_abbr] . ' - ' . $Init[initiation_camp] . ' - ' . $Init[initiation_date];
+					$from[initiation] = 'n';
+					$from[warrior_initiation] = 'j';
+					$where[] = "n.initiation_id = '" .  $lval . "'";
+					$where[] = 'j.warrior = w.war_id';
+					$where[] = 'j.initiation = n.initiation_id';
+					
+				}
+			}// End foreach initiation_id in $_REQUEST
+
+
+			//--------------------------------------------------
+			// Construct query section for occupation
+			//--------------------------------------------------
+			if (array_key_exists('occupation', $_REQUEST)) { 
+				if (in_array( $_REQUEST['occupation'], $InValidChoice)) {
+					unset ( $_REQUEST['occupation']  );
+				}
+
+				if ( ! empty ( $_REQUEST['occupation'] ) ) {
+					$TellMeWhat[] = "with occupation of $_REQUEST[occupation]";
+					$from['warrior_details'] = 'd';
+					$where[] = "w.war_id = d.war_de_id";
+					$where[] = "d.occupation like '%$_REQUEST[occupation]%'";
+					$SHOWSQL[] = 'occupation';
+					$SHOW[] = 'occupation';
+					$SelectWhat[] = 'd.occupation';
+					$ALLFIELD[] = 'occupation';	// CHECK
+					$fields[] =  'occupation';
+					$fieldlabel['occupation'] = "Occupation";
+				}
+			}
+
+			//--------------------------------------------------
+			// Construct query section for preferences
+			//--------------------------------------------------
+			if (array_key_exists('preference_id', $_REQUEST)) { 
+				if (in_array( $_REQUEST[preference_id], $InValidChoice)) {
+					unset ( $_REQUEST[preference_id]  );
+				}
+				if ( ! empty ( $_REQUEST[preference_id] ) ) {
+					$lval = mysql_real_escape_string( $_REQUEST['preference_id'] );
+					if (is_numeric($lval)){
+						$lsql = "SELECT preference_name from preference where preference_id = '$lval'";
+						echo "<P class=trace>$sql produces $pwhat</P>\n"; // DEVONLY
+						$pwhat = get_value($lsql);
+						$from[warrior_preference] = 'p';
+						$where[] = "p.preference_id = '" .  $lval  . "'";
+						$where[] = "p.preference_value = '$_REQUEST[ANSYN]'";
+						$where[] = "p.warrior_id = w.war_id";
+						$TellMeWhat[] = "Preference $_REQUEST[ANSYN] $pwhat";
+					}
+				}
+			}// End foreach preference_id in $_REQUEST
+			
+			//--------------------------------------------------
+			// Construct query section for age/birthday
+			//--------------------------------------------------
+			if (array_key_exists('birthdate', $_REQUEST)) { 
+				$lval = mysql_real_escape_string( $_REQUEST['birthdate'] );
+				if ( empty ($lval) ) {
+					unset($_REQUEST['Mode_Bday']);
+					unset($_REQUEST['birthdate']);
+				}else{
+					$date_error = validate_date($lval);
+					echo "<P class=trace>birthday validate returns [$date_error]</P>\n"; // DEVONLY
+					if (! empty ( $date_error ) ) {
+						echo "<CENTER>\n";
+						echo "<H1>Birthday Entry Error</H1>\n";
+						echo "<TABLE BORDER=5>\n";
+						echo "<TR><TD>$date_error</TD>\n";
+						echo "</TABLE>\n";
+						echo "</CENTER>\n";
+						spew_footer($FMT);
+						exit;
+					}
+					$SHOWSQL[] = 'birthdate';
+					$SHOW[] = 'birthdate';
+					$SelectWhat[] = 'd.birthdate';
+					$ALLFIELD[] = 'birthdate';	// CHECK
+					$fields[] =  'birthdate';
+					$fieldlabel['birthdate'] =  'Birth Date';
+					$from['warrior_details'] = 'd';
+					if ($_REQUEST['BDAY'] == 'Before' ) {
+						$where[] = "d.birthdate < '" .  $lval  . "'";
+						$TellMeWhat[] = "birth date before $lval";
+					}
+					if ($_REQUEST['BDAY'] == 'After' ) {
+						$where[] = "d.birthdate > '" .  $lval  . "'";
+						$TellMeWhat[] = "birth date after $lval";
+					}
+					if ($_REQUEST['BDAY'] == 'Exactly' ) {
+						$where[] = "d.birthdate = '" .  $lval  . "'";
+						$TellMeWhat[] = "birth date of $lval";
+					}
+					if ($_REQUEST['BDAY'] == 'Unknown' ) {
+						$where[] = "d.birthdate = '0000-00-00'";
+						$TellMeWhat[] = "birth date unknown";
+					}else{
+						$where[] = "d.birthdate > '0000-00-00'";
+					}
+					$where[] = "d.war_de_id = w.war_id";
+				}
+			}// Endif array_key_exists (birthdate, $_REQUEST)
+
+			//--------------------------------------------------
+			// Construct query section for trainings
+			//--------------------------------------------------
+			//
+
+			//mysql> desc trainings;
+			//+-------------+------------------+------+-----+------------+----------------+
+			//| Field	   | Type			 | Null | Key | Default	| Extra		  |
+			//+-------------+------------------+------+-----+------------+----------------+
+			//| trg_id	  | int(11) unsigned | NO   | PRI | NULL	   | auto_increment |
+			//| trg_name	| char(60)		 | NO   |	 | NULL	   |				|
+			//| trg_date	| date			 | NO   |	 | 0000-00-00 |				|
+			//| trg_loc	 | char(50)		 | NO   |	 | NULL	   |				|
+			//| trg_city	| char(40)		 | NO   |	 |			|				|
+			//| trg_state   | char(2)		  | NO   |	 | CA		 |				|
+			//| trg_center  | int(11) unsigned | NO   |	 | 37		 |				|
+			//| trg_country | char(2)		  | NO   |	 | NULL	   |				|
+			//+-------------+------------------+------+-----+------------+----------------+
+
+			//mysql> desc warrior_trainings;
+			//+--------------------+------------------+------+-----+---------+----------------+
+			//| Field			  | Type			 | Null | Key | Default | Extra		  |
+			//+--------------------+------------------+------+-----+---------+----------------+
+			//| wartrg_id		  | int(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| wartrg_war_id	  | int(11) unsigned | NO   | MUL | 0	   |				|
+			//| wartrg_training_id | int(11) unsigned | NO   | MUL | 0	   |				|
+			//| attendee_role | char(20)		  | NO   |	 | NULL	   |				|
+			//+--------------------+------------------+------+-----+---------+----------------+
+
+			if (array_key_exists('trg_id', $_REQUEST)) { 
+				if (in_array( $_REQUEST[trg_id], $InValidChoice)) {
+					unset ( $_REQUEST['trg_id']  );
+				}else{
+					$tid =  $_REQUEST['trg_id'];
+				}
+				if ( ! empty ( $_REQUEST['trg_id'] ) ) {
+					$lval =  mysql_real_escape_string($_REQUEST['trg_id']);
+					$lval = preg_replace("/\\\'/", "''", $lval);
+					if (is_numeric($tid)) {
+						$lsql = "SELECT trg_name from trainings where trg_id = '$lval'";
+						$twhat = get_value($lsql);
+						$from[trainings] = 't';
+						$from[warrior_trainings] = 'z';
+						$SelectWhat[] = 't.trg_name';
+						$SelectWhat[] = 't.trg_id';
+
+						$SHOWSQL[] = 'trg_name';
+						array_push($ALLFIELD, 'trg_name');
+						$where[] = "t.trg_id = '" .  $tid . "'";
+						$where[] = 'z.wartrg_training_id = t.trg_id';
+						$where[] = 'z.wartrg_war_id = w.war_id';
+						$TellMeWhat[] = "training = $twhat";
+					}
+				}
+			}// End foreach TRAININGFIELDS
+			
+			//---------------------------------------------------------------
+			// Create query for I- Group Regions
+			//---------------------------------------------------------------
+			//mysql> desc igroup_regions;
+			//+--------------+-----------------------+------+-----+---------+----------------+
+			//| Field		| Type				  | Null | Key | Default | Extra		  |
+			//+--------------+-----------------------+------+-----+---------+----------------+
+			//| igrpreg_id   | smallint(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| igrpreg_name | varchar(40)		   | NO   |	 |		 |				|
+			//| igrpreg_cen  | int(11) unsigned	  | NO   |	 | 1	   |				|
+			//+--------------+-----------------------+------+-----+---------+----------------+
+
+			if (array_key_exists('igrpreg_id', $_REQUEST)) { 
+				$rid = $_REQUEST['igrpreg_id'];
+				if ( ! empty ($rid) ) {
+					$from[igroup_regions] = 'r';
+					$from[igroup] = 'i';
+
+					//
+					// If in_igroup is set to NO, skip this
+					//
+					if ( ! isset ($_REQUEST['in_igroup']) ||  $_REQUEST['in_igroup'] == 'Yes' ){
+						echo "<P class=trace>EITHER in_igroup is NOT Set =OR= in_igroup == 'Yes'</P>\n"; //DEVONLY
+						$where[] = "r.igrpreg_id = i.igroup_reg";
+					}else{
+						echo "<P class=trace>in_igroup is Set and is  'No'</P>\n"; //DEVONLY
+					}
+
+					$where[] = "i.igroup_reg = '$rid'";
+
+					//$_REQUEST['in_igroup'] = "Yes"; // Kick off below to add igroup query attributes
+
+					$sql = "SELECT igrpreg_name from igroup_regions where igrpreg_id = '$rid'";
+					$regname = get_value($sql);
+					$TellMeWhat[] = "their I-Group is in the <B>$regname</B> region";
+					$ShowRep="Yes";
+				}
+			}
+
+			//--------------------------------------------------
+			// Construct query section for is in I-Group
+			//--------------------------------------------------
+
+			//mysql> desc igroup;
+			//+--------------------------+----------------------------------------------------+------+-----+---------+----------------+
+			//| Field					| Type											   | Null | Key | Default | Extra		  |
+			//+--------------------------+----------------------------------------------------+------+-----+---------+----------------+
+			//| igroup_id				| int(11) unsigned								   | NO   | PRI | NULL	| auto_increment |
+			//| igroup_name			  | varchar(45)										| NO   |	 |		 |				|
+			//| igroup_city			  | varchar(45)										| NO   |	 |		 |				|
+			//| igroup_night			 | enum('Mon','Tues','Wed','Thurs','Fri','Sat','Sun') | YES  |	 | Mon	 |				|
+			//| igroup_status			| enum('Open','Closed')							  | YES  |	 | Open	|				|
+			//| igroup_title			 | varchar(40)										| NO   |	 |		 |				|
+			//| igroup_street			| varchar(60)										| NO   |	 |		 |				|
+			//| igroup_state			 | char(4)											| NO   |	 | CA	  |				|
+			//| igroup_country		   | char(2)											| NO   |	 | NULL	|				|
+			//| igroup_zip			   | varchar(10)										| NO   |	 |		 |				|
+			//| igroup_rep			   | int(11) unsigned								   | NO   |	 | 0	   |				|
+			//| igroup_cen			   | int(11) unsigned								   | NO   | MUL | 1	   |				|
+			//| igroup_reg			   | smallint(2) unsigned							   | NO   |	 | 0	   |				|
+			//| igroup_time			  | varchar(30)										| NO   |	 |		 |				|
+			//| igroup_history		   | text											   | NO   |	 | NULL	|				|
+			//| igroup_frequency		 | varchar(255)									   | NO   |	 | NULL	|				|
+			//| igroup_newmembers		| varchar(255)									   | NO   |	 | NULL	|				|
+			//| igroup_visit_initiated   | varchar(128)									   | NO   |	 | NULL	|				|
+			//| igroup_visit_uninitiated | varchar(128)									   | NO   |	 | NULL	|				|
+			//| igroup_mixed			 | varchar(255)									   | NO   |	 | NULL	|				|
+			//+--------------------------+----------------------------------------------------+------+-----+---------+----------------+
+
+			//mysql> desc warrior_igroup;
+			//+------------+------------------+------+-----+---------+----------------+
+			//| Field	  | Type			 | Null | Key | Default | Extra		  |
+			//+------------+------------------+------+-----+---------+----------------+
+			//| war_ig_id  | int(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| war_ig_war | int(11) unsigned | NO   | MUL | 0	   |				|
+			//| war_ig_ig  | int(11) unsigned | NO   | MUL | 0	   |				|
+			//+------------+------------------+------+-----+---------+----------------+
+
+
+			if (! empty( $_REQUEST['in_igroup']) ) {
+				$ShowRep="Yes";
+				$ShowRegRep="Yes";
+
+				$SelectWhat[] = 'i.igroup_id';
+				$SelectWhat[] = 'i.igroup_name';
+				$SelectWhat[] = 'x.war_ig_id';
+
+				$from[igroup] = 'i';
+				$from[warrior_igroup] = 'x';
+
+				$SHOW[] =  'igroup_name';
+				$ALLFIELD[] = 'igroup_name';	// CHECK
+				$fields[] = 'igroup_name';
+				$fieldlabel[igroup_name] = "I-Group Name";
+
+				//------------------------------------------------
+				// If In I-Group, he will have a real entry
+				//------------------------------------------------
+				if ( $_REQUEST['in_igroup'] == 'Yes') {
+					echo "<P class=trace>in_igroup is Yes</P>\n";// DEVONLY
+					$SelectWhat[] = 'i.igroup_rep';
+					$where[] = "x.war_ig_war = w.war_id";
+					$where[] = "i.igroup_id = x.war_ig_ig";
+					$where[] = "i.igroup_name NOT LIKE 'None:%'";
+					$SelectWhat[] = 'i.igroup_name';
+					$TellMeWhat[] = "they are in an I-Group";
+					//------------------------------------------------
+					// If In Specific I-Group
+					//------------------------------------------------
+					if (isset( $_REQUEST[igroup_id])) {
+						if (is_numeric ($_REQUEST[igroup_id] )) {
+							$id = $_REQUEST[igroup_id];
+							$where[] = "i.igroup_id = '$id'";
+							$ignsql = "SELECT igroup_name from igroup where igroup_id = '$id'";
+							$name = get_value($ignsql);
+							$TellMeWhat[] = "members of $name";
+						}else{
+							echo "<P class=trace>ERROR: I-Group ID is not numeric</P>\n";
+						}
+					}
+				}
+
+				//------------------------------------------------
+				// If Not In I-Group, he will belong to an igroup
+				// in the warrior_igroup table with igroup_name of 
+				// 'None: xxx' 
+				//------------------------------------------------
+				if ( $_REQUEST['in_igroup'] == 'No') {
+					echo "<P class=trace>in_igroup is No</P>\n";// DEVONLY
+					$where[] = "i.igroup_name LIKE 'None:%'";
+					$where[] = "x.war_ig_war = w.war_id";
+					$where[] = "x.war_ig_ig = i.igroup_id";
+					$TellMeWhat[] = "they are not in an I-Group";
+				}
+			}// Endif in_igroup
+			//--------------------------------------------------
+			// Construct query section for is trained
+			//--------------------------------------------------
+
+			//mysql> desc trainings;
+			//+-------------+------------------+------+-----+------------+----------------+
+			//| Field	   | Type			 | Null | Key | Default	| Extra		  |
+			//+-------------+------------------+------+-----+------------+----------------+
+			//| trg_id	  | int(11) unsigned | NO   | PRI | NULL	   | auto_increment |
+			//| trg_name	| char(60)		 | NO   |	 | NULL	   |				|
+			//| trg_date	| date			 | NO   |	 | 0000-00-00 |				|
+			//| trg_loc	 | char(50)		 | NO   |	 | NULL	   |				|
+			//| trg_city	| char(40)		 | NO   |	 |			|				|
+			//| trg_state   | char(2)		  | NO   |	 | CA		 |				|
+			//| trg_center  | int(11) unsigned | NO   |	 | 37		 |				|
+			//| trg_country | char(2)		  | NO   |	 | NULL	   |				|
+			//+-------------+------------------+------+-----+------------+----------------+
+
+			//mysql> desc warrior_trainings;
+			//+--------------------+------------------+------+-----+---------+----------------+
+			//| Field			  | Type			 | Null | Key | Default | Extra		  |
+			//+--------------------+------------------+------+-----+---------+----------------+
+			//| wartrg_id		  | int(11) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| wartrg_war_id	  | int(11) unsigned | NO   | MUL | 0	   |				|
+			//| wartrg_training_id | int(11) unsigned | NO   | MUL | 0	   |				|
+			//+--------------------+------------------+------+-----+---------+----------------+
+
+			//mysql> desc training;
+			//+-----------------------+------------------+------+-----+---------+----------------+
+			//| Field				 | Type			 | Null | Key | Default | Extra		  |
+			//+-----------------------+------------------+------+-----+---------+----------------+
+			//| training_id		   | int(10) unsigned | NO   | PRI | NULL	| auto_increment |
+			//| training_name		 | varchar(80)	  | YES  |	 | NULL	|				|
+			//| training_abbreviation | varchar(14)	  | YES  |	 | NULL	|				|
+			//| training_class		| varchar(30)	  | YES  |	 | NULL	|				|
+			//| training_type		 | varchar(30)	  | YES  |	 | NULL	|				|
+			//| training_description  | text			 | YES  |	 | NULL	|				|
+			//| syllabus_url		  | varchar(200)	 | YES  |	 | NULL	|				|
+			//+-----------------------+------------------+------+-----+---------+----------------+
+
+			//------------------------------------------------
+			// If Trained
+			//------------------------------------------------
+			if (array_key_exists('is_trained', $_REQUEST)) { 
+					$SelectWhat[] = 't.trg_name';
+					$SelectWhat[] = 't.trg_id';
+					$SHOW[] = 'trg_name';
+					$ALLFIELD[] =  'trg_name';
+					$fields[] = 'trg_name';
+					$fieldlabel['trg_name'] = 'Training';
+	
+					//
+					// Training (class) table
+					//
+					$from['training'] = 'b';
+					$where[] = "b.training_id = t.training_id";
+
+					if (array_key_exists('training_id', $_REQUEST)) { 
+						$bid = $_REQUEST['training_id'];
+						$where[] = "t.training_id = '$bid'";
+					}
+	
+					$from['trainings'] = 't';
+					$from['warrior_trainings'] = 'z';
+	
+					$where[] = "t.trg_id = z.wartrg_training_id";
+					$where[] = "w.war_id = z.wartrg_war_id";
+	
+					$fieldlabel['trg_name'] = "Training";
+					$fieldlabel['training_name'] = "Training Type";
+
+					$tid = $_REQUEST['training_id'];
+					$sqlwhich = "SELECT training_abbreviation from training where training_id = '$tid'";
+					$name = get_value($sqlwhich);
+
+					$ttid = $_REQUEST['training_id'];	// Training type
+
+				if ( $_REQUEST[is_trained] == 'Yes') {
+					$TellMeWhat[] = "they have attended $name";
+					$where[] = "b.training_id = '$tid'";
+				}else{
+					$TellMeWhat[] = "they have not attended $name";
+					$where[] = "b.training_id != '$tid'";
+				}
+			}
+
+			//
+			//---------------------------------------------------------------
+			// Cycle through warrior values and pick ones that have values
+			// in $_REQUEST and construct sql query
+			//---------------------------------------------------------------
+			//
+			foreach ($warfields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$sqlfields = $_REQUEST[$f];
+					if ( is_array( $sqlfields )) {
+						// For Cities that are multiple selection arrays, create OR statement
+						echo "<P class=trace>REQUEST of [$f] is an array</P>\n";// DEBUG DEVONLY
+
+						$multiple = array();
+						$prettymultiple = array();
+
+						foreach ($sqlfields as $val ) {
+							// Except for invalid choices like 'All'
+							if (in_array($val, $InValidChoice)){
+								unset($val) ;
+							};
+
+							if ( isset ($val) ) {
+								if (! in_array( $val, $InValidChoice)){
+									echo "<P class=trace>Val is SET, adding to multiple</P>\n";// DEBUG DEVONLY
+									$cleanval = mysql_real_escape_string($val);
+									$cleanval = preg_replace("/\\\'/", "''", $cleanval);	// O\'Neil -> O''Neil
+									$sqlm = "w." . $f . "='" . $cleanval . "'" ;
+									$prettysqlm =  $f . "= " . $cleanval ;
+									array_push($multiple, $sqlm);
+									$prettymultiple[] = $prettysqlm;
+								}
+							}
+						}
+						echo "<P>multiplecount is count($multiple)\n";	// DEBUG DEVONLY
+						if ( count($multiple) ) {
+							$where[] = '(' . implode(' OR ', $multiple) . ')';
+							$TellMeWhat[] = '(' . implode(' OR ', $prettymultiple) . ')';
+							
+						}
+					}else{
+						// sqlfields aka $_REQUEST is NOT an array
+						$val = $_REQUEST[$f];
+						if (in_array($val, $InValidChoice)){
+							unset($val) ;
+						}else{
+							$val = mysql_real_escape_string($_REQUEST[$f]);
+							$val = preg_replace("/\\\'/", "''", $val);	// O\'Neil -> O''Neil
+						}
+						if ( $f == "war_id" ) {	// Kluge to keep session out
+							unset ($val);
+						}
+						if ( ! empty ($val) ) {
+							if (preg_match('/%/', $val) ) {
+								$where[] = "w." . $f . " LIKE '" . $val . "'" ;
+								if (! in_array($f, $NoTell)) {
+									$TellMeWhat[] = "$fieldlabel[$f] LIKE $val";
+								}
+							}else{
+								$where[] = "w." . $f . "= '" . $val . "'" ;
+								if ( $f == "war_center") {
+									$TellMeWhat[] = "Center = $CenterName[$val]";
+								}else{
+									if (! in_array($f, $NoTell)) {
+										$TellMeWhat[] = "$fieldlabel[$f] = $val";
+									}
+								}
+							}
+						}
+					}
+				}// Endif array_key_exists( $f, $_REQUEST)
+			} // Endforeach fields as $f
+
+			$TellMeWhat = array_unique($TellMeWhat);
+			$SelectWhat = array_unique($SelectWhat);
+			$where = array_unique($where);
+			$wherecount = count($where);
+			$whatcount = count($SelectWhat);
+
+			echo "<PRE>\n"; 					// DEBUG DEVONLY
+			echo "Select Whatcount is $whatcount\n";	// DEBUG DEVONLY
+			print_r($SelectWhat);					// DEBUG DEVONLY
+			echo "Select Wherecount is $wherecount\n";	// DEBUG DEVONLY
+			print_r($where);					// DEBUG DEVONLY
+			echo "</PRE>\n"; 					// DEBUG DEVONLY
+
+			// SQL field entries
+			$sql = "SELECT distinct " . implode(',', $SelectWhat);
+
+			// FROM clause
+			$fromarray = array();
+			foreach ($from as $table => $abbr) {
+				$fromarray[] = $table . ' ' . $abbr ;
+			}
+			$sql .= ' FROM ' . implode(',', $fromarray);
+
+			// WHERE clause
+			if ( $wherecount ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+				if ( $wherecount <= $WARCFG['MINQUERYCRITERIA'] ) {
+					echo "<H2>Where Criteria ($wherecount) less than min required ($WARCFG[MINQUERYCRITERIA]</H2>\n"; // DEVONLY
+					if ($_SESSION['access'] < $WARCFG['ADMINLEVEL'] ) {
+                    	echo "<CENTER>\n";
+						echo "<H2>Must narrow search so as not to kill the server</H2>\n";
+                    	echo "</CENTER>\n";
+						spew_footer($FMT);
+						exit;
+					}
+				}
+
+			}else{
+				echo "<H2>No wherecount ($wherecount) </H2>\n"; // DEVONLY
+				if ($_SESSION['access'] < $WARCFG['ADMINLEVEL'] ) {
+                	echo "<CENTER>\n";
+					echo "<H2>Must narrow search so as not to kill the server</H2>\n";
+                	echo "</CENTER>\n";
+					spew_footer($FMT);	
+					exit;
+				}
+			}
+			$OrderBy = array (
+				'Training'		=>	't.trg_name,w.war_lname',
+				'I-Group'		=>	'i.igroup_name,w.war_lname',
+				'City'			=>	'w.war_city, w.war_state',
+				'Zip'			=>	'w.war_zip, w.war_lname, w.war_fname',
+				'Country'		=>	'w.war_country, w.war_city',
+				'First Name'	=>	'w.war_fname, w.war_lname',
+				'Birthdate'		=>	'd.birthdate, w.war_lname, w.war_fname',
+				'Last Name'		=>	'w.war_lname, w.war_fname'
+				);
+
+			if (array_key_exists('Sortmeby', $_REQUEST)) {
+				$sby = $_REQUEST[Sortmeby];
+				if (isset ($OrderBy[$sby])){
+					$sql .= ' ORDER BY ' . $OrderBy[$sby];
+				}else{
+					$sql .= ' ORDER BY w.war_lname, w.war_fname ';
+				}
+			}else{
+				$sql .= ' ORDER BY w.war_lname, w.war_fname ';
+			}
+
+			echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($sql);
+			$num_records_in_query = mysql_num_rows($result);
+
+			//-------------------------------------------------------------
+			// LIMITER
+			// (If you append '&recordlimit=x' to url you can bypass this)
+			//-------------------------------------------------------------
+			$blurb = "Show warriors where " . implode(', ', $TellMeWhat);
+
+			if (array_key_exists('recordlimit', $_REQUEST)) {
+				//
+				// Secret key....
+				// As big a query result as you want
+				//
+				echo "<P class=trace>${blurb}.";
+
+				if ( $num_records_in_query == 1) {
+					echo " Found $num_records_in_query record.";
+				}else{
+					echo " Found $num_records_in_query records.";
+				}
+				echo "</P>";
+
+			}else{
+				// NOT As big a query result as you want
+				echo "<P class=trace>${blurb}.";
+
+				if ( $num_records_in_query == 1) {
+					echo " Found $num_records_in_query record";
+				}else{
+					echo " Found $num_records_in_query records";
+				}
+
+				if ($num_records_in_query > $WARCFG[MAXDISPLAYROWS] ) {
+					echo " but limiting display to $WARCFG[MAXDISPLAYROWS] </P>\n";
+					$sql .= " limit  $WARCFG[MAXDISPLAYROWS] ";
+					$result = mysql_query($sql);
+				}
+				echo ".</P>\n";
+			}
+
+			//-------------------------------------------------------------
+			// Query Display
+			//-------------------------------------------------------------
+			$today = date('Y-m-d');
+			date_default_timezone_set($WICCFG['TIMEZONE']);
+			$row = array();
+
+			echo "<P class=trace>";
+			if ( isset ($ShowRep)){
+				echo "Click on location links to &quot;drill down&quot; or narrow your selection.\n";
+				echo " I-Group Reps highlighted in yellow.\n";
+			}else{
+				echo " Click on location links to &quot;drill down&quot; or narrow your selection.\n";
+			}
+			echo " I-Group Region Reps highlighted in Blue.\n";
+			echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<TABLE id=warrior_query_result BORDER>\n";
+
+			if ( $_SESSION['access'] >= $WARCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+			//
+			// Looking for an I-Group member
+			//
+			if (array_key_exists('igroup_id', $_SESSION)) {
+				$igid = $_SESSION['igroup_id'];
+				if ( $_REQUEST['Action'] == "New Member" ) {
+					echo "<TH class=ths>Add To I-Group</TH>\n";
+				}
+			}
+			unset($fields[war_id]);
+
+			foreach ($fields as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}
+			}
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$BGC="#FFFFFF";
+				$class = 'tds';
+				$cclass = 'tdsc';
+				$wid = $row['war_id'];
+
+				if (isset ($ShowRep)) {
+					if ( $row['war_id'] == $row['igroup_rep']) {
+						$class = 'tdsltyel';
+						$cclass = 'tdscltyel';
+					}
+				}
+				if (array_key_exists($wid, $RegionRep)) {
+					$class = 'tdsltblue';
+					$cclass = 'tdscltblue';
+				}
+
+				echo "<TR>\n";
+				//
+				// Edit Icon
+				//
+				if ( $_SESSION['access'] >= $WARCFG[EDITLEVEL] ) {
+					//echo "<TD BGCOLOR=$BGC ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<TD class=$cclass>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?war_id=$row[war_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A></TD>\n";
+				}
+	
+				//
+				// View Icon
+				//
+				//echo "<TD BGCOLOR=$BGC ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				echo "<TD class=$cclass>";
+				echo "<A HREF=$_SERVER[PHP_SELF]?war_id=$row[war_id]";
+				echo "&Action=View>";
+				echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+
+				//
+				// Edit Icon in View Box (Don't ask)
+				//
+				if ( $_SESSION['access'] < $WARCFG[EDITLEVEL] && $_SESSION['war_id'] == $row[war_id]) {
+					echo "<A HREF=$_SERVER[PHP_SELF]?war_id=$row[war_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>\n";
+				}
+				echo "</TD>\n";
+				//
+				// Looking for an I-Group member
+				//
+				if (array_key_exists('igroup_id', $_REQUEST)) {
+					if ( $_REQUEST['Action'] == "New Member" ) {
+						//echo "<TD BGCOLOR=$BGC ALIGN=CENTER VALIGN=TOP class=tdcs>";
+						echo "<TD class=$cclass>";
+						echo "<A HREF=$_SERVER[PHP_SELF]?war_id=$row[war_id]";
+						echo "&igroup_id=$igid";
+						echo "&Action=Add+Member>";
+						echo "<IMG SRC=/images/smallballs/purpleball.gif BORDER=0></A>\n";
+						echo "</TD>\n";
+					}
+				}
+	
+				foreach ($ALLFIELD as $f) {
+					$display = stripslashes($row[$f]);
+					//
+					// Display Exceptions (lookup)
+					//
+
+					if ( $f  == 'war_email' ) {
+						$display = "<A HREF=\"mailto:$row[$f]\">$row[$f]</A>";
+					}
+					if ( $f  == 'igroup_name' ) {
+						$display = "<A HREF=\"$WICCFG[IGROUPSURL]/igroups.phpx?Action=View&igroup_id=$row[igroup_id]\">$row[$f]</A>";
+					}
+
+					//
+					// Birthdate
+					//
+					if ( $f  == 'birthdate' ) {
+						$num_today = strtotime($today);
+						$num_bday = strtotime($row[$f]);
+						$age = intval(($num_today - $num_bday)/(60 * 60 * 24 * 365.25));
+						$display = "$row[$f] ($age)";
+					}
+
+					if ( $f  == 'trg_name' ) {
+						$display = "<A HREF=/trainings.phpx?Action=View&trg_id=$row[trg_id]>$row[$f]</A>";
+					}
+
+					if (in_array($f, $SHOW)) {
+						$css = $class;
+						if (array_key_exists($f, $CenterCss)) {
+							$css = $cclass;
+						}
+						if (in_array($row[war_id], $CloakMe) && in_array($f, $PRIVATE)) {
+							echo "<TD BGCOLOR=$BGC VALIGN=TOP class=tdcs>";
+							echo "*";
+						}else{
+							echo "<TD BGCOLOR=$BGC VALIGN=TOP class=$css>";
+							if (in_array($f, $LINK)) {
+								echo "<A HREF=\"";
+								echo "$_SERVER[PHP_SELF]";
+								echo '?';
+								$url = preg_replace('/\s+/', '+', $row[$f]);
+								echo "$f=${url}&"; 
+								echo "${drilldown}\">";
+								echo "$display</A>\n";
+							}else{
+								echo "$display\n";
+							}
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			// Privacy
+			echo "<P class=trace><B>Note:</B> Entries of <B>*</B> are withheld by ";
+			echo "<A HREF=/mypreferences.php>individual preference</A>.</P>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST['Action'] == "Query" || "List")) 
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			die("Adding New Warrior Entry not allowed with this utility.");
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=warrior_add_new BORDER>\n";
+
+			$fieldlabel = get_field_labels('warrior', 'war');
+			unset($fieldlabel['war_id']);
+			foreach ($fieldlabel as $fieldname => $val) {
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $FieldType)) {
+					// If Menu type of Menu
+					if ( $FieldType[$fieldname] == "Menu" || $FieldType[$fieldname] == "MenuArray" ) {
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							//echo "<BR>$menusql\n";//DEBUG
+							$menuitems = get_menu($menusql);
+							sort($menuitems);
+							print '<pre>';	// DEBUG DEVONLY
+							print htmlspecialchars(print_r($menuitems), ENT_QUOTES);	// DEBUG DEVONLY
+							print '</pre>';	// DEBUG DEVONLY
+							spew_select_menu($fieldname, $val,'All',$menuitems);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = mysql_fetch_array($result, MYSQL_ASSOC);
+							ksort($menuitems);
+							print '<pre>';	// DEBUG DEVONLY
+							print htmlspecialchars(print_r($menuitems), ENT_QUOTES);	// DEBUG DEVONLY
+							print '</pre>';	// DEBUG DEVONLY
+							spew_select_hash_menu($fieldname, '$val','All',$menuitems);
+						}
+					}
+				}else{
+					echo "<INPUT class=tds TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+		//----------------------------------------------------------------------
+	  	// Edit Something
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+	  		$_REQUEST['Action'] = "Edit Section Info";
+			$_REQUEST['table_name'] = 'warrior';
+		}
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Preferences") {
+			echo "<CENTER>\n";
+			echo "<H3><A HREF=$WICCFG[WICURL]/mypreferences.phpx>Edit My Preferences</A></H3>\n";
+			echo "</CENTER>\n";
+	  		//$_REQUEST['Action'] = "Edit Section Info";
+			//$_REQUEST['table_name'] = 'warrior_preference';
+		}
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit I-Group") {
+			echo "<H3><A HREF=$WICCFG[IGROUPSURL]/igroups.phpx>Edit My I-Group</A></H3>\n";
+	  		//$_REQUEST['Action'] = "Edit Section Info";
+			//$_REQUEST['table_name'] = 'warrior_igroup';
+		}
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Permissions") {
+	  		$_REQUEST['Action'] = "Edit Section Info";
+			$_REQUEST['table_name'] = 'warrior_permissions';
+		}
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Details") {
+	  		$_REQUEST['Action'] = "Edit Section Info";
+			$_REQUEST['table_name'] = 'warrior_details';
+		}
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View" ) {
+
+			if ( array_key_exists('war_id', $_REQUEST)) {
+				$wid = $_REQUEST[war_id];
+			}else{
+				die ("No Warrior Id Set") ;
+			}
+			caa_connect();
+			global $WICCFG;
+
+			$Hide = array(
+				'nid',
+				'war_change',
+				'war_log',
+				'war_new',
+				'war_password',
+				'war_sync',
+				'war_whoch',
+				'war_street3',
+				'vid'
+			);
+			//
+			// Identify warriors who do not want their contact information shown
+			//
+			$CloakMe = array();	
+			$cloaksql = "SELECT warrior_id from warrior_preference where preference_id = '97' and preference_value = 'No'";
+			echo "<P class=trace>$cloaksql</P>\n";	// DEVONLY
+			$CloakMe = get_menu($cloaksql);
+			echo "<P class=trace>Cloaked</P>\n"; // DEVONLY
+			print_r($CloakMe);	// DEVONLY
+
+			//
+			// If you are Admin, Show all details
+			//
+			if ($_SESSION['access'] > $WARCFG['EDITLEVEL']) {
+				$Hide = array();
+			}
+
+			//
+			// NOTE: This really needs everyone to be assigned to a center
+			// Or else will not find them
+			//
+			$sql = "SELECT w.*, c.center_name FROM warrior w, center c ";
+			$sql .= " WHERE w.war_id = '$_REQUEST[war_id]' AND w.war_center = c.center_id";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$row['war_password'] = "********";	// HARDWIRE SECURITY, Legacy Password
+
+			//
+			// Lookup nice name for last person who changed record
+			//
+			$whoid = $row['war_whoch'];
+			$whosql = "SELECT war_id, war_fname, war_lname FROM warrior WHERE war_id = '$whoid'";
+			$wresult = mysql_query($whosql);
+			$Who = mysql_fetch_array($wresult, MYSQL_ASSOC);
+			$whochanged = $Who['war_fname'] . ' ' .  $Who['war_lname'];
+
+			echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+			echo "<P class=trace>Current information for $row[war_fname] $row[war_lname] ($row[center_name])</P>\n";
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER=9>\n";
+			echo "<TR>\n";
+
+			//
+			// Left Column: Photo
+			//
+			echo "<TD ALIGN=CENTER VALIGN=TOP>\n"; // Begin Left (photo Column)
+
+				$ValidExt = array(
+					'.png',
+					'.gif',
+					'.jpeg',
+					'.jpg'
+					);
+	
+				$imgurl = $WICCFG['HEADSHOTURL'] . '/unavailable.jpg';
+				$LastImg = array(
+					"1000"	=>	"$imgurl"
+				);
+				$wid = $row['war_id'];
+				$cid = $row['war_center'];
+				foreach ($ValidExt as $ext) {
+					$imgfile = $WICCFG[HEADSHOTDIR] . '/' . $cid . '/' . 'portrait_' . $wid . $ext;
+					echo "<P class=trace>Looking for $imgfile</P>\n"; // DEVONLY
+					if( file_exists( "$imgfile"))  {
+						$ts = filemtime("$imgfile");
+						$imgurl = $WICCFG[HEADSHOTURL] . '/' . $cid . '/' . 'portrait_' . ${wid} . $ext;
+						echo "<P class=trace>Found It : $imgurl [$ts]</P>\n"; // DEVONLY
+						$LastImg[$ts] = $imgurl;
+					}
+				}
+				ksort($LastImg);
+				foreach ($LastImg as $ts => $img){
+					echo "<P class=trace>Reviewing : $img</P>\n"; // DEVONLY
+					$imgurl = $img;
+				}
+
+				echo "<IMG SRC=${imgurl} BORDER=0>\n";
+				//
+				// If you are owner, you may update your photo
+				//
+				if ( $_SESSION['war_id'] == $wid ) {
+					echo "<p class=trace>Upload <A HREF=$WICCFG[WICURL]/headshot.phpx>new photo</A></P>\n";
+				}
+
+			//
+			// Middle Column: Leadership and Basic info
+			//
+			echo "</TD><TD ALIGN=CENTER VALIGN=TOP>\n"; // Begin Middle (warrior Column)
+
+
+
+				//
+				// WArrior Information
+				//
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<TABLE id=warrior_view_record BORDER>\n";
+
+				$fieldlabel = array();
+				$fieldlabel = get_field_labels('warrior','war');
+
+				echo "<TH class=ths COLSPAN=2>Warrior Information</TH>\n";
+
+				foreach ($fieldlabel as $fieldname => $val) {
+					$display = stripslashes($row[$fieldname]);
+					if ( $fieldname == "war_center" ) {
+						$display = stripslashes($row['center_name']);
+					}
+					//
+					// Who last changed WHOCH
+					//
+					if ( $fieldname == "war_whoch" ) {
+						$display = "<A HREF=/warrior.phpx?war_id=$whoid&Action=View>$whochanged</A>";
+					}
+					// Email link
+					if ( $fieldname == "war_email" ) {
+						$display = "<A HREF=mailto:$row[$fieldname]>$row[$fieldname]</A>";
+					}
+
+					// Email link
+					if ( $fieldname == "war_email2" ) {
+						$display = "<A HREF=mailto:$row[$fieldname]>$row[$fieldname]</A>";
+					}
+
+					if (! in_array($fieldname, $Hide)) {
+						echo "<TR><TD VALIGN=TOP class=tdls>$val</TD>\n";
+						// Privacy
+						if (in_array($wid, $CloakMe) && in_array($fieldname, $PRIVATE)) {
+							$display = '*';
+							echo "<TD VALIGN=TOP class=tdcs>";
+							echo "$display";
+						}else{
+							echo "<TD VALIGN=TOP class=tds>";
+							echo "$display<BR>";
+						}
+						
+						echo "</TD>\n";
+					}
+				}
+				echo "</TABLE>\n"; 
+				// Privacy
+				echo "<P class=trace>Note: Entries of <B>*</B> are withheld by ";
+				echo "<A HREF=/mypreferences.php>individual preference</A>.</P>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Warrior Lookup\">\n";
+	
+				foreach ($ModeList as $mode) {
+					if (isset ( $_REQUEST[$mode]) ) {
+						echo "<INPUT TYPE=HIDDEN NAME=\"$mode\" VALUE=Yes>\n";
+					}
+				}
+				if ( $_SESSION['war_id'] == $_REQUEST['war_id'] || $_SESSION['access'] >= $WARCFG['EDITLEVEL']) {
+					echo "<INPUT TYPE=HIDDEN NAME=war_id VALUE=$_REQUEST[war_id]>\n";
+					echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Edit>\n";
+				}
+				echo "</FORM>\n";
+
+				echo "<HR>\n";
+				show_warrior_igroups($wid);
+
+			//----------------------------------------------------
+			// Right Column: Trainings and Staffings
+			//----------------------------------------------------
+			//
+			echo "</TD><TD ALIGN=CENTER VALIGN=TOP>\n"; // Begin Right (trainings/staffings Column)
+				show_warrior_current_leadership($wid);
+				echo "<HR>\n";
+				show_warrior_initiation($wid);
+				echo "<HR>\n";
+				show_warrior_trainings($wid);
+				echo "<HR>\n";
+				show_warrior_preferences($wid);
+				echo "<HR>\n";
+				show_warrior_staffings($wid);
+				echo "<HR>\n";
+				show_warrior_mos($wid);
+				//echo "<HR>\n";
+				//show_warrior_past_leadership($wid);
+			echo "</TD>\n";	// End right column, Row 1
+
+			echo "</TR>\n";
+			//
+			// Warrior Details, Row 2, 3-Col span
+			//
+			$today = date('Y-m-d');
+			echo "<TR>\n";
+			echo "<TD COLSPAN=3 ALIGN=CENTER>\n";
+				$row = array();
+				$sql = "SELECT * from warrior_details WHERE war_de_id = '$wid'";
+				$fieldlabel = array();
+				$fieldlabel = get_field_labels('warrior_details', 'war');
+				echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+				$result = mysql_query($sql);
+				echo "<TABLE id=warrior_view_details BORDER>\n";
+				echo "<TH COLSPAN=2 class=ths>Warrior Details</TH>\n";
+				$row = mysql_fetch_array($result, MYSQL_ASSOC);
+				unset($fieldlabel['war_de_id']);
+				foreach ($fieldlabel as $fieldname => $val) {
+					$display = stripslashes($row[$fieldname]);
+
+					if ( $fieldname == 'birthdate' ) {
+						$num_today = strtotime($today);
+						$num_bday = strtotime($row[$fieldname]);
+						$age = intval(($num_today - $num_bday)/(60 * 60 * 24 * 365.25));
+						$display = "$row[$fieldname] (Age $age)";
+					}
+
+					if ( $row[$fieldname] ) {
+						echo "<TR><TD VALIGN=TOP class=tdls>$val</TD>\n";
+						echo "<TD VALIGN=TOP class=tds>";
+						echo "$display<BR>";
+						echo "</TD>\n";
+					}
+				}//Endforeach
+				echo "</TABLE>\n";
+			echo "</TD>\n";
+			echo "</TR>\n";
+			echo "</TABLE>\n"; // End 3 column outer table
+
+			//
+			// Add Comment
+			//
+
+			echo "<P>\n";
+			echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$wid>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=warrior>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+			echo "</FORM>\n";
+
+			show_comment_history($wid, 'warrior');
+
+	  	}//Endif ($_REQUEST[Action] == "View"))
+
+		//----------------------------------------------------------------------
+	  	// Edit Section Info
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit Section Info") {
+			echo "<P class=trace>Entering Edit Section Info</P>\n";	// DEVONLY
+			//
+			// Insure specific warrior_id is provided
+			//
+			if (array_key_exists('war_id', $_COOKIE)) {
+				$mywarid = $_REQUEST['war_id'];
+				echo "<P class=trace>Settting mywarid to $mywarid from COOKIE</P>\n";	// DEVONLY
+			}
+			if (array_key_exists('war_id', $_SESSION)) {
+				$mywarid = $_SESSION['war_id'];
+				echo "<P class=trace>Settting mywarid to $mywarid from SESSION</P>\n";	// DEVONLY
+			}
+
+			if (array_key_exists('war_id', $_REQUEST)) {
+				if ( $_SESSION['access'] >= $WARCFG[EDITLEVEL] ) {
+					$mywarid = $_REQUEST['war_id'];
+					echo "<P class=trace>Access >= $WARCFG[EDITLEVEL], Settting mywarid to $mywarid from REQUEST</P>\n";	// DEVONLY
+				}elseif( $_REQUEST['war_id'] == $_SESSION['war_id'] ){
+					echo "<P class=trace>Please update your information and click on <B>Update</B> button at bottom of form.<BR>\n";
+				}else{
+					echo "<P class=trace>You have insufficient access permissions to edit a record that is not yours<BR>\n";
+					echo " or you are not <A HREF=$WICCFG[WICURL]/login.phpx>logged in</A></P>\n";
+				}
+			}
+
+			if (! is_numeric( $mywarid ) ) {
+				echo "<P class=trace>Warrior ID is not numeric.  <A HREF=$WICCFG[WICURL]/login.phpx>Log in</A></P>";
+				unset ($mywarid);
+			}
+
+			if ( empty($mywarid) ) {
+				die ("No Warrior Id Set") ;
+			}
+
+			//
+			// Insure specific table name is provided
+			//
+			if ( array_key_exists('table_name', $_REQUEST)) {
+				$mytable = $_REQUEST['table_name'];
+				echo "<P class=trace>Settting mytable to $mytable from REQUEST of table_name</P>\n";	// DEVONLY
+			}else{
+				die ("No table_name Set") ;
+			}
+
+			caa_connect();
+
+			echo "<P class=trace>My Table [$mytable] My War Id [$mywarid], Table Id [$mytable]</P>\n"; // DEBUG DEVONLY
+
+			//-----------------------------------------------------------------
+			// warrior
+			//-----------------------------------------------------------------
+			//
+			if ( $mytable == "warrior") {
+				$war_key_field = "war_id";
+				$fieldlabel = get_field_labels($mytable,'war');
+				$sql = "SELECT * FROM $mytable WHERE $war_key_field = '$mywarid'";
+				$title = "Basic Warrior Information";
+				$Hide = array(
+					'war_password',
+					'war_whoch',
+					'nid',
+					'war_new',
+					'war_log',
+					'war_change',
+					'vid',
+					'war_sync'
+				);
+				$NoEdit = array(
+					'war_id',
+					'war_status',
+					'war_new',
+					'vid',
+					'nid',
+					'war_username',
+					'war_change',
+					'war_password'
+				);
+				$FieldType = array( 
+					'war_center'		=>	'MenuArray'
+				);
+				$Menu = array(
+					"war_center" => "SELECT center_id, center_name FROM center ORDER BY center_name"
+				);
+			}
+			//
+			//-----------------------------------------------------------------
+			// warrior details
+			//-----------------------------------------------------------------
+			//
+			//mysql> describe warrior_details;
+			//+----------------+------------------+------+-----+------------+-------+
+			//| Field		  | Type			 | Null | Key | Default	| Extra |
+			//+----------------+------------------+------+-----+------------+-------+
+			//| war_de_id	  | int(11) unsigned | NO   | PRI | 0		  |	   |
+			//| occupation	 | varchar(40)	  | NO   |	 |			|	   |
+			//| business_name  | varchar(50)	  | NO   |	 |			|	   |
+			//| business_title | varchar(50)	  | NO   |	 |			|	   |
+			//| mission		| text			 | YES  |	 | NULL	   |	   |
+			//| mission_shad   | text			 | YES  |	 | NULL	   |	   |
+			//| birthdate	  | date			 | NO   |	 | 0000-00-00 |	   |
+			//| website		| varchar(50)	  | NO   |	 |			|	   |
+			//| lks			| varchar(20)	  | NO   |	 | No		 |	   |
+			//| leader		 | varchar(15)	  | NO   |	 | No		 |	   |
+			//| staffings	  | int(4) unsigned  | NO   |	 | 0		  |	   |
+			//| mos			| int(4) unsigned  | NO   |	 | 0		  |	   |
+			//| bio			| text			 | YES  |	 | NULL	   |	   |
+			//| notes		  | text			 | YES  |	 | NULL	   |	   |
+			//| newsletter	 | varchar(128)	 | NO   |	 | Default	|	   |
+			//+----------------+------------------+------+-----+------------+-------+
+
+			if ( $mytable == "warrior_details") {
+				$war_key_field = "war_de_id";
+				$fieldlabel = get_field_labels($mytable,'war');
+				$sql = "SELECT * FROM $mytable WHERE $war_key_field = '$mywarid'";
+				$title = "Extended Warrior Information";
+				$Hide = array(
+					'war_de_id'
+				);
+				$NoEdit = array(
+					'war_de_id'
+				);
+				$FieldType = array( 
+					'bio' 			=> 'TextArea',
+					'mission' 			=> 'TextArea',
+					'mission_shad' 	=> 'TextArea',
+					'notes' 		=> 'TextArea'
+				);
+				$Menu = array(
+				);
+			}
+			//
+			//-----------------------------------------------------------------
+			// warrior permissions
+			//-----------------------------------------------------------------
+			//mysql> desc warrior_permissions;
+			//+-----------+-------------------------------------------+------+-----+---------+----------------+
+			//| Field	 | Type									  | Null | Key | Default | Notes		  |
+			//+-----------+-------------------------------------------+------+-----+---------+----------------+
+			//| wp_uni_id | int(11) unsigned						  | NO   | PRI | NULL	| Primary Key
+			//| wp_id	 | int(11) unsigned						  | NO   |	 | 0	   | war_id foreign key
+			//| wp_perms  | enum('1','2','3','4','5','6','7','8','9') | NO   |	 | 1	   | Perm for this center
+			//| wp_center | int(11) unsigned						  | NO   | MUL | 1	   | Center ID
+			//+-----------+-------------------------------------------+------+-----+---------+----------------+
+
+			if ( $mytable == "warrior_permissions") {
+				if ( $_SESSION[access] <= $WARCFG[PERMADMINLEVEL] ) {
+					echo "<P class=trace>You have insufficient privilege to access permissions";
+					echo " or not <A HREF=$WICCFG[WICURL]/login.phpx>logged in</A>.</P>\n";
+					spew_footer($FMT);
+					exit;
+				}
+				$war_key_field = "wp_id";
+				$primary_key_field = "wp_uni_id";
+				$fieldlabel = get_field_labels($mytable,'wp');
+				$sql = "SELECT * FROM $mytable WHERE $war_key_field = '$mywarid'";
+				$title = "Warrior Permissions";
+				$Hide = array(
+					'wp_uni_id'
+				);
+				$NoEdit = array(
+					'wp_uni_id'
+				);
+				$FieldType = array( 
+					'wp_center' 			=> 'MenuArray'
+				);
+				$Menu = array(
+					'wp_center' => "SELECT center_name, center_id FROM center"
+				);
+			}
+			//
+			//-----------------------------------------------------------------
+			// warrior igroup
+			//-----------------------------------------------------------------
+			//
+			if ( $mytable == "warrior_igroup") {
+				$war_key_field = "wp_war_id";
+				$fieldlabel = get_field_labels($mytable,'war');
+				$sql = "SELECT * FROM warrior WHERE $war_key_field = '$mywarid'";
+				$title = "Warrior Permissions";
+				$Hide = array(
+				);
+				$NoEdit = array(
+					'war_de_id'
+				);
+				$FieldType = array( 
+					'lks' 			=> 'Menu',
+					'leader' 		=> 'Menu',
+					'bio' 			=> 'TextArea',
+					'mission' 		=> 'TextArea',
+					'mission_shad' 	=> 'TextArea'
+					);
+				$Menu = array(
+					'lks' => "SELECT choice from menu where table_name = 'warrior_details' AND field_name = 'lks'",
+					'leader' => "SELECT choice from menu where table_name = 'warrior_details' AND field_name = 'leader'"
+				);
+			}
+			//-----------------------------------------------------------------
+			// Edit Appropriate Table
+			//-----------------------------------------------------------------
+			echo "<P class=trace>$sql</P>\n"; // DEBUG DEVONLY
+			echo "<PRE>\n";// DEBUG DEVONLY
+			echo "<P>NoEdit</P>\n"; //DEBUG DEVONLY
+			print_r ($NoEdit);// DEBUG DEVONLY
+			echo "<P>FieldType</P>\n"; //DEBUG DEVONLY
+			print_r ($FieldType);// DEBUG DEVONLY
+			echo "<P>Menu</P>\n"; //DEBUG DEVONLY
+			print_r ($Menu);// DEBUG DEVONLY
+			echo "</PRE>\n";// DEBUG DEVONLY
+
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+			$myentryid = $row[$war_key_field];
+
+			echo "<CENTER>\n";
+			echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF]  METHOD=POST>\n";
+
+			echo "<TABLE id=warrior_subtable BORDER>\n";
+			echo "<TR><TH COLSPAN=2 class=ths>$title</TH>\n";
+
+			foreach ($fieldlabel as $fieldname => $val) {
+				$display = stripslashes($row[$fieldname]);
+				if (!in_array($fieldname, $Hide)) {
+					echo "<TR><TD VALIGN=TOP class=tdls>$val</TD>\n";
+					echo "<TD VALIGN=TOP class=tds>";
+
+					if (array_key_exists($fieldname, $FieldType)) {
+						$menuitems = array();
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = get_menu($menusql);
+							sort($menuitems);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menuitems);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = get_menu_array($menusql);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menuitems);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname ROWS=10 COLS=50>$display</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT class=tds TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$display\"><BR>";
+						}
+					}else{
+						// No FieldType Designated
+						if (in_array($fieldname, $NoEdit)) {
+							echo "$display<BR>";
+						}else{
+							echo "<INPUT class=tds TYPE=TEXT NAME=$fieldname VALUE=\"$display\"><BR>";
+						}
+					}
+					echo "</TD>\n";
+				}//Endif in_array $Hide
+			}
+			echo "</TABLE>\n";
+
+
+			if ( $_SESSION['war_id'] == $_REQUEST['war_id'] || $_SESSION['access'] >= $WARCFG['EDITLEVEL']) {
+				echo "<INPUT TYPE=HIDDEN NAME=war_id VALUE=$mywarid>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=$mytable>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Update\">\n";
+				//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit Details\">\n";
+			}
+			echo "</FORM>\n";
+
+			//
+			// If base table, give comment options
+			//
+			if ( $mytable == 'warrior') {
+				echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$myentryid>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=$mytable>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+				echo "</FORM>\n";
+	
+				show_comment_history($myentryid, $mytable);
+			}
+
+			echo "<P class=trace>If logged in, your can <A HREF=/mypreferences.phpx>";
+			echo "edit your preferences</A>.</P>\n";
+			echo "</CENTER>\n";
+	  	}//Endif ($_REQUEST['Action'] == "Edit Section Info")
+
+
+	}else{
+		spew_query_form();
+	}
+	spew_footer($FMT);
+	//================================================================
+	// BEGIN Functions
+	//================================================================
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		global $WARCFG;
+		global $ModeList;
+		$list = array();
+		$row = array();
+
+		caa_connect();
+
+		echo "<P class=trace>";
+		echo "See help for <A HREF=/help.php?table_name=warrior&field_name=Advanced&Action=Help>";
+		echo "advanced search options</A> or general Warrior Finder help via the ";
+		echo " <A HREF=/help.php?table_name=warrior&field_name=Overview&Action=Help>";
+		echo "overview.</A>";
+		echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM  ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=warrior_query_modes_select BORDER CELLPADDING=3>\n";
+		$mcnt = count($ModeList);
+		echo "<TH COLSPAN=$mcnt class=ths>Advanced Search for Specific Interests</TH>\n";
+		echo "<TR>\n";
+
+		//
+		// I-Groups
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_AnIgroup VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_AnIgroup']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "I-Group Membership";
+		echo "</TD>\n";
+
+		//
+		// I-Group Region
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Region VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Region']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "I-Group Region";
+		echo "</TD>\n";
+
+		//
+		// Email
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Email VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Email']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "Email";
+		echo "</TD>\n";
+
+		//
+		// Occupation
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Job VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Job']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "Occupation";
+		echo "</TD>\n";
+		//
+		// Mode: Training
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Training VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Training']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "Trainings";
+		echo "</TD>\n";
+
+
+		//
+		// Mode: New Brother
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Newbrother VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Newbrother']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "New Brothers";
+		echo "</TD>\n";
+
+
+		//
+		// Mode: Preferences
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Preference VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Preference']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "Preferences";
+		echo "</TD>\n";
+
+		//
+		// Mode: Age
+		//
+		echo "<TD class=tdcs>\n";
+		echo " <INPUT class=tds TYPE=CHECKBOX NAME=Mode_Bday VALUE=Yes";
+		if (isset ( $_REQUEST['Mode_Bday']) ) {
+			echo " CHECKED ";
+		}
+		echo ">\n";
+		echo "&nbsp;&nbsp;";
+		echo "Birthdate";
+		echo "</TD>\n";
+
+
+		echo "</TABLE>\n";
+		echo "<INPUT class=tds TYPE=SUBMIT NAME=DisplayMode VALUE=\"Reconfigure\">\n";
+		echo "</FORM>\n";
+		echo "</TD>\n";
+
+		echo "</CENTER>\n";
+		
+		echo "<P class=trace>";
+		if (array_key_exists('center_id', $_SESSION)) {
+			$center_id = $_SESSION['center_id'];
+			$sql = "SELECT center_name FROM center WHERE center_id = '$center_id'";
+			$centername = get_value($sql);
+			echo "Warrior lookup: query will default to your center, $centername.\n";
+		}
+		
+		//
+		// Basic Query Form
+		//
+		echo "For help, see <A HREF=/help.php?table_name=warrior&field_name=Overview&Action=Help>overview</A>.";
+		echo "<BR>To make a partial match in the names or zip field, use a % wildcard, e.g. entering <B>Ed%</B> will";
+		echo " find Ed, Edward, Eddy, Eduard, etc. Entering <B>%ed%</B> will find Fred, Sedwick, and Edward.";
+		echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM  ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=warrior_query_form_mode_basic BORDER>\n";
+		echo "<TH class=ths>First Name</TH>\n";
+		echo "<TH class=ths>Last Name</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>State/Province</TH>\n";
+		echo "<TH class=ths>Postal Code</TH>\n";
+		echo "<TH class=ths>Country</TH>\n";
+
+		if ( $_SESSION['access'] >= $WARCFG['EDITLEVEL'] ) {
+			echo "<TH class=ths>Status</TH>\n";
+		}
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		//------------------------------
+		// First Name
+		//------------------------------
+		echo "<TR><TD class=tds>\n";
+		echo "<INPUT class=tds TYPE=TEXT SIZE=8 NAME=war_fname>\n";
+		echo "</TD>\n";
+
+		//------------------------------
+		// Last Name
+		//------------------------------
+		echo "<TD class=tds>\n";
+		echo "<INPUT class=tds TYPE=TEXT SIZE=8 NAME=war_lname>\n";
+		echo "</TD>\n";
+
+		//------------------------------
+		// Center
+		//------------------------------
+		echo "<TD class=tds>\n";
+		$sql = "SELECT center_id, center_name FROM center ORDER BY center_name";
+		$list = get_menu_array($sql);
+		if (array_key_exists('center_id', $_SESSION)) {
+			$center_id =  $_SESSION['center_id'] ;
+		}
+		if (array_key_exists('center_id', $_REQUEST)) {
+			$center_id =  $_REQUEST[center_id] ;
+		}
+		spew_select_hash_menu('war_center', $center_id ,'All',$list);
+		echo "</TD>\n";
+
+		//------------------------------
+		// City
+		//------------------------------
+		echo "<TD class=tds>\n";
+		if (array_key_exists('center_id', $_SESSION)) {
+			$center_id = $_SESSION['center_id'];
+
+			$sql = "SELECT distinct war_city from warrior WHERE ";
+			$sql .= " war_center = '$center_id'";
+			$sql .= " AND war_city != ''";
+
+			if (! empty( $_REQUEST['war_state']) ) {
+				$state = $_REQUEST['war_state'];
+				$sql .= " AND war_state = '$state' ";
+			}
+
+			$sql .= " ORDER BY war_city";
+			$list = get_menu($sql);
+			spew_select_menu('war_city','','All',$list);
+			//spew_multiple_select_menu('war_city', '', 'All', '4', $list ) ;
+		}else{
+			echo "<INPUT class=tds TYPE=TEXT SIZE=8 NAME=war_city>\n";
+		}
+		echo "</TD>\n";
+
+		//------------------------------
+		// State
+		//------------------------------
+		echo "<TD class=tds>\n";
+			//............................................................
+			// Seemed like a good idea at the time, maybe if qualified by
+			// center or region
+			//............................................................
+			//$sql = "SELECT distinct war_state from warrior";
+			//$sql .= " WHERE ...."
+			//spew_select_menu('war_state','','All',$list);
+
+			echo "<INPUT class=tds TYPE=TEXT SIZE=8 NAME=war_state>\n";
+		echo "</TD>\n";
+
+		//------------------------------
+		// Zip / Postal Code
+		//------------------------------
+		echo "<TD class=tds>\n";
+		echo "<INPUT class=tds TYPE=TEXT SIZE=8 NAME=war_zip>\n";
+		echo "</TD>\n";
+
+		//------------------------------
+		// Country
+		//------------------------------
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct war_country from warrior order by war_country";
+		$list = get_menu($sql);
+		spew_select_menu('war_country','','All', $list);
+		echo "</TD>\n";
+
+		//------------------------------
+		// Status
+		//------------------------------
+		if ( $_SESSION['access'] >= $WARCFG['EDITLEVEL'] ) {
+			echo "<TD class=tds>\n";
+			$sql = "SELECT distinct war_status from warrior order by war_status";
+			$list = get_menu($sql);
+
+			//$blist = array();
+			//foreach($last as $a){
+				//if ($a != 'Private'){
+					//push($blist, $a);
+				//}
+			//}
+
+			spew_select_menu('war_status','','All', $list);
+			echo "</TD>\n";
+		}
+		//------------------------------
+		// Sort By
+		//------------------------------
+		echo "<TD class=tds>\n";
+		$default = 'City';
+		$sortby = array (
+			'First Name',
+			'Last Name',
+			'City',
+			'State',
+			'Country'
+		);
+		//
+		// Training
+		//
+		if ( array_key_exists('Mode_Training', $_REQUEST)) {
+			$sortby[] = 'Training';
+			$default = 'Training';
+		}
+		//
+		// I-Group Region
+		//
+		if ( array_key_exists('Mode_Region', $_REQUEST)
+		 	|| array_key_exists('Mode_AnIgroup', $_REQUEST)
+			) {
+			$sortby[] = 'I-Group';
+			$default = 'I-Group';
+		}
+		//
+		// Birthdate
+		//
+		if ( array_key_exists('Mode_Bday', $_REQUEST)) {
+			$sortby[] = 'Birthdate';
+			$default = 'Birthdate';
+		}
+
+		$sortby = array_unique($sortby);
+		sort($sortby);
+
+		spew_select_menu('Sortmeby','',$default,$sortby);
+		echo "</TD>\n";
+
+		//=================================================================
+		// End Table One
+		//=================================================================
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+
+		//
+        //----------------------------------------------------------
+        // If There are Any Advanced Features, Create new Table Row
+		// Begin Table Two, Second Row
+        //----------------------------------------------------------
+		//
+		if ( isset ( $_REQUEST['Mode_Newbrother'])
+			|| isset ( $_REQUEST['Mode_AnIgroup']) 
+			|| isset ( $_REQUEST['Mode_Training']) 
+			|| isset ( $_REQUEST['Mode_Region']) 
+			|| isset ( $_REQUEST['Mode_Bday']) 
+			|| isset ( $_REQUEST['Mode_Job']) 
+			|| isset ( $_REQUEST['Mode_Email']) 
+			|| isset ( $_REQUEST['Mode_Preference'])) {
+			$do_second_table="yes";
+		}
+
+		if (isset ($do_second_table) ) {
+			echo "<TABLE id=warrior_query_form_augment BORDER>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Newbrother'])) {
+			echo "<TH class=ths>Recent NWTA (Selection must match center)</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_AnIgroup'])) {
+			echo "<TH class=ths>Is In an I-Group</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Igroup'])) {
+			echo "<TH class=ths>I-Group Name</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Region'])) {
+			echo "<TH class=ths>I-Group Region</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Training'])) {
+			echo "<TH class=ths>Training Type</TH>\n";
+			//echo "<TH class=ths>Has Attended</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Email'])) {
+			echo "<TH class=ths>Email</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Job'])) {
+			echo "<TH class=ths>Occupation</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Preference'])) {
+			echo "<TH class=ths COLSPAN=2>Preference</TH>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Bday'])) {
+			echo "<TH class=ths COLSPAN=2>Birth Date (YYYY-MM-DD)</TH>\n";
+		}
+
+		//if ($_REQUEST[is_trained] == "Yes") {
+			//echo "<TH class=ths>Which Training</TH>\n";
+		//}
+
+        //----------------------------------------------------------
+        // If There are Any Advanced Features, Create new Table Row
+        //----------------------------------------------------------
+        //
+
+		if (isset ($do_second_table) ) {
+			echo "<TR>\n";
+		}
+
+		if ( isset ( $_REQUEST['Mode_Newbrother'])) {
+			echo "<TD>\n";
+			$sql =  "SELECT n.initiation_id, n.initiation_date, n.initiation_center, n.initiation_camp, ";
+			$sql .= " c.short_name, c.center_abbr ";
+			$sql .= " from initiation n, warrior w, center c, warrior_initiation j ";
+			$sql .= " where n.initiation_date > '$WARCFG[INITIATIONDATEHORIZON]' ";
+			$sql .= " AND n.initiation_center = c.center_id ";
+			$sql .= " AND w.war_center = c.center_id ";
+			$sql .= " AND n.initiation_id = j.initiation ";
+			$sql .= " AND j.warrior = w.war_id ";
+	
+			$result = mysql_query($sql);
+			$Init = array();
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$id = $row[initiation_id];
+				$Init[$id] = $row[center_abbr] . ': ';
+				$Init[$id] .= $row[initiation_date];
+				$Init[$id] .=  ' @ ';
+				$Init[$id] .= $row[initiation_camp];
+			}
+            asort($Init);
+	
+			spew_select_hash_menu('initiation_id',$_REQUEST[initiation_id],'Any',$Init);
+			echo "</TD>\n";
+		}
+
+
+		//------------------------------
+		// Is In I-Group Check Box
+		//------------------------------
+		if ( isset ( $_REQUEST['Mode_AnIgroup'])) {
+			$Igroups = array();
+			echo "<TD ALIGN=CENTER>\n";
+			echo " <INPUT TYPE=CHECKBOX NAME=in_igroup VALUE=Yes";
+			if ($_REQUEST['in_igroup'] == 'Yes') {
+				echo " CHECKED ";
+			}
+			echo ">Yes\n";
+			echo "&nbsp;&nbsp;";
+			echo " <INPUT TYPE=CHECKBOX NAME=in_igroup VALUE=No";
+			if ($_REQUEST['in_igroup'] == 'No') {
+				echo " CHECKED ";
+			}
+			echo ">No\n";
+			echo "</TD>\n";
+		}
+
+
+		//------------------------------
+		// Is In A Specific I-Group
+		//------------------------------
+		if ( isset ( $_REQUEST['Mode_Igroup'])) {
+			$cid = $_SESSION['center_id'];
+			$isql = "SELECT DISTINCT i.igroup_id, i.igroup_name, c.center_abbr from igroup i, center c";
+			$isql .= " WHERE c.center_id = i.igroup_cen ";
+			if (!  empty ( $cid) ) {
+				$isql .= " AND i.igroup_cen = '$cid'";
+			}
+			$iresult = mysql_query($isql);
+
+			while ($row = mysql_fetch_array($iresult, MYSQL_ASSOC) ) {
+				$iid = $row['igroup_id'];
+				$Igroups[$iid] = $row['center_abbr'] . ': ' . $row['igroup_name'];
+				
+			}
+
+			echo "<TD ALIGN=CENTER>\n";
+			spew_select_hash_menu('igroup_id','','',$Igroups);
+			echo "</TD>\n";
+		}
+
+		//------------------------------
+		// I-Group Region
+		//------------------------------
+
+		//mysql> desc igroup_regions;
+		//+--------------+-----------------------+------+-----+---------+----------------+
+		//| Field		| Type				  | Null | Key | Default | Extra		  |
+		//+--------------+-----------------------+------+-----+---------+----------------+
+		//| igrpreg_id   | smallint(11) unsigned | NO   | PRI | NULL	| auto_increment |
+		//| igrpreg_name | varchar(40)		   | NO   |	 |		 |				|
+		//| igrpreg_cen  | int(11) unsigned	  | NO   |	 | 1	   |				|
+		//+--------------+-----------------------+------+-----+---------+----------------+
+		if ( isset ( $_REQUEST['Mode_Region'])) {
+			echo "<TD ALIGN=CENTER>\n";
+			$sql  = "SELECT i.igrpreg_id, i.igrpreg_name, c.center_abbr ";
+			$sql .= " FROM igroup_regions i, center c";
+			$sql .= " WHERE i.igrpreg_cen = c.center_id";
+			$result = mysql_query($sql);
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$id = $row['igrpreg_id'];
+				$list[$id] = $row['center_abbr'] . ': ' . $row['igrpreg_name'];
+			}
+			asort($list);
+			spew_select_hash_menu('igrpreg_id',$_REQUEST[igrpreg_id],'',$list);
+			echo "</TD>\n";
+		}
+
+
+
+		//------------------------------
+		// Attended Trainings
+		//------------------------------
+		if ( isset ( $_REQUEST['Mode_Training'])) {
+
+			//
+			// List of Training
+			//
+			echo "<TD ALIGN=CENTER>\n";
+			$sql = "SELECT training_id, training_name from training";
+			//$sql = "SELECT training_id, training_abbreviation from training";
+			$list = &get_menu_array($sql);
+			spew_select_hash_menu('training_id',$_REQUEST[training_id],'',$list);
+			echo "</TD>\n";
+			echo " <INPUT TYPE=HIDDEN NAME=is_trained VALUE=Yes>";
+
+			//
+			// Check box Yes/No
+			//
+			//echo "<TD ALIGN=CENTER>\n";
+			//echo " <INPUT TYPE=CHECKBOX NAME=is_trained ";
+			//if ($_REQUEST[is_trained] == "Yes") {
+				//echo " CHECKED ";
+			//}
+			//echo "VALUE=Yes>Yes\n";
+			//echo "&nbsp;\n";
+
+			//echo " <INPUT TYPE=CHECKBOX NAME=is_trained ";
+			//if ($_REQUEST[is_trained] == "No") {
+				//echo " CHECKED ";
+			//}
+			//echo "VALUE=No>No\n";
+			//echo "</TD>\n";
+		}
+
+		//------------------------------
+		// Email
+		//------------------------------
+		if ( isset ( $_REQUEST['Mode_Email'])) {
+			echo "<TD ALIGN=CENTER>\n";
+			echo "<INPUT TYPE=TEXT NAME=war_email>";
+			echo "</TD>\n";
+		}
+
+		//------------------------------
+		// Occupation
+		//------------------------------
+		if ( isset ( $_REQUEST['Mode_Job'])) {
+			echo "<TD ALIGN=CENTER>\n";
+			echo "<INPUT TYPE=TEXT NAME=occupation>";
+			echo "</TD>\n";
+		}
+
+		//------------------------------
+		// Preference
+		//------------------------------
+		if ( isset ( $_REQUEST['Mode_Preference'])) {
+			echo "<TD ALIGN=CENTER>\n";
+			$yn = array(
+				'Yes'		=>	'Is',
+				'No'	=>	'Is Not'
+				);
+			spew_select_hash_menu('ANSYN','','',$yn);
+			echo "</TD>\n";
+
+			echo "<TD ALIGN=CENTER>\n";
+			$sql = "SELECT preference_id, preference_name FROM preference ";
+			$sql .= " WHERE preference_type = 'Binary' ";
+			//$sql .= " AND is_released = 'Yes'";		// LIVEONLY
+			$Pref = array();
+			$Pref = get_menu_array($sql);
+			spew_select_hash_menu(preference_id,'','All',$Pref);
+			echo "</TD>\n";
+		}
+
+		//------------------------------
+		// Birthdate
+		//------------------------------
+
+		if ( isset ( $_REQUEST['Mode_Bday'])) {
+			echo "<TD ALIGN=CENTER>\n";
+			$yn = array(
+				'Before',
+				'Exactly',
+				'Unknown',
+				'After'
+				);
+			spew_select_menu('BDAY',$_REQUEST[BDAY],'Exactly',$yn);
+			echo "</TD>\n";
+
+			echo "<TD ALIGN=CENTER>\n";
+			$today = date('Y-m-d');
+			echo "<INPUT TYPE=TEXT NAME=birthdate VALUE=\"$today\">";
+			echo "</TD>\n";
+		}
+
+		//------------------------------
+		// End Table Two
+		//------------------------------
+		if (isset ($do_second_table) ) {
+			echo "</TR>\n";
+			echo "</TABLE>\n";
+		}
+		if ( $_SESSION['access'] >= $WARCFG['VIEWLEVEL'] ) {
+ 			echo "<SPAN class=sm>";
+			echo "<INPUT TYPE=CHECKBOX NAME=show_email VALUE=Yes>Show Email";
+ 			echo "<INPUT TYPE=CHECKBOX NAME=show_username VALUE=Yes>Show Username";
+			//if ( $_SESSION['access'] >= $WARCFG['EDITLEVEL'] ) {
+ 				//echo "<INPUT TYPE=CHECKBOX NAME=show_username VALUE=Yes>Show Username";
+			//}
+ 			echo "</SPAN>";
+		}
+
+		echo "<BR>";
+
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=List>\n";
+
+		if ( $_SESSION['access'] >= $WARCFG['EDITLEVEL']) {
+			//echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+
+		foreach ($ModeList as $mode) {
+			if (isset ( $_REQUEST[$mode]) ) {
+				if (! empty ( $_REQUEST[$mode]) ) {
+					echo "<INPUT TYPE=HIDDEN NAME=\"$mode\" VALUE=Yes>\n";
+				}
+			}
+		}
+
+
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function Show Comment History
+	//----------------------------------------------------------------
+
+	function show_comment_history ( $cid , $ctable) {
+		global $WICCFG;
+
+		$subname = "show_comment_history";
+
+		echo "<P class=trace>Entering $subname in $program</P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"author_id"			=>	"45759",
+			"comment_type"		=>	"Comment",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		//---------------------------------------------
+		// Get List of nicknames for comment authors
+		//---------------------------------------------
+		$Who = array();
+		$row = array();
+		$sql = "SELECT w.war_id, w.war_fname, w.war_nname, w.war_lname, war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$cid' ";
+		$result =  mysql_query($sql);
+
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			if ( empty ( $row[war_nname] ) ) {
+				$name = $row[war_fname] . ' ' . $row[war_lname];
+			}else{
+				$name = $row[war_nname] . ' ' . $row[war_lname];
+			}
+			//$name .= substr($row[war_lname], 0, 1);
+			$id = $row['war_id'];
+			$Who[$id]  = $name;
+			$AuthorEmail[$id]  = $row['war_email'];
+		}
+
+		//---------------------------------------------
+		// Get List of existing comment types
+		//---------------------------------------------
+		$sql = "SELECT distinct comment_type from comment";
+		$ctypes =  get_menu($sql);
+
+		//--------------------------------------------------------
+		// Generate SQL query
+		//--------------------------------------------------------
+	
+		$dbh = caa_connect();
+		$cfields =  get_fields('comment','comment');
+	
+		$sql = "SELECT  ";
+		$sql .= " c.comment_id, c.comment_access,  c.author_id, c.date_created, c.comment_type,";
+		$sql .= " c.comment_summary, c.comment_detail"; 
+		$sql .= " FROM comment c WHERE c.table_name = '$ctable' and c.table_id = '$cid' ";
+
+		if (! isset($_SESSION[war_id] ) ) {
+			$sql .= " AND c.comment_access = 'Public' ";
+			echo "<P class=trace>Following are all public entries. ";
+			echo "Remaining entries visible after <A HREF=/login.phpx>logging in.</A></P>\n";
+		}
+
+		$sql .= " ORDER BY c.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//--------------------------------------------------------
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//--------------------------------------------------------
+
+		$TotalEntries = '0';
+		$result = mysql_query($sql);
+		$rowcount = mysql_num_rows($result);
+		if ( $rowcount < 1 ){
+			return;
+		}elseif ( $rowcount == 1 ) {
+			echo "<P class=trace>See $rowcount comment</P>\n";
+		}else{
+			echo "<P class=trace>List of $rowcount comments</P>\n";
+		}
+		$Sort = array();
+		$Comment = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Comment History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Comment] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			print "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Comment Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Comment=Summary/', '', $url);
+			print "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">Show Comment Details</P>\n";
+		}
+
+		$howmany = "Entries";
+
+		if ( $rowcount == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<CENTER>\n";
+		echo "<TABLE id=warrior_comment_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Comment'] == "Detail" ) {
+			echo "<TH class=ths>Details of $rowcount Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $rowcount Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=commentlist>\n";
+
+		while ($Comment = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			$ts =  timestamp2display($Comment[date_created]);
+			echo "<LI>";
+			echo "<A HREF=\"/comment.phpx?comment_id=$Comment[comment_id]&Action=View\">";
+			echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0 HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Comment['author_id'];
+
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">$Who[$author_id]</A>:\n";
+
+			$summary = stripslashes( $Comment[comment_summary]);
+			echo "$summary\n";
+
+			if ( $_REQUEST[Comment] == "Detail" ) {
+				echo "<UL id=commentlistbody><LI>\n";
+				echo "<PRE>\n";
+				$cleantext = stripslashes($Comment[comment_detail]);
+				$display = wordwrap($cleantext, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+	
+	}// End funtion show_comment_history
+	//----------------------------------------------------------------
+	// End funtion show_comment_history
+	//----------------------------------------------------------------
+
+	//----------------------------------------------------------------------
+	// Show warrior MOS
+	//----------------------------------------------------------------------
+	function show_warrior_mos ($wid) {
+		echo "<P class=trace>Entering show_warrior_mos with input of [$wid]</P>\n";// DEBUG DEVONLY
+
+		if ( empty( $wid )) {
+			die ("Show_warrior_mos fail, no warrior_id ($wid) ");
+		}
+
+		caa_connect();
+
+		//
+		// Location name to id lookup
+		// Will be a join after we have full data integrity
+		//
+		$sql = "SELECT location_id, location_name from fulllocation ";
+		$sql .= " WHERE location_type like 'Large%' or location_type like '%NWTA%'";
+		$LocName = array();
+		$LocName = get_menu_array($sql);
+
+
+		//Select * from mos_roster where mos_warrior = '45759';
+		//+--------+-------------+-------------+---------+----------+
+		//| mos_id | mos_warrior | mos_weekend | mos_app | mos_list |
+		//+--------+-------------+-------------+---------+----------+
+		//|   3233 |	   45759 |		2787 |   31416 | 1		|
+		//+--------+-------------+-------------+---------+----------+
+
+		//mysql> desc initiation;
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//| Field			  | Type			 | Null | Key | Default	| Extra		  |
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//| initiation_id	  | int(11) unsigned | NO   | PRI | NULL	   | auto_increment |
+		//| initiation_day	 | char(15)		 | NO   |	 |			|				|
+		//| initiation_date	| date			 | NO   |	 | 0000-00-00 |				|
+		//| initiation_center  | int(11)		  | NO   | MUL | 0		  |				|
+		//| initiation_camp	| char(40)		 | NO   |	 | NULL	   |				|
+		//| initiation_loc	 | int(11) unsigned | NO   | MUL | 1		  |				|
+		//| initiation_city	| char(40)		 | NO   |	 |			|				|
+		//| initiation_state   | char(4)		  | NO   |	 | NULL	   |				|
+		//| initiation_country | char(2)		  | NO   |	 | NULL	   |				|
+		//+--------------------+------------------+------+-----+------------+----------------+
+
+		$sql = "SELECT i.initiation_date, i.initiation_camp, i.initiation_loc, i.initiation_city, i.initiation_state";
+		$sql .= " FROM initiation i, mos_roster m ";
+		$sql .= " WHERE m.mos_weekend = i.initiation_id AND m.mos_warrior= '$wid'";
+		echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+		$result = mysql_query($sql);
+
+   		$count = mysql_num_rows($result);
+		echo "<CENTER>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths COLSPAN=3>MKP NWTA MOS Staffings ($count)</TH>\n";
+		echo "<TR>\n";
+		echo "<TH class=ths>Date</TH>\n";
+		echo "<TH class=ths>Camp</TH>\n";
+		echo "<TH class=ths>Location</TH>\n";
+
+		if ( empty($count)) {
+			echo "<TR>\n";
+			echo "<TD class=tds COLSPAN=3>No NWTA MOS staffings in database</TD>\n";
+		}else{
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ){
+				$lid = $row['initiation_loc'];
+				echo "<TR>\n";
+				echo "<TD class=tds>$row[initiation_date]</TD>\n";
+				echo "<TD class=tds>$row[initiation_camp]</TD>\n";
+				echo "<TD class=tds><A HREF=/fulllocation.phpx?location_id=$lid&Action=View>$LocName[$lid]</A></TD>\n";
+			}
+		}
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+	}// End function show_warrior_mos
+
+	//----------------------------------------------------------------------
+	// Show warrior Staffings
+	//----------------------------------------------------------------------
+	function show_warrior_staffings ($wid) {
+		echo "<P class=trace>Entering show_warrior_staffings with input of [$wid]</P>\n";// DEBUG DEVONLY
+
+		if ( empty( $wid )) {
+			die ("Show_warrior_staffings fail, no warrior_id ($wid) ");
+		}
+
+		caa_connect();
+
+		//
+		// Location name to id lookup
+		//
+		$sql = "SELECT location_id, location_name from fulllocation ";
+		//$sql .= " WHERE location_type = 'Large Group Venue'";
+		$LocName = array();
+		$LocName = get_menu_array($sql);
+
+		//mysql> desc warrior_staffing;
+		//+--------------+------------------+------+-----+---------+-------+
+		//| Field		| Type			 | Null | Key | Default | Extra |
+		//+--------------+------------------+------+-----+---------+-------+
+		//| war_stf_id   | int(11) unsigned | NO   | PRI | 0	   |	   |
+		//| war_stf_init | int(11) unsigned | NO   | PRI | 0	   |	   |
+		//| war_stf_cen  | int(11) unsigned | NO   | MUL | 1	   |	   |
+		//+--------------+------------------+------+-----+---------+-------+
+
+		//mysql> desc initiation;
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//| Field			  | Type			 | Null | Key | Default	| Extra		  |
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//| initiation_id	  | int(11) unsigned | NO   | PRI | NULL	   | auto_increment |
+		//| initiation_day	 | char(15)		 | NO   |	 |			|				|
+		//| initiation_date	| date			 | NO   |	 | 0000-00-00 |				|
+		//| initiation_center  | int(11)		  | NO   | MUL | 0		  |				|
+		//| initiation_camp	| char(40)		 | NO   |	 | NULL	   |				|
+		//| initiation_loc	 | int(11) unsigned | NO   | MUL | 1		  |				|
+		//| initiation_city	| char(40)		 | NO   |	 |			|				|
+		//| initiation_state   | char(4)		  | NO   |	 | NULL	   |				|
+		//| initiation_country | char(2)		  | NO   |	 | NULL	   |				|
+		//+--------------------+------------------+------+-----+------------+----------------+
+
+		$sql = "SELECT i.initiation_id, i.initiation_date, i.initiation_camp, i.initiation_loc, i.initiation_city, i.initiation_state";
+		$sql .= " FROM initiation i, warrior_staffing s ";
+		$sql .= " WHERE s.war_stf_init = i.initiation_id AND s.war_stf_id = '$wid'";
+		echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+		$result = mysql_query($sql);
+
+   		$count = mysql_num_rows($result);
+        echo "<P class=trace>Click on date to see staff roster</P>\n";
+		echo "<CENTER>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths COLSPAN=3>MKP NWTA Staffings ($count)</TH>\n";
+		echo "<TR>\n";
+		echo "<TH class=ths>Date</TH>\n";
+		echo "<TH class=ths>Camp</TH>\n";
+		echo "<TH class=ths>Location</TH>\n";
+
+		if ( empty($count)) {
+			echo "<TR>\n";
+			echo "<TD class=tds COLSPAN=3>No staffings in database</TD>\n";
+		}else{
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ){
+				$lid = $row['initiation_loc'];
+				echo "<TR>\n";
+				echo "<TD class=tds><A HREF=/nwta.phpx?initiation_id=$row[initiation_id]&Action=Show+Staff+Roster>$row[initiation_date]</A>";
+                echo "</TD>\n";
+				echo "<TD class=tds>$row[initiation_camp]</TD>\n";
+				echo "<TD class=tds><A HREF=/fulllocation.phpx?location_id=$lid&Action=View>$LocName[$lid]</A></TD>\n";
+			}
+		}
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+	}// End function show_warrior_staffings
+
+	//----------------------------------------------------------------------
+	// Show warrior trainings
+	//----------------------------------------------------------------------
+	function show_warrior_trainings ($wid) {
+		echo "<P class=trace>Entering show_warrior_trainings with input of [$wid]</P>\n";// DEBUG DEVONLY
+
+		if ( empty( $wid )) {
+			die ("Show_warrior_trainings fail, no warrior_id ($wid) ");
+		}
+
+		caa_connect();
+
+		$IconMap = array(
+			'Attendee'	  =>  '<IMG SRC=/images/smallballs/greenball.gif BORDER=0>',
+			'Student'	  =>  '<IMG SRC=/images/smallballs/greenball.gif BORDER=0>',
+			'Staff'		  =>  '<IMG SRC=/images/smallballs/orangeball.gif BORDER=0>',
+			'Presenter'	  =>  '<IMG SRC=/images/smallballs/blueball.gif BORDER=0>',
+			'Leader'	  =>  '<IMG SRC=/images/smallballs/purpleball.gif BORDER=0>'
+		);
+		
+        //
+        // Get Location Name/id map
+        //
+		$sql = "SELECT location_id, location_name from fulllocation";
+		echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+		$LocName = array();
+		$LocName = get_menu_array($sql);
+
+        //
+        // Get Training Abbr Map
+        //
+		$sql = "SELECT training_id, training_abbreviation from training";
+		echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+		$TrainingType = array();
+		$TrainingType = get_menu_array($sql);
+		//print_r($TrainingType); // DEVONLY
+
+        //
+		// List of my trainings
+        //
+		$sql = "SELECT t.trg_id, t.trg_name, t.trg_loc, t.location_id, t.trg_date, t.training_id, t.location_id,";
+		$sql .= " w.attendee_role";
+		$sql .= " FROM trainings t, warrior_trainings w";
+		$sql .= " WHERE w.wartrg_training_id = t.trg_id AND w.wartrg_war_id = '$wid'";
+        $sql .= " ORDER BY t.trg_name, t.trg_date";
+		echo "<P class=trace>$sql</P>\n"; //DEBUG DEVONLY
+
+		$result = mysql_query($sql);
+   		$count = mysql_num_rows($result);
+
+		echo "<CENTER>\n";
+        //
+		// Role Legend
+        //
+        echo "<P class=trace><B>Non-NWTA Trainings</B></P>\n";
+        echo "<TABLE>\n";
+        echo "<TH class=ths COLSPAN=4>Training Role Key</TH>\n";
+
+        echo "<TR>";
+        echo "<TD class=tdcs VALIGN=TOP>";
+		echo "$IconMap[Student]\n";
+        echo "&nbsp;Student/Attendee</TD>\n";
+
+        echo "<TD class=tdcs VALIGN=TOP>";
+        echo "&nbsp;|&nbsp;\n";
+		echo "$IconMap[Staff]\n";
+        echo "&nbsp;Staff</TD>\n";
+
+        echo "<TD class=tdcs VALIGN=TOP>";
+        echo "&nbsp;|&nbsp;\n";
+		echo "$IconMap[Presenter]\n";
+        echo "&nbsp;Presenter</TD>\n";
+
+        echo "<TD class=tdcs VALIGN=TOP>";
+        echo "&nbsp;|&nbsp;\n";
+		echo "$IconMap[Leader]\n";
+        echo "&nbsp;Leader</TD>\n";
+
+        echo "</TABLE>\n";
+
+        //
+		// Training List
+        //
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths COLSPAN=5>MKP (non-NWTA) Trainings ($count)</TH>\n";
+		echo "<TR>\n";
+		echo "<TH class=ths>Training</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		echo "<TH class=ths>Date</TH>\n";
+		echo "<TH class=ths>Role</TH>\n";
+		echo "<TH class=ths>Location</TH>\n";
+  
+		if ( empty ($count) ) {
+			echo "<TR>\n";
+			echo "<TD class=tdcs COLSPAN=5>None on record</TD>\n";
+		}else{
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ){
+				$lid = $row['location_id'];
+				$tid = $row['training_id'];
+				$xid = $row['trg_id'];
+                $rid = $row['attendee_role'];
+				$locname = stripslashes($row['trg_loc']);
+				echo "<TR>\n";
+				echo "<TD class=tds><A HREF=/trainings.phpx?trg_id=$xid&Action=View>$row[trg_name]</A></TD>\n";
+				echo "<TD class=tds><A HREF=/training.phpx?training_id=$tid&Action=View>$TrainingType[$tid]</A></TD>\n";
+				echo "<TD class=tds>$row[trg_date]</TD>\n";
+				echo "<TD class=tdcs>$IconMap[$rid]</TD>\n";
+				echo "<TD class=tds>$locname<BR></TD>\n";
+			}
+		}
+		echo "</TABLE>\n";
+
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=/trainings.phpx METHOD=POST>\n";
+		echo "<INPUT TYPE=HIDDEN NAME=war_id VALUE=$wid>\n";
+		echo "<INPUT TYPE=HIDDEN NAME=trg_center VALUE=$_SESSION[center_id]>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"List Trainings\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+	}// End function show_warrior_trainings
+
+		
+	//----------------------------------------------------------------------
+	// Show warrior preferences
+	//----------------------------------------------------------------------
+	function show_warrior_preferences ($wid) {
+		$sql = "SELECT w.warrior_preference_id, w.preference_value, p.preference_name  ";
+		$sql .= " FROM preference p, warrior_preference w ";
+		$sql .= " WHERE w.warrior_id = '$wid' AND p.preference_id = w.preference_id ";
+		$sql .= " ORDER BY p.preference_name";
+
+		echo "<p class=trace>$sql</p>\n";   // CHECK DEVONLY
+		$result = mysql_query($sql) ;
+		$prefcount = mysql_num_rows($result);
+
+		echo "<TABLE id=warrior_view_preferences BORDER>\n";
+		echo "<TH class=ths COLSPAN=2>Preferences ($prefcount)</TH>\n";
+		if ($prefcount) {
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				print "<TR>\n";
+				print "<TD class=tdls>$row[preference_name]</TD>\n";
+				print "<TD class=tds>$row[preference_value]</TD>\n";
+				print "</TR>\n";
+			}
+		}else{
+			echo "<TR><TD COLSPAN=2 class=tdcs>No preferences set</TD>\n";
+		}
+		print "</TABLE>\n";
+
+	}// End function show_warrior_preferences
+
+	//================================================================
+	// Show Warrior Current Leadership
+	//================================================================
+	function show_warrior_current_leadership($wid) {
+
+			//-------------------------------------------------------------------
+			// Lookup sub menus of which_id to specific region, center, igr
+			//-------------------------------------------------------------------
+			//
+			// Get MKPI Region Name Lookup
+			//
+			$Mkpi = array(
+			'99'	=>	'MKPI'
+			);
+
+			//
+			// Get GeoRegion Name Lookup
+			//
+			$sql = "SELECT georegion_id, georegion_shortname from georegion";
+			$GeoRegion = array();
+			$GeoRegion = get_menu_array($sql);
+
+			//
+			// Get Center Name Lookup
+			//
+			$sql = "SELECT center_id, short_name from center";
+			$Center = array();
+			$Center = get_menu_array($sql);
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+			//
+			// Get I-Group  Name Lookup
+			//
+			$sql = "SELECT igroup_id, igroup_name from igroup";
+			$IGroup = array();
+			$IGroup = get_menu_array($sql);
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+			//
+			// Get I-Group Region Name Lookup
+			//
+			$sql = "SELECT DISTINCT igrpreg_id, igrpreg_name from igroup_regions";
+			$IGRegion = array();
+			$IGRegion = get_menu_array($sql);
+
+
+			//-------------------------------------------------------------------
+			//	Query current leadership positions
+			//-------------------------------------------------------------------
+			//#mysql> desc org;
+			//#+------------------+------------------+------+-----+---------+----------------+
+			//#| Field            | Type             | Null | Key | Default | Extra          |
+			//#+------------------+------------------+------+-----+---------+----------------+
+			//#| org_id           | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+			//#| org_tier         | varchar(30)      | YES  |     | NULL    |                |
+			//#| reports_to_org   | int(10) unsigned | YES  |     | NULL    |                |
+			//#| org_name         | varchar(40)      | YES  |     | NULL    |                |
+			//#| org_longname     | varchar(60)      | YES  |     | NULL    |                |
+			//#| org_shortname    | varchar(20)      | YES  |     | NULL    |                |
+			//#| org_abbreviation | varchar(20)      | YES  |     | NULL    |                |
+			//#| org_description  | text             | YES  |     | NULL    |                |
+			//#+------------------+------------------+------+-----+---------+----------------+
+			//#mysql> desc orgrole;
+			//#+----------------------+----------------------+------+-----+---------+----------------+
+			//#| Field                | Type                 | Null | Key | Default | Extra          |
+			//#+----------------------+----------------------+------+-----+---------+----------------+
+			//#| orgrole_id           | int(10) unsigned     | NO   | PRI | NULL    | auto_increment |
+			//#| org_id               | int(10) unsigned     | NO   |     | NULL    |                |
+			//#| orgrole_name         | varchar(40)          | NO   |     | NULL    |                |
+			//#| orgrole_longname     | varchar(80)          | YES  |     | NULL    |                |
+			//#| orgrole_term         | smallint(5) unsigned | YES  |     | NULL    |                |
+			//#| orgrole_tier         | varchar(20)          | NO   |     | NULL    |                |
+			//#| orgrole_abbreviation | varchar(20)          | NO   |     | NULL    |                |
+			//#| reports_to_orgrole   | int(10) unsigned     | YES  |     | NULL    |                |
+			//#| orgrole_description  | text                 | YES  |     | NULL    |                |
+			//#+----------------------+----------------------+------+-----+---------+----------------+
+			//#mysql> desc orgroleholder;
+			//#+------------------+------------------+------+-----+---------+----------------+
+			//#| Field            | Type             | Null | Key | Default | Extra          |
+			//#+------------------+------------------+------+-----+---------+----------------+
+			//#| orgroleholder_id | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+			//#| orgrole_id       | int(10) unsigned | NO   |     | NULL    |                |
+			//#| warrior_id       | int(10) unsigned | NO   |     | NULL    |                |
+			//#| which_id         | int(10) unsigned | NO   |     | NULL    |                |
+			//#| start_date       | date             | NO   |     | NULL    |                |
+			//#| end_date         | date             | NO   |     | NULL    |                |
+			//#+------------------+------------------+------+-----+---------+----------------+
+
+
+			//
+			//	Query current leaderships
+			//
+			$sql = " SELECT DISTINCT o.org_tier, o.org_name, ";
+			$sql .= " r.orgrole_name, ";
+			$sql .= " h.end_date, h.which_id ";
+			$sql .= " FROM org o, orgrole r, orgroleholder h";
+			$sql .= " WHERE h.orgrole_id = r.orgrole_id ";
+			$sql .= " AND o.org_id = r.org_id";
+			$sql .= " AND h.warrior_id = '$wid'";
+			// ZZZ
+			$row = array();
+			$result = mysql_query($sql);
+			echo "<TABLE id=warrior_current_leadership BORDER>\n";
+			echo "<TH class=ths COLSPAN=5>Current Leadership Roles</TH>\n";
+			echo "<TR>\n";
+			echo "<TH class=ths>Tier</TH>\n";
+			echo "<TH class=ths>Which</TH>\n";
+			echo "<TH class=ths>Group</TH>\n";
+			echo "<TH class=ths>Role</TH>\n";
+			echo "<TH class=ths>Until</TH>\n";
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$hrid = $row['which_id'];
+				$cnt++;
+
+				echo "<TR>\n";
+				echo "<TD class=tds>$row[org_tier]</TD>\n";
+				if ( $row['org_tier'] == 'MKPI' ) {
+					echo "<TD class=tds>$Mkpi[$hrid]</TD>\n";	// 99 === MKPI
+				}
+				if ( $row['org_tier'] == 'GeoRegion' ) {
+					echo "<TD class=tds>$GeoRegion[$hrid]</TD>\n";
+				}
+				if ( $row['org_tier'] == 'Center' ) {
+					echo "<TD class=tds>$Center[$hrid]</TD>\n";
+				}
+				if ( $row['org_tier'] == 'I-Group Region' ) {
+					echo "<TD class=tds>$IGRegion[$hrid]</TD>\n";
+				}
+				if ( $row['org_tier'] == 'I-Group' ) {
+					echo "<TD class=tds>$IGroup[$hrid]</TD>\n";
+				}
+				echo "<TD class=tds>$row[org_name]</TD>\n";
+				echo "<TD class=tds>$row[orgrole_name]</TD>\n";
+				echo "<TD class=tds>$row[end_date]</TD>\n";
+			}
+			if ( $cnt < 1 ) {
+				echo "<TR><TD class=tdcs COLSPAN=5>No current leadership roles</TD></TR>\n";
+			}
+			echo "</TABLE>\n";
+
+	}
+
+	//================================================================
+	// Show Warrior Ininitiation
+	//================================================================
+	function show_warrior_initiation($wid) {
+		global $WICCFG;
+		//mysql> desc warrior_initiation;
+		//+------------+------------------+------+-----+---------+-------+
+		//| Field	  | Type			 | Null | Key | Default | Extra |
+		//+------------+------------------+------+-----+---------+-------+
+		//| warrior	| int(11) unsigned | NO   | PRI | 0	   |	   |
+		//| initiation | int(11) unsigned | NO   | MUL | 0	   |	   |
+		//+------------+------------------+------+-----+---------+-------+
+		//
+		//mysql> desc initiation;
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//| Field			  | Type			 | Null | Key | Default	| Extra		  |
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//| initiation_id	  | int(11) unsigned | NO   | PRI | NULL	   | auto_increment |
+		//| initiation_day	 | char(15)		 | NO   |	 |			|				|
+		//| initiation_date	| date			 | NO   |	 | 0000-00-00 |				|
+		//| initiation_center  | int(11)		  | NO   | MUL | 0		  |				|
+		//| initiation_camp	| char(40)		 | NO   |	 | NULL	   |				|
+		//| initiation_loc	 | int(11) unsigned | NO   | MUL | 1		  |				|
+		//| initiation_city	| char(40)		 | NO   |	 |			|				|
+		//| initiation_state   | char(4)		  | NO   |	 | NULL	   |				|
+		//| initiation_country | char(2)		  | NO   |	 | NULL	   |				|
+		//+--------------------+------------------+------+-----+------------+----------------+
+		//
+		// This will be a join when we insure referential integrity
+		//
+		$sql = "SELECT location_id, location_name from fulllocation";
+		$sql .= " WHERE location_type like 'Large%' or location_type like '%NWTA%';";
+		$Where = array();
+		$Where = get_menu_array($sql);
+
+		$sql = "SELECT distinct i.* FROM initiation i, warrior_initiation x ";
+		$sql .= " WHERE x.warrior = '$wid' AND i.initiation_id = x.initiation";
+
+		echo "<p class=trace>$sql</p>\n";   // CHECK DEVONLY
+		$result = mysql_query($sql) ;
+		$inicount = mysql_num_rows($result);
+
+        echo "<P class=trace>Click on date to show roster</P>\n";
+		echo "<TABLE id=warrior_view_preferences BORDER>\n";
+        if ( $inicount > 1) {
+		    echo "<TH class=ths COLSPAN=3>New Warrior Training Adventure Weekends</TH>\n";
+        }else{
+		    echo "<TH class=ths COLSPAN=3>New Warrior Training Adventure Weekend</TH>\n";
+        }
+		echo "<TR>\n";
+		echo "<TH class=ths>Date</TH>\n";
+		echo "<TH class=ths>Camp</TH>\n";
+		echo "<TH class=ths>Location</TH>\n";
+		if ($inicount) {
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$camp = $row['initiation_camp'];
+				$lid = $row['initiation_loc'];
+
+				echo "<TR>\n";
+				echo "<TD class=tdcs>";
+				echo "<A HREF=/warrior.phpx?initiation_id=$row[initiation_id]&Action=Query>";
+				echo "$row[initiation_date]</A></TD>\n";
+				echo "<TD class=tdcs>$row[initiation_camp]</TD>\n";
+				echo "<TD class=tdcs><A HREF=$WICCFG[WICURL]/fulllocation.phpx?location_id=$lid&Action=View>";
+				echo "$Where[$lid]</A></TD>\n";
+			}
+		}else{
+			echo "<TR><TD class=tdcs COLSPAN=3>No initiation date on record.";
+            echo " <BR><A HREF=/nwta.phpx>Update your database entry</A> or\n";
+			echo " <BR>Contact <A HREF=mailto:$WICCFG[ADMINEMAIL]>Administrator</A></TD>\n";
+		}
+		echo "</TABLE>\n";
+	}// End function show_warrior_initiation
+
+	//================================================================
+	// Show Warrior I-Groups
+	//================================================================
+	function show_warrior_igroups($wid) {
+		global $WICCFG;
+
+        //mysql> desc warrior_igroup;
+        //+------------+------------------+------+-----+---------+----------------+
+        //| Field      | Type             | Null | Key | Default | Extra          |
+        //+------------+------------------+------+-----+---------+----------------+
+        //| war_ig_id  | int(11) unsigned | NO   | PRI | NULL    | auto_increment |
+        //| war_ig_war | int(11) unsigned | NO   | MUL | 0       |                |
+        //| war_ig_ig  | int(11) unsigned | NO   | MUL | 0       |                |
+        //+------------+------------------+------+-----+---------+----------------+
+
+		//
+		// Get igroup list
+		//
+		$sql = "SELECT DISTINCT i.igroup_id, i.igroup_name ";
+        $sql .= " FROM igroup i, warrior_igroup w ";
+		$sql .= " WHERE i.igroup_id = w.war_ig_ig ";
+		$sql .= " AND w.war_ig_war = '$wid' ";
+		$sql .= " AND i.igroup_name NOT LIKE '%None:' ";
+
+        echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+		$result = mysql_query($sql);
+
+		$igroup_count = mysql_num_rows($result);
+
+        echo "<P class=trace>Click on name to show roster</P>\n";
+
+		echo "<TABLE id=warrior_view_igroups BORDER>\n";
+
+        if ( $igroup_count > 1) {
+		    echo "<TH class=ths>Member of Following I-Groups</TH>\n";
+        }else{
+		    echo "<TH class=ths>Member of Following I-Group</TH>\n";
+        }
+
+		echo "<TR>\n";
+		echo "<TD class=tds>";
+		if ($igroup_count) {
+            echo "<UL>\n";
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$igid = $row['igroup_id'];
+				$igroup_name = $row['igroup_name'];
+
+				echo "<LI>\n";
+				echo "<A HREF=/warrior.phpx?igroup_id=$igid&in_igroup=Yes&Action=Query>";
+				echo "$igroup_name</A>";
+                echo "</LI>\n";
+			}
+            echo "</UL>\n";
+		}else{
+			echo "Not a member of an I-Group.";
+            if ( $wid == $_SESSION['war_id'] ) {
+                echo "<UL>\n";
+                echo " <LI><A HREF=/myigroup.phpx>Join I-Group</A></LI>\n";
+			    echo " <LI>Or contact <A HREF=mailto:$WICCFG[ADMINEMAIL]>Administrator</A></LI>\n";
+                echo "</UL>\n";
+            }
+		}
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	}// End function show_warrior_igroups
+
+	//================================================================
+	// END Functions
+	//================================================================
+?>

@@ -1,0 +1,1397 @@
+<?php
+	//#==================================================================
+	//# NWTA Prospect Management
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/23 23:59:35 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/prospect.phpx,v $
+	//# $Id: prospect.phpx,v 1.3 2012/12/23 23:59:35 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no war_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+    global $WICCFG;
+	session_start();
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$returl =  $_SERVER['PHP_SELF'];
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$url = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl .=  '?' .  $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=$returl");
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"MKP NWTA Enrollment Prospects",
+		'TITLE'			=>	"MKP NWTA Enrollment Prospects",
+		'MODULENAME'	=>	"prospect.phpx",
+		'NAV1'			=>	"INFO"	
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$PROSPECTCFG = array (
+		'EDITLEVEL'		=>	'4',			// Access level to get edit screen
+		'DELETELEVEL'		=>	'6'		// Access level to delete
+	);
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		'pro_id',
+		'pro_fname',
+		'pro_nname',
+		'pro_mname',
+		'pro_lname',
+		'pro_suffix',
+		'pro_center',
+		'pro_email',
+		'pro_email2',
+		'pro_street',
+		'pro_street2',
+		'pro_street3',
+		'pro_city',
+		'pro_state',
+		'pro_zip',
+		'pro_country',
+		'pro_hphone',
+		'pro_wphone',
+		'pro_cphone',
+		'pro_fphone',
+		'pro_status',
+		'pro_start',
+		'pro_change'
+	);
+	$NEWFIELD = array(
+		'pro_fname',
+		'pro_nname',
+		'pro_mname',
+		'pro_lname',
+		'pro_suffix',
+		'pro_center',
+		'pro_email',
+		'pro_street',
+		'pro_city',
+		'pro_state',
+		'pro_zip',
+		'pro_country',
+		'pro_hphone',
+		'pro_wphone',
+		'pro_cphone',
+		'pro_fphone',
+		'pro_status'
+	);
+
+	$VIEW = array(
+		'pro_fname',
+		'pro_nname',
+		'pro_lname',
+		'pro_suffix',
+		'pro_center',
+		'pro_email',
+		'pro_street',
+		'pro_city',
+		'pro_state',
+		'pro_zip',
+		'pro_country',
+		'pro_hphone',
+		'pro_wphone',
+		'pro_cphone',
+		'pro_fphone',
+		'pro_status'
+	);
+
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+		'pro_fname',
+		'pro_lname',
+		'pro_email',
+		'pro_center',
+		'pro_city',
+		'pro_state',
+		'pro_zip',
+		'pro_hphone',
+		'pro_wphone',
+		'pro_cphone',
+		'pro_status'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'pro_city',
+		'pro_state',
+		'pro_status',
+		'pro_zip'
+	);
+
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array();
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'pro_fname'		=>  'first name',
+		'pro_lname'		=>  'last name',
+		'pro_email'		=>  'primary email',
+		'pro_street'	=>  'street address',
+		'pro_city'		=>  'city',
+		'pro_state'		=>  'state',
+		'pro_zip'		=>  'zip code',
+		'pro_country'   =>  'country',
+		'pro_hphone'	=>  'home phone',
+		'pro_cphone'	=>  'cell phone',
+		'pro_wphone'	=>  'work phone',
+		'pro_status'	=>  'status',   // Yes, required, but hardwired to 'Prospect'
+		'pro_center'	=>  'center'
+	);
+
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'pro_id'
+	);
+
+	$FieldType = array(
+		'pro_center'			=>	'MenuArray',
+		'pro_status'			=>	'Menu'
+	);
+
+	$Menu = array(
+		"pro_center"		=> "SELECT center_id, center_name FROM center",
+        "pro_status"        => "SELECT choice FROM menu WHERE table_name = 'prospect' AND field_name = 'pro_status' ORDER BY choice"
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'pro_name'		=>	'tds'	// small left justified
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+	spew_header($FMT);
+
+	if (array_key_exists(Action, $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Entry" ) {
+			caa_connect();
+			$today = date('Y-m-d');
+
+			//
+			// Identify data entry originator
+			//
+			$Who = array();
+			$wid = $_SESSION['war_id'];
+			$sql = "SELECT war_id, war_fname, war_lname FROM warrior WHERE war_id = '$wid'";
+            echo "<P class=trace>$sql</P>\n"; // DEVONLY
+            $result = mysql_query($sql);
+			$Who = mysql_fetch_array($result, MYSQL_ASSOC) ;
+            print_r($Who); // DEVONLY
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('prospect','pro');
+			$fields = array_keys($fieldlabel);
+
+			//mysql> desc prospect;
+			//+-------------+------------------+------+-----+---------------------+----------------+
+			//| Field	   | Type			 | Null | Key | Default			 | Extra		  |
+			//+-------------+------------------+------+-----+---------------------+----------------+
+			//| pro_id	  | int(11) unsigned | NO   | PRI | NULL				| auto_increment |
+			//| pro_fname   | char(40)		 | NO   |	 |					 |				|
+			//| pro_nname   | char(40)		 | NO   |	 |					 |				|
+			//| pro_mname   | char(40)		 | NO   |	 |					 |				|
+			//| pro_lname   | char(40)		 | NO   |	 |					 |				|
+			//| pro_suffix  | char(4)		  | NO   |	 |					 |				|
+			//| pro_email   | char(60)		 | NO   |	 |					 |				|
+			//| pro_email2  | char(60)		 | NO   |	 | NULL				|				|
+			//| pro_street  | char(65)		 | NO   |	 |					 |				|
+			//| pro_street2 | char(65)		 | NO   |	 |					 |				|
+			//| pro_street3 | char(65)		 | NO   |	 |					 |				|
+			//| pro_city	| char(40)		 | NO   |	 |					 |				|
+			//| pro_state   | char(50)		 | NO   |	 | NULL				|				|
+			//| pro_zip	 | char(10)		 | NO   |	 |					 |				|
+			//| pro_country | char(2)		  | NO   |	 | US				  |				|
+			//| pro_hphone  | char(20)		 | NO   |	 |					 |				|
+			//| pro_wphone  | char(20)		 | NO   |	 |					 |				|
+			//| pro_cphone  | char(20)		 | NO   |	 |					 |				|
+			//| pro_fphone  | char(20)		 | NO   |	 |					 |				|
+			//| pro_status  | char(25)		 | NO   |	 | Prospect			|				|
+			//| pro_center  | int(11) unsigned | NO   | MUL | 1				   |				|
+			//| pro_start   | datetime		 | NO   |	 | 0000-00-00 00:00:00 |				|
+			//| pro_change  | datetime		 | NO   |	 | 0000-00-00 00:00:00 |				|
+			//+-------------+------------------+------+-----+---------------------+----------------+
+
+			//
+			// Define default values
+			//
+			$Default = array (
+				'pro_status'	=>  'Prospect',
+				'pro_country'   =>  'US',
+				'pro_center'	=>  "$_SESSION[center_id]",
+				'pro_change'	=>  'NOW()'
+			);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+
+			//
+			// Setup default values
+			//
+			foreach ($Default as $key => $val ) {
+				if (  empty ( $_REQUEST[$key] )) {
+					$_REQUEST[$key] = $val;
+				}
+			}
+
+			//
+			// Delete auto_increment primary key
+			//
+			unset ($_REQUEST['pro_id']);
+
+			//
+			// Required fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					if ( $key == 'pro_hphone' || $key == 'pro_cphone' || $key == 'pro_wphone' ) {
+						$missing_phone++;
+					}else{
+						$err .= '<LI>Please enter or select ' . $RequiredField[$key] . '.</LI>';
+					}
+				}else{
+					if ( empty ($val) ) {
+						$err .= '<LI>Please enter or select ' . $RequiredField[$key] . '.</LI>';
+					}
+				}
+			}
+
+			if ($missing_phone > 2) {
+				$err .= '<LI>Please enter at least one phone number</LI>';
+			}
+
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			//
+			// Required Gauntlet Passed, Insert record
+			//
+			$sql = 'INSERT INTO prospect (';
+            $sql2 = '';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<CENTER>\n";
+			echo "<H3>Uninitiated man/prospect record successfully added</H3>\n";
+
+			$pid = mysql_insert_id();
+			$_REQUEST['pro_id'] = $pid;
+
+			//----------------------------------------------------------------------
+			// If this came in with an igroup_id (add uninitiated man to my I-Group)
+			// Add him to that I-Group (prospect_igroup) and to the prospect_ighistory
+			//----------------------------------------------------------------------
+			if ( isset ( $_REQUEST['igroup_id'] )) {
+				$iid =  $_REQUEST['igroup_id'];
+				//
+				// Get name of I-Group
+				//
+				$inamesql = "SELECT igroup_name from igroup where igroup_id = '$iid'";
+				$igname = get_value($inamesql);
+
+				//
+				// Insert into prospect_igroup
+				//
+				$sql = "INSERT INTO prospect_igroup (prospect_id, igroup_id) VALUES ('$pid','$iid')";
+				echo "<p class=trace>$sql</p>\n";	// DEVONLY
+				mysql_query($sql);
+				$xid = mysql_insert_id();
+
+				if ( $pid != $xid ) {
+					echo "<H3>Addition as member of <I>$igname</I> I-Group successful</H3>\n";
+				}
+
+				//
+				// Insert into prospect_ighistory
+				//
+				$sql = "INSERT INTO prospect_ighistory (prospect_id, igroup_id, start_date) VALUES ('$pid','$iid','$today')";
+				echo "<p class=trace>$sql</p>\n";	// DEVONLY
+				mysql_query($sql);
+				$hid = mysql_insert_id();
+
+				if ( $hid != $xid ) {
+					echo "<H3>Update in prospect I-Group history successful</H3>\n";
+				}
+
+				//
+				// Identify I-Group for prospect_notes
+				//
+				$igsql = "SELECT igroup_name from igroup where igroup_id = '$iid'";
+				$igroup_name = get_value($igsql);
+	
+				$pnote = "Created as part of adding an uninitiated member to I-Group";
+				$pnote .= " <A HREF=/igroups.phpx?igroup_id=$iid&Action=View>$igroup_name</A>";
+				$pnote .= " by <A HREF=/warrior.phpx?war_id=$wid&Action=View>";
+				$pnote .= $Who['war_fname'] . ' ' . $Who['war_lname'];
+                $pnote .= "</A> on $today";
+			}
+
+			//----------------------------------------------------------------------
+			// Status Information
+			// Add null record into prospect_admin table
+			//----------------------------------------------------------------------
+
+			//mysql> desc prospect_admin;
+			//+-----------------+----------------------+------+-----+------------+-------+
+			//| Field		   | Type				 | Null | Key | Default	| Extra |
+			//+-----------------+----------------------+------+-----+------------+-------+
+			//| proad_id		| int(11) unsigned	 | NO   | PRI | 0		  |	   |
+			//| proad_admin	 | int(11) unsigned	 | NO   |	 | 0		  |	   |
+			//| proad_sent	  | enum('Yes','No')	 | NO   |	 | No		 |	   |
+			//| proad_sdate	 | date				 | NO   |	 | 0000-00-00 |	   |
+			//| proad_return	| enum('Yes','No')	 | NO   |	 | No		 |	   |
+			//| proad_rdate	 | date				 | NO   |	 | 0000-00-00 |	   |
+			//| proad_pack_send | varchar(100)		 | NO   |	 |			|	   |
+			//| proad_tuition   | enum('Yes','No')	 | NO   |	 | No		 |	   |
+			//| proad_med	   | enum('Yes','No')	 | NO   |	 | No		 |	   |
+			//| proad_conf	  | enum('Yes','No')	 | NO   |	 | No		 |	   |
+			//| proad_release   | enum('Yes','No')	 | NO   |	 | No		 |	   |
+			//| proad_team	  | int(4) unsigned	  | NO   |	 | 0		  |	   |
+			//| proad_num	   | smallint(2) unsigned | NO   |	 | 0		  |	   |
+			//+-----------------+----------------------+------+-----+------------+-------+
+
+			$sql = "INSERT INTO prospect_admin (proad_id) VALUES ('$pid')";
+            echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			mysql_query($sql);
+			echo "<H3>Prospect admin table null entry added</H3>\n"; // DEVONLY
+
+			//----------------------------------------------------------------------
+			// Payment Information
+			// Insert into the prospect_details table
+			//----------------------------------------------------------------------
+
+			//mysql> desc prospect_details;
+			//+----------------+------------------+------+-----+------------+-------+
+			//| Field		  | Type			 | Null | Key | Default	| Extra |
+			//+----------------+------------------+------+-----+------------+-------+
+			//| pros_id		| int(11) unsigned | NO   | PRI | 0		  |	   |
+			//| pros_sponsor   | int(11) unsigned | NO   | MUL | 1		  |	   |
+			//| pros_manager   | int(11) unsigned | NO   |	 | 1		  |	   |
+			//| pros_init	  | int(11) unsigned | NO   | MUL | 1		  |	   |
+			//| pros_email	 | enum('Yes','No') | NO   |	 | No		 |	   |
+			//| pros_tuition   | varchar(6)	   | NO   |	 |			|	   |
+			//| pros_early	 | enum('Yes','No') | NO   |	 | No		 |	   |
+			//| pros_birthdate | date			 | NO   |	 | 0000-00-00 |	   |
+			//| pros_signup	| date			 | NO   |	 | 0000-00-00 |	   |
+			//| pros_ref	   | varchar(80)	  | NO   |	 |			|	   |
+			//| pros_contact   | varchar(80)	  | NO   |	 |			|	   |
+			//| pros_qnotes	| varchar(12)	  | YES  |	 | NULL	   |	   |
+			//| pros_notes	 | text			 | YES  |	 | NULL	   |	   |
+			//| pros_update	| varchar(12)	  | NO   |	 |			|	   |
+			//+----------------+------------------+------+-----+------------+-------+
+
+			$PDData = array (
+				'pros_email'	=>  'No',
+				'pros_early'	=>  'No',
+				'pros_manager'  =>  '1',
+				'pros_notes'    =>  "$pnote",
+				'pros_sponsor'  =>  "$_SESSION[war_id]",
+				'pros_id'       =>  "$pid"
+			);
+			$fi = strtoupper( substr ( $Who['war_fname'], 0, 1 ));  
+			$li = strtoupper( substr ( $Who['war_lname'], 0, 1 ));  
+
+			$PDData['pros_update'] = date('d-m-y') . ' ' . $fi . $li;
+
+			$fieldlabel = array();
+			$fieldlabel = get_field_labels(prospect_details, 'xxx');
+			$fields = array_keys($fieldlabel);
+
+        
+			$pdsql = 'INSERT INTO prospect_details (';
+            $pdsql2 = '';
+
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $PDData)) {
+					$pdsql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $PDData)) {
+					$val = mysql_real_escape_string($PDData[$f]);
+					$pdsql2 .= "'" . $val . "'" . ',';
+				}
+			}
+			$finalsql = rtrim($pdsql, ",") .  ') VALUES (' .  rtrim($pdsql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+
+			$result = mysql_query($finalsql) or die('Error, query failed: $finalsql' . mysql_error() );
+
+			echo "<H3>Prospect Details Record successfully added</H3>\n";
+
+			//----------------------------------------------------------------------
+			// Tracking Notes
+			// Insert into the prospect_notes table
+			//----------------------------------------------------------------------
+			//
+			$PNData = array();
+
+			$PNData['prosn_note'] = $pnote;
+			$PNData['prosn_pros'] = $pid;
+			$PNData['prosn_date'] = $today;
+			$PNData['prosn_logger'] = $_SESSION['war_id'];
+
+			//mysql> desc prospect_notes;
+			//+--------------+------------------+------+-----+------------+----------------+
+			//| Field		| Type			 | Null | Key | Default	| Extra		  |
+			//+--------------+------------------+------+-----+------------+----------------+
+			//| prosn_id	 | int(11) unsigned | NO   | PRI | NULL	   | auto_increment |
+			//| prosn_pros   | int(11) unsigned | NO   |	 | 0		  |				|
+			//| prosn_note   | varchar(250)	 | NO   |	 |			|				|
+			//| prosn_date   | date			 | NO   |	 | 0000-00-00 |				|
+			//| prosn_logger | int(11) unsigned | NO   |	 | 0		  |				|
+			//+--------------+------------------+------+-----+------------+----------------+
+
+			$fieldlabel = array();
+			$fieldlabel = get_field_labels(prospect_notes, 'xxx');
+			$fields = array_keys($fieldlabel);
+
+			$sql = 'INSERT INTO prospect_notes (';
+            $sql2 = '';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $PNData)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $PNData)) {
+					$val = mysql_real_escape_string($PNData[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<H3>Prospect Notes Record successfully added</H3>\n";
+
+			//
+			// Return home if came from I-Group
+			//
+			if ( isset ( $_REQUEST['igroup_id'] )) {
+				echo "<H2>Return to $igname <A HREF=/igroups.phpx?igroup_id=$iid&Action=Manage+My+I-Group>Roster</A></H2>\n";
+			}
+
+			echo "</CENTER>\n";
+			$_REQUEST['Action'] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Delete Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Delete" ) {
+
+			if ( array_key_exists('pro_id', $_REQUEST)) {
+				$pid = mysql_real_escape_string($_REQUEST['pro_id']);
+				if (! is_numeric( $pid ) ) {
+					die ("ERROR: Attempt to delete requires pro_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Prospect Id Set") ;
+			}
+			caa_connect();
+
+			$sql = "DELETE FROM prospect WHERE pro_id = '$pid'";
+            echo "<P class=trace>$sql</P>\n"; // DEVONLY
+			$result = mysql_query($sql);
+			echo "<H3>Record Deleted</H3>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+			$Original = array();
+			$Prospect = array();
+			$fieldlabel = array();
+
+			if ( array_key_exists('pro_id', $_REQUEST)) {
+				$pid = $_REQUEST['pro_id'];
+				if (! is_numeric( $pid ) ) {
+					die ("ERROR: Attempt to update requires pro_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Prospect Id Set") ;
+			}
+
+			caa_connect();
+
+			//
+			// Get Original Record
+			//
+			$sql = "SELECT * FROM prospect WHERE pro_id = '$pid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('prospect','pro');
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE prospect SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlentry[] = $f . " = '" . $val . "'";
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE pro_id = '$pid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST[Action] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query or Full Query
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Query") {
+			caa_connect();
+			$fieldlabel = array();
+
+			$fieldlabel = get_field_labels('prospect','pro');
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters[Action] = $_REQUEST[Action];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$where = array(
+				'p.pro_center = c.center_id'
+			);
+
+			//
+			// Construct where clause into an array from prospect
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( ! empty($val) ) {	
+						if ( preg_match('/%/', $val)) { 
+							$where[] = 'p.' .  $f . "LIKE '" . $val . "'" ;
+						}else{
+							$where[] =  'p.' . $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT p.*, c.center_name FROM prospect p, center c";
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'First Name'		=>	'p.pro_fname, p.pro_lname',
+				'Last Name'		=>	'p.pro_lname, p.pro_fname',
+				'City'		=>	'p.pro_city, p.pro_lname',
+				'State'		=>	'p.pro_state, p.pro_city, p.pro_lname',
+				'Center'		=>	'c.center_name, p.pro_state, p.pro_city'
+			);
+
+			$sortby = $_REQUEST[Sortmeby];
+			$sby = $OrderBy[$sortby];
+			if (empty ($sby)){
+				$sql .= ' ORDER BY p.pro_lname, p.pro_fname';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+		    $rowcount = mysql_num_rows($result);
+            if ( $rowcount == 1 ) {
+                echo "<P class=trace>Query returned $rowcount entry</P>\n";
+            }else{
+                echo "<P class=trace>Query returned $rowcount entries</P>\n";
+            }
+	
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access'] >= $PROSPECTCFG[EDITLEVEL] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+
+			unset($fields[pro_id]);
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+				// Edit if authorized
+				if ($_SESSION['access'] >= $PROSPECTCFG[EDITLEVEL] ) {	// SECURITY
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?pro_id=$row[pro_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// View for everyone
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?pro_id=$row[pro_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'pro_center' ) {
+						$display = $row['center_name'];
+					}
+
+					if (in_array($f, $SHOW)) {
+
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+
+						echo "<TD VALIGN=TOP class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form or Import from igvisitor
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" 
+            || $_REQUEST['Action'] == "Enroll In NWTA" ) {
+            echo "<P class=center>Entering Enroll In NWTA function</P>\n"; // DEVONLY
+            caa_connect();
+
+			$menulist = array();
+			$fieldlabel = array();
+			$Default = array(
+				'pro_center'	=> "$_SESSION[center_id]",
+				'pro_status'	=>  'Prospect'  // Will be overridden by igvisitor status
+			);
+
+            //
+            // For Transfers from igvisitor table, load imported valued
+            // Into default array to pre-populate new entry
+            //
+            if ( ! empty ($_REQUEST['igvisitor_id']) ) {
+                $igvid = mysql_real_escape_string($_REQUEST['igvisitor_id']);
+                $sql = "SELECT * from igvisitor where igvisitor_id = '$igvid'";
+
+                echo "<P class=trace>$sql</P>\n"; // DEVONLY
+
+			    $result = mysql_query($sql);
+                $IgVisitor = array();
+			    $IgVisitor = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+                echo "<PRE>\n"; // DEVONLY
+                print_r($IgVisitor); // DEVONLY
+                echo "</PRE>\n"; // DEVONLY
+
+			    $igvfieldlabel = get_field_labels('igvisitor','igvisitor');
+			    $igvfield = array_keys($igvfieldlabel);
+
+                foreach ($igvfield as $field ) {
+                    $profield = preg_replace('/igvisitor_/', 'pro_', $field);
+                    if (! empty ($_REQUEST[$profield] ) ) {
+                        $Default[$profield] = stripslashes($_REQUEST[$field]);
+                    }else{
+                        $_REQUEST[$profield] = $IgVisitor[$field];
+                    }
+                }
+                //
+                // Hard Wire for import from igvisitor
+                //
+                $_REQUEST['pro_status'] = 'I-Group Referral';
+                $Default['pro_status'] = 'I-Group Referral';
+            }
+
+            //
+            // Pre-populate new entry with defaults for empty fields
+            //
+			foreach ($Default as $field => $val ) {
+				if ( empty ($_REQUEST[$field] ) ) {
+					$_REQUEST[$field] = $val;
+				}
+			}
+
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabel = get_field_labels('prospect','pro');
+
+			unset($fieldlabel['pro_id']);
+			unset($_REQUEST['pro_id']);
+
+			foreach ($NEWFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdls>$val</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $Default[$fieldname], $_REQUEST[$fieldname] , $menulist);
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						asort($menulist);
+						spew_select_hash_menu($fieldname, $Default[$fieldname] , '', $menulist);
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname></TEXTAREA>\n";
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname VALUE=\"$_REQUEST[$fieldname]\">";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$_REQUEST[$fieldname]\">";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+
+			if (isset ( $_REQUEST['igroup_id'] ) ) {
+				$iid = $_REQUEST['igroup_id'];
+				echo "<INPUT TYPE=HIDDEN NAME=igroup_id VALUE=\"$iid\">\n";
+			}
+
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Edit 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+			$table = 'prospect';
+
+			if ( array_key_exists('pro_id', $_REQUEST)) {
+				$pid = $_REQUEST[pro_id];
+				if ( ! is_numeric($pid) ) {
+					die ("Location ID ($pid) is not an integer.") ;
+				}
+			}else{
+				die ("No Prospect Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM prospect WHERE pro_id = '$pid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('prospect','pro');
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($VIEW as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdls>$label</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=pro_id VALUE=$pid>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			if ( $_SESSION['access'] >= $PROSPECTCFG['EDITLEVEL'] ) {   // SECURITY
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";  // SECURITY
+			}   // SECURITY
+			if ( $_SESSION['access'] >= $PROSPECTCFG['DELETELEVEL'] ) {   // SECURITY
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Delete>\n";  // SECURITY
+			}   // SECURITY
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			show_comment_history($pid, $table);
+
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "View" ) {
+			$table = 'prospect';
+
+			if ( array_key_exists('pro_id', $_REQUEST)) {
+				$pid = $_REQUEST['pro_id'];
+				if ( ! is_numeric($pid) ) {
+					die ("Prospect ID ($pid) is not an integer.") ;
+				}
+			}else{
+				die ("No Prospect Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM prospect WHERE pro_id = '$pid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('prospect','pro');
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($VIEW as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdls>$label</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				$display = stripslashes($row[$fieldname]);
+				//
+				// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				//
+				if ( $fieldname == "pro_center" ) {
+					$sql = "SELECT center_name from center where center_id = '$row[pro_center]'";
+					$display = get_value($sql);
+				}
+
+				echo "$display<BR>";
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=pro_id VALUE=$pid>\n";
+			if ($_SESSION['access'] >= $PROSPECTCFG['EDITLEVEL'] ) {
+			    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Edit>\n";
+			}
+			if ($_SESSION['access'] >= $PROSPECTCFG['DELETELEVEL'] ) {
+			    echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Delete>\n";
+			}
+			echo "</FORM>\n";
+
+			//
+			// Show Comment History
+			//
+			echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$pid>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=$table>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+			echo "</FORM>\n";
+
+			show_comment_history($pid, $table);
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "View")
+
+		//----------------------------------------------------------------------
+		// END 'Action' Processing Options
+		//----------------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		global $WICCFG;
+		caa_connect();
+		$list = array();
+
+		echo "<P class=trace>";
+		echo "For help, see ";
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?table_name=prospect&field_name=Overview&Action=Help>overview</A>.";
+		echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>First Name</TH>\n";
+		echo "<TH class=ths>Last Name</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Status</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+
+		// First Name
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=pro_fname SIZE=8>\n";
+		echo "</TD>\n";
+
+		// Last Name
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=pro_lname SIZE=8>\n";
+		echo "</TD>\n";
+
+		// Center
+		echo "<TD class=tds>\n";
+		$sql = "SELECT center_id, center_name from center order by center_name";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('pro_center',$_SESSION[center_id],'All',$list);
+		echo "</TD>\n";
+
+		// City
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=pro_city SIZE=8>\n";
+		echo "</TD>\n";
+
+		// State
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=pro_state SIZE=6>\n";
+		echo "</TD>\n";
+
+		// Status
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct pro_status from prospect order by pro_status";
+		$list = get_menu($sql);
+        if ( empty ($_REQUEST['pro_status'] )) {
+            $_REQUEST['pro_status'] = 'Prospect';
+        }
+		spew_select_menu('pro_status',$_REQUEST['pro_status'],'All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'First Name',
+			'Last Name',
+			'City',
+			'State',
+			'Center'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Last Name',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=New>\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function Show Comment History
+	//----------------------------------------------------------------
+	function show_comment_history ( $cid, $ctable ) {
+		global $WICCFG;
+		$subname = "show_comment_history";
+		echo "<P class=trace>Entering $subname in $program, cid is $cid, table is $ctable </P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"author_id"			=>	"45759",
+			"comment_type"		=>	"Comment",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		caa_connect;
+
+		//
+		// Get List of nicknames for comment authors
+		//
+		$Who = array();
+		$sql = "SELECT w.war_id, w.war_fname, w.war_nname, w.war_lname, war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$cid' ";
+		$Who = get_warrior_name_picklist($sql);
+
+		//
+		// Get List of emails for comment authors
+		//
+		$AuthorEmail = array();
+		$sql = "SELECT w.war_id , war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$cid' ";
+		$AuthorEmail = get_menu_array($sql);
+
+		//
+		// Get List of existing comment types
+		//
+		$sql = "SELECT distinct comment_type from comment";
+		$ctypes =  get_menu($sql);
+
+		//
+		// Generate SQL query
+		//
+	
+		$fieldlabel = get_field_labels('comment','comment');
+		$fields = array_keys($fieldlabel);
+	
+		$sql = "SELECT  ";
+		$sql .= " c.comment_id, c.comment_access,  c.author_id, c.date_created, c.comment_type,";
+		$sql .= " c.comment_summary, c.comment_detail"; 
+		$sql .= " FROM comment c WHERE c.table_name = '$ctable' and c.table_id = '$cid' ";
+
+		$sql .= " ORDER BY c.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//
+
+		$TotalEntries = '0';
+		$result = mysql_query($sql);
+		$rowcount = mysql_num_rows($result);
+		$Sort = array();
+		$Comment = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Comment History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Comment] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			print "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Comment Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Comment=Summary/', '', $url);
+			print "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">Show Comment Details</P>\n";
+		}
+
+		$count = mysql_num_rows($result);
+		echo "<CENTER>\n";
+		$howmany = "Entries";
+
+		if ( $count == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<TABLE id=${ctable}_comment_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Comment'] == "Detail" ) {
+			echo "<TH class=ths>Details of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=commentlist>\n";
+
+		while ($Comment = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			$ts =  timestamp2display($Comment[date_created]);
+			echo "<LI>";
+			//echo "<A HREF=\"/comment.phpx?comment_id=$Comment[comment_id]&Action=View\">";
+			//echo "<IMG SRC=/images/smallballs/greenball.gif HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Comment['author_id'];
+
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">$Who[$author_id]</A> :\n";
+
+			echo "$Comment[comment_summary]\n";
+
+			if ( $_REQUEST[Comment] == "Detail" ) {
+				echo "<UL id=commentlistbody><LI>\n";
+				echo "<PRE>\n";
+				$cleantext = stripslashes($Comment[comment_detail]);
+				$display = wordwrap($cleantext, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		if (! $count) {
+			echo "<LI>No comment entries</LI>\n";
+		}
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+	}// End funtion show_comment_history
+
+	//----------------------------------------------------------------
+	// Function Get Warrior Full Name Picklist
+	//----------------------------------------------------------------
+	function get_warrior_name_picklist ( $sql ) {
+		global $WICCFG;
+		caa_connect();
+		$row = array();
+		$MyWho = array();
+		echo "<P class=trace>entering get_warrior_name_picklist: $sql</P>\n";   // DEVONLY
+		if (empty ($sql) ) {
+			die ("Function get_warrior_name_picklist attempted without sql statement: $sql");
+		}
+		$result =  mysql_query($sql);
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			if ( empty ( $row['war_nname'] ) ) {
+				$name = $row['war_fname'] . ' ' . $row['war_lname'];
+			}else{
+				$name = $row['war_nname'] . ' ' . $row['war_lname'];
+			}
+			$id = $row['war_id'];
+			$MyWho[$id]  = $name;
+		}
+		return($MyWho);
+	}// End funtion get_warrior_name_picklist
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>

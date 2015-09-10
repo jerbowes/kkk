@@ -1,0 +1,648 @@
+<?php
+	//#==================================================================
+	//# Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP Development Coordinator, jerbowes@yahoo.com
+	//# Simple script to capture a new MKP NWTA prospect
+	//# Jerry Bowes, jerbowes@yahoo.com, 2010-06-25
+	//# Originally enrollment...
+	//#------------------------------------------------------------------
+	//# $Date: 2013/08/23 16:33:42 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/newprospect.phpx,v $
+	//# $Id: newprospect.phpx,v 1.28 2013/08/23 16:33:42 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#------------------------------------------------------------------
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/newprospect.phpx,v $
+	//# $Id: newprospect.phpx,v 1.28 2013/08/23 16:33:42 jbowes Exp $
+	//# $Date: 2013/08/23 16:33:42 $
+	//#------------------------------------------------------------------
+	//#==================================================================
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+	$FMT = array (
+		'BANNER'	=>	'MKP Interest Form<BR>[ Demonstration Mock Up]',
+		'TITLE'		=>	'MKP Interest Form',
+		'NAV1'		=>	'Info'
+	);
+	//
+	// Database Field Roster We Care About
+	//
+	$ALLFIELD = array(
+		'pro_id',
+		'pro_fname',
+		//'pro_nname',
+		//'pro_mname',
+		'pro_lname',
+		'pro_email',
+		//'pro_email2',
+		'pro_street',
+		'pro_city',
+		'pro_state',
+		'pro_zip',
+		'pro_country',
+		'pro_hphone',
+		'pro_wphone',
+		'pro_cphone',
+		'pro_birthyear',
+		//'pro_fphone',
+		'pro_status',
+		'pro_center',
+		'pro_start'
+	);
+
+	$FIELDLABEL = array(
+		'pro_fname'		=>	'First Name',
+		//'pro_nname'		=>	'Nickname',
+		//'pro_mname'		=>	'Middle Name',
+		'pro_lname'		=>	'Last Name',
+		//'pro_suffix'	=>	'Suffix (Jr., III)',
+		'pro_email'		=>	'Primary Email',
+		//'pro_email2'	=>	'Alternate Email',
+		//'pro_street'	=>	'Street',
+		'pro_city'		=>	'City',
+		'pro_state'		=>	'State or Province',
+		'pro_birthyear'		=>	'Four digit birth year',
+		'pro_zip'		=>	'Zip or Postal Code',
+		//'pro_country'	=>	'Country',
+		'pro_hphone'	=>	'Home or Evening Phone',
+		//'pro_wphone'	=>	'Day or Work Phone',
+		'pro_cphone '	=>	'Mobile Phone'
+		//'pro_center'	=>	'MKP Geographical Center'
+	);
+
+	// Listed in query results
+	$SHOW = array(
+		'pro_fname',
+		'pro_nname',
+		'pro_mname',
+		'pro_lname',
+		'pro_email',
+		'pro_email2',
+		'pro_street',
+		'pro_birthyear',
+		'pro_city',
+		'pro_state',
+		'pro_zip',
+		'pro_country',
+		'pro_hphone',
+		'pro_wphone',
+		'pro_cphone ',
+		'pro_fphone',
+		'pro_center'
+	);
+
+	// Fields that can have query drill down links on display
+	$LINK = array(
+		'pro_fname',
+		'pro_nname',
+		'pro_lname',
+		'pro_city',
+		'pro_state',
+		'pro_center',
+		'pro_zip',
+		'pro_country'
+	);
+
+	// Data Validation: Required for New Entry
+	$RequiredField = array(
+		'pro_fname'	=>		'enter first name',
+		'pro_lname' =>		'enter last name',
+		'pro_email' =>		'enter primary email address',
+		'pro_city'	=>		'enter city',
+		'pro_state' =>		'enter state',
+		'pro_birthyear' =>		'enter 4 digit birth year, e.g. 1979',
+		'pro_zip'	=>		'enter zip or postal code',
+		'pro_email'		=>	'enter primary email address'
+	);
+
+	// Global query choices
+	$InValidChoice = array(
+		'All',
+		' ',
+		'',
+		'None',
+		'Choose'
+	);
+
+	// Edit record fields with edit disabled
+	$NoEdit = array(
+		'pro_id'
+	);
+
+	$MenuType = array(
+		'pro_center'	=>		'MenuArray'
+	);
+
+	$Menu = array(
+		'pro_center' => "SELECT center_id, center_name from center",
+	);
+
+	// Display exceptions from default tdcs centered display table cell
+	$JustifyCss = array(
+		'summary',	'tds'	// small left justified
+	);
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// BEGIN PROGRAM
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	spew_header($FMT);
+	if (array_key_exists('Action', $_REQUEST)) {
+		//----------------------------------------------------------------------
+	  	// Apply / Action
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Sign Me Up" ) {
+
+			echo "<PRE>\n";		// DEVONLY
+			print_r($_REQUEST); // DEVONLY
+			echo "</PRE>\n";	// DEVONLY
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+
+			//
+			// Required fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					if ( ! $_REQUEST[$key] ) {
+						$err .= '<LI>Please ' . $val . '.</LI>';
+					}
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+
+			//echo "<p class=trace>$finalsql</p>\n";	//DEBUG
+			//$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			//$pid = mysql_insert_id();
+			////send_email_notification($pid);
+
+			echo "<CENTER>\n";
+
+			echo "<TABLE BORDER>\n";
+			echo "<TH class=ths>Here is how we are answering your request(s)</TH>\n";
+
+			echo "<TR>\n";
+			echo "<TD class=tds>\n";
+			echo "<UL>\n";
+			foreach ($_REQUEST as $interest => $ischecked) {
+				$interest = preg_replace('/_/', ' ', $interest);
+				//echo "<P class=trace>$interest $ischecked</P>\n";	// DEVONLY
+
+
+				if ( $interest == 'Enroll me in the next NWTA training weekend'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information about local I-Groups' ) {
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Sign me up for the MKP email newsletter' ){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Contact me to discuss and visit an I-Group'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Show me the calendar of upcoming NWTA weekends'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'More Information on the NWTA'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on creating joint events with other mens organizations'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on related mens organizations'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on MKP Open Circles for men'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on mixed gender circles'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on programs similar to MKP for women'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on related womens organizations'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'How can I donate money to MKP'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'How do I contribute time and talent to MKP'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on Gay-Bisexual Gateway NWTA trainings'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+				if ( $interest == 'Information on Hispanic Gateway NWTA trainings'){
+					echo "<LI>\n";
+
+					echo "$interest\n";
+					echo "<UL>\n";
+					echo "<LI>\n";
+					echo "blurb\n";
+					echo "</LI>\n";
+					echo "</UL>\n";
+
+					echo "</LI>\n";
+				}
+	
+			}
+			echo "</UL>\n";
+			echo "</TD>\n";
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+
+			now_what($pid);
+		}
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "View" ) {
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabels = get_field_labels('prospect');
+			unset($fieldlabels['pro_id']);
+			foreach ($fieldlabels as $fieldname => $val) {
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdl>$val</TD>\n";
+				echo "<TD VALIGN=TOP>";
+				if (array_key_exists($fieldname, $MenuType)) {
+					// If Menu type of Menu
+					if ( $MenuType[$fieldname] == "Menu" || $MenuType[$fieldname] == "MenuArray" ) {
+						if ( $MenuType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							//echo "<BR>$menusql\n";//DEBUG
+							$menuitems = get_menu($menusql);
+							sort($menuitems);
+							//print_r($menuitems);//DEBUG
+							spew_select_menu($fieldname, $val,'All',$menuitems);
+						}
+
+						if ($MenuType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menuitems = mysql_query($result, MYSQL_ASSOC);
+							ksort($menuitems);
+							//print_r($menuitems);//DEBUG
+							spew_select_hash_menu($fieldname, '$val','All',$menulist);
+						}
+
+					}
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Submit\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+	}else{
+		spew_prospect_entry_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_prospect_entry_form ZZZ
+	//----------------------------------------------------------------
+	function spew_prospect_entry_form() {
+		require_once('./include/msutils-inc.phpx');
+		require_once('./include/config-inc.phpx');
+		global $FIELDLABEL;
+		global $WICCFG;
+		global $Menu;
+		global $MenuType;
+		global $RequiredField;
+		//caa_connect();
+		//$fieldlabels = get_field_labels('prospect', 'pro');
+		//$fields = array_keys($fieldlabels);
+		//print_r($fieldlabels);// DEBUG DEVONLY
+
+		echo "<CENTER>\n";
+		echo "<TABLE BORDER=0 WIDTH=80%>\n";
+		echo "<TR><TD class=tds>\n";
+		echo "The <A HREF=http://mkp.org>ManKind Project</A> is an international non-profit training and personal growth organization for men.\n";
+		echo "We create a safer world by building better men.\n";
+		echo "<P>\n";
+		echo "We teach men who they are, who they can be, and how to let go of who they do not want to be. \n";
+		echo "We provide experiential training and support so men can live empowered lives of centered awareness, \n";
+		echo "emotional honesty, and personal integrity. \n";
+		echo "We invite them to clarify what calls them to serve the world and define their personal mission.\n";
+		echo "We call a man clear who he is, responsibile for what he does, and centered in his mission a <B>New Warrior</B>.\n";
+		echo "</P>\n";
+		echo "<P>\n";
+		echo "MKP offers two things to men.\n";
+		echo "<OL>\n";
+		echo "<LI>\n";
+		echo "The initial training weekend is called the <A HREF=http://nwta.mkp.org>New Warrior Training Adventure (NWTA)</A>. \n";
+		echo "This weekend introduces men to the core concepts of integrity, accoutability, and emotional literacy.\n";
+		echo "It helps men to identify what calls them to serve in the world by clarifying their personal mission.\n";
+		echo "</LI>\n";
+		echo "<LI>\n";
+		echo "After the NWTA, men receive ongoing support from other men who have completed their training.\n";
+		echo "Men regularly sit in circles helping each other apply and integrate the awareness and tools \n";
+		echo "from the NWTA and many other aspects of personal and public leadership skills into their daily lives.\n";
+		echo "These groups are called Integration Groups or I-Groups.\n";
+		echo "</OL>\n";
+		echo "We want men important to you to be better men, especially if that man is you. Take that step and fill out the below form. \n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+
+		echo "<P class=trace>\n";
+		echo "Entries marked with an asterix (&quot;*&quot;) are required</P>\n";
+
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER=5>\n";
+			echo "<TH class=ths>Information About That Important Man</TH>\n";
+			echo "<TH class=ths>What Can We Provide for that Man?</TH>\n";
+		echo "<TR><TD VALIGN=TOP>\n";
+			// Left Column
+			echo "<TABLE>\n";
+	
+			foreach ($FIELDLABEL as $fieldname => $label) {
+				echo "<TR>\n";
+				echo "<TD class=tdl>$label";
+				if ( array_key_exists($fieldname, $RequiredField)) {
+					echo " (*)";
+				}
+				echo "</TD>\n";
+					echo "<TD VALIGN=TOP>";
+						echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+					echo "</TD>\n";
+			}
+			echo "<TR><TD class=tdl>Your relationship to this man(*)</TD>";
+			echo "<TD VALIGN=TOP>\n";
+			$Relation = array(
+				'I am that man',
+				'His male friend',
+				'His female friend',
+				'His wife',
+				'His female partner/lover',
+				'His male husband/partner/lover',
+				'His brother',
+				'His sister',
+				'His mother',
+				'His father',
+				'His son',
+				'His daughter',
+				'His grandmother',
+				'His grandfather',
+				'His coworker',
+				'His therapist/doctor'
+				);
+				spew_select_menu('relationship','Choose','Choose',$Relation);
+			echo "</TD>\n";
+			echo "</TABLE>\n";
+		echo "</TD><TD VALIGN=TOP>\n";
+			// Right Column
+
+
+
+			$Interest = array (
+				'Information about local I-Groups',
+				'Sign me up for the MKP email newsletter',
+				'Contact me to discuss and visit an I-Group',
+				'Show me the calendar of upcoming NWTA weekends',
+				'More Information on the NWTA',
+				'Information on creating joint events with other mens organizations',
+				'Information on related mens organizations',
+				'Information on MKP Open Circles for men',
+				'Information on mixed gender circles',
+				'Information on programs similar to MKP for women',
+				'Information on related womens organizations',
+				'How can I donate money to MKP',
+				'How do I contribute time and talent to MKP',
+				'Information on Gay-Bisexual Gateway NWTA trainings',
+				'Information on Hispanic Gateway NWTA trainings'
+			);
+
+
+
+			sort($Interest);
+				echo "<INPUT TYPE=CHECKBOX NAME=\"Enroll me in the next NWTA training weekend\"> ";
+				echo "Enroll me in the next NWTA training weekend\n";
+				echo "<HR>\n";
+
+			foreach ($Interest as $key) {
+				echo "<BR><INPUT TYPE=CHECKBOX NAME=\"$key\"> ";
+				echo "$key\n";
+			}
+
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Sign Me Up\">\n";
+		echo "</CENTER>\n";
+		echo "</FORM>\n";
+	} // Endfunction spew_prospect_entry_form
+
+	//----------------------------------------------------------------
+	// Function send_email_notification
+	//----------------------------------------------------------------
+	function send_email_notification() {
+		require_once('./include/msutils-inc.phpx');
+		require_once('./include/config-inc.phpx');
+		global $WICCFG;
+		global $ENROLLMENTCFG;
+		caa_connect();
+		// Get list of fields for this table
+
+		$fieldlabel = get_field_labels('prospect', 'pro');
+		$fields = array_keys($fieldlabels);
+		sort($fields);
+
+		$subject = "Message From Our Web Site newprospect.php"; 
+		$from_email = "mkphelp@mkp.org"; 
+		$from_name = "MKP Helpdesk"; 
+		$to_email = "jerbowes@yahoo.com"; 
+		//$to_email = "jbowes@jbowes.net"; 
+		$MP = $ENROLLMENTCFG[MAILER];
+
+		$fd = popen($MP,"w"); 
+		fputs($fd, "To: $to_email\n"); 
+		//fputs($fd, "From: $from_name <$from_email>\n"); 
+		fputs($fd, "From: $from_email\n"); 
+		fputs($fd, "Subject: $subject\n\n"); 
+		foreach ( $fields as $field ) {
+			if ($_REQUEST[$field] ) {
+				$line = $fieldlabel[$field] . " ($field): " . $_REQUEST[$field];//DEBUG DEVONLY
+				//$line = $fieldlabel[$field] . " : " . $_REQUEST[$field]; //LIVEONLY
+				fputs($fd, $line); 
+			}
+		}
+		pclose($fd); 
+	} // Endfunction send_email_notification
+	//----------------------------------------------------------------
+
+
+	//----------------------------------------------------------------
+	// Function now_what
+	//----------------------------------------------------------------
+	function now_what() {
+		require_once('./include/msutils-inc.phpx');
+		require_once('./include/config-inc.phpx');
+		echo "<CENTER>\n";
+		echo "<H2>Thank You</H2>\n";
+		echo "</CENTER>\n";
+	} // Endfunction now_what()
+	//----------------------------------------------------------------
+
+
+?>

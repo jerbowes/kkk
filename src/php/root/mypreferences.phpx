@@ -1,0 +1,496 @@
+<?php
+	//#==================================================================
+	//# Personal Preference Manager
+	//#==================================================================
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2013/04/21 16:46:37 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/mypreferences.phpx,v $
+	//# $Id: mypreferences.phpx,v 1.7 2013/04/21 16:46:37 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	//#------------------------------------------------------------------
+
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/auth-inc.phpx");
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"USA I-Group Portal Personal Preferences",
+		'TITLE'			=>	"USA I-Group Portal Personal Preferences",
+		'MODULENAME'	=>	"mypreferences.phpx",
+		'NAV1'			=>	"INFO",
+		'MYINFO'		=>	"1"
+	);
+	$PREFCFG = array (
+		'ADMINLEVEL'	=>	'7'
+	);
+
+	//------------------------------------------------------------------------
+	// Database Fields for warrior_preference
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		'warrior_preference_id',
+		'preference_id',
+		'warrior_id',
+		'preference_value',
+		'source',
+		'user_visible',
+		'last_modified_by',
+		'last_modified',
+	);
+
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+
+	// Default hardwired to Query
+	if (! array_key_exists(Action, $_REQUEST)) {
+		$_REQUEST[Action] = "Query";
+	}
+	if ( array_key_exists(Action, $_REQUEST)) {
+
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		//----------------------------------------------------------------------
+	  	// Delete
+		//----------------------------------------------------------------------
+	  	if (($_REQUEST['Action'] == "Delete" )) {
+			if ( array_key_exists('warrior_preference_id', $_REQUEST)) {
+				$lid = $_REQUEST[warrior_preference_id];
+				if ( ! is_numeric($lid) ) {
+					die (" ID ($lid) is not an integer.") ;
+				}
+			}else{
+				die ("ERROR: No Preference Id Set") ;
+			}
+
+			caa_connect();
+
+			$sql = "DELETE FROM warrior_preference WHERE warrior_preference_id = '$lid'";
+			$result = mysql_query($sql);
+			echo "<CENTER>\n";
+			echo "<H3>Preference Deleted</H3>\n";
+			echo "</CENTER>\n";
+
+			$_REQUEST[Action] = "Query";
+
+	  	}//if ($_REQUEST[Action] == "Delete") 
+
+
+		//----------------------------------------------------------------------
+	  	// Add Preference
+		//----------------------------------------------------------------------
+
+	  	if ($_REQUEST['Action'] == "Add Preference" ) {
+			caa_connect();
+			$wid = $_SESSION[war_id];
+			if ( empty ($wid) ) {
+				echo "<H4>No warrior ID in your session, perhaps your session has expired\n";
+				echo "<BR>please <A HREF=/login.phpx>log back in</A></H4>\n";
+				spew_footer($FMT);
+				exit ;
+			}
+			$Exists = array();
+			$sql = "SELECT preference_id from warrior_preference where warrior_id = '$wid'";
+			$Exists = get_menu($sql);
+
+			//
+			// Eliminate all values that have invalid answers
+			//
+			foreach ($_REQUEST as $key => $val) {
+				if (in_array($val, $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+			}
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['warrior_preference_id']);
+
+			$PrefId = array();
+			$Value = array();
+
+			//
+			// Handle Non-Binary Choices
+			// Form handles name of pref_nnn, we sill strip the 'pref_' leaving 
+			// the preference_id nnn
+			//
+			foreach($_REQUEST as $key => $val){
+				if (preg_match('/^pref_/', $key)) {
+					list($prefix,$id) = explode('_', $key);
+					if (! empty ( $val ) ) {
+						$PrefId[$id] = $val;
+					}
+				}
+			}
+			//
+			// Handle The Binary Choice
+			//
+			if ( array_key_exists('preference_id', $_REQUEST)) {
+				echo "<P class=trace>See preference_id in REQUEST</P>";; // DEVONLY
+				if (! empty ( $_REQUEST[ANSYN] ) ) {
+					echo "<P class=trace>ANSYN is NOT empty</P>";; // DEVONLY
+					$id = $_REQUEST[preference_id];
+					$PrefId[$id] = $_REQUEST[ANSYN];
+					echo "<P class=trace>Adding anser or $_REQUEST[ANSYN] to binary id $id</P>\n";; // DEVONLY
+				}else{
+					echo "<P class=trace>ANSYN is empty</P>";; // DEVONLY
+				}
+			}
+
+			$wid = $_SESSION[war_id];
+			//
+			// TODO; Ripple function to handle the responds_to and responds_how
+			//
+			foreach ($PrefId as $id => $val ) {
+				//$val = $Value[$id];
+				if (! empty($val) ) {
+					if (in_array($id, $Exists)) {
+						// We are updating an existing preference with a different value
+						$cleanval = mysql_real_escape_string($val);
+						$sql = "UPDATE warrior_preference set preference_value = '$cleanval',";
+						$sql .= "source = '$FMT[MODULENAME]', last_modified_by = '$wid', user_visible = 'Yes' ";
+						$sql .= " WHERE ";
+						$sql .= " warrior_id = '$wid' AND preference_id = '$id'";
+						echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+						$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+					}else{
+						// New preference 
+						$sql = 'INSERT INTO warrior_preference (';
+						$cleanval = mysql_real_escape_string($val);
+						$sql = "INSERT INTO warrior_preference ";
+						$sql .= " (warrior_id, preference_id, preference_value,last_modified_by,user_visible)";
+						$sql .= " VALUES (";
+						$sql .= " '$wid','$id','$cleanval','$wid','Yes')";
+						echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+						$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+					}
+				}
+			}
+
+			echo "<CENTER>\n";
+			echo "<H2>Preference choice successfully entered.</H2>\n";
+			echo "</CENTER>\n";
+			$_REQUEST[Action] = "Query";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query 
+		//----------------------------------------------------------------------
+	  	if ( $_REQUEST[Action] == "Query" ) {
+			caa_connect();
+			$wid = $_SESSION[war_id];
+			if ( empty ($wid) ) {
+				echo "<H4>No warrior ID in your session, perhaps your session has expired\n";
+				echo "<BR>please <A HREF=/login.phpx>log back in</A></H4>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			//
+			// Base sql query
+			//
+			$sql = "SELECT w.warrior_preference_id, w.preference_id, w.preference_value, p.preference_name, p.is_required  ";
+			$sql .= " FROM preference p, warrior_preference w ";
+			$sql .= " WHERE w.warrior_id = '$wid' AND p.preference_id = w.preference_id ";
+			$sql .= " ORDER BY p.preference_name";
+
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			$rowcount = mysql_num_rows($result);
+			echo "<p class=trace>$sql Returns $rowcount</p>\n";	// CHECK DEVONLY
+
+			//
+			// If No Preferences, select all required and fill in default_values
+			//
+			if ( $rowcount < 1 ) {
+				echo "<p class=trace>None on file</p>\n";	// CHECK DEVONLY
+				$psql = "SELECT preference_id, default_value from preference WHERE is_required = 'Yes'";
+				$presult = mysql_query($psql) or die('Error, query failed: $psql' . mysql_error() );
+				$prowcount = mysql_num_rows($presult);
+				echo "<p class=trace>$psql returned $prowcount</p>\n";	// CHECK DEVONLY
+				$wid = $_SESSION[war_id];
+				echo "<p class=trace>Warrior id is $wid</p>\n";	// CHECK DEVONLY
+
+				while ($row = mysql_fetch_array($presult, MYSQL_ASSOC) ) {
+					if ( !empty ( $wid ) ) {
+						$isql = "INSERT INTO warrior_preference (";
+						$isql .= "warrior_id, preference_id, preference_value, source, last_modified_by)";
+						$isql .= " VALUES('$wid',  '$row[preference_id]', '$row[default_value]',";
+						$isql .= "'$FMT[MODULENAME]','$wid')";
+						echo "<p class=trace>$isql</p>\n";	// CHECK DEVONLY
+						mysql_query($isql) or die('Error, query failed: $isql' . mysql_error() );
+					}
+				}
+			}
+
+			//
+			// Refreash original query set
+			//
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+			$rowcount = mysql_num_rows($result);
+			echo "<p class=trace>$sql Returns $rowcount</p>\n";	// CHECK DEVONLY
+
+            //-------------------------------------
+            // My Current Preferences
+            //-------------------------------------
+
+			$MyPref = array();
+			//
+			// Blurb
+			//
+            echo "<P class=trace>\n";
+			echo "For more information about USA I-Group Portal preferences, see";
+            echo " <A HREF=/help.phpx?table_name=warrior_preference&field_name=Overview&Action=Help>";
+            echo "overview</A>.\n";
+            echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<TABLE id=mypreferences_display_form BORDER>\n";
+			echo "<TH COLSPAN=3 class=ths>My Current Preferences</TH>\n";
+			if ( $rowcount > 0 ) {
+				while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+					echo "<TR>\n";
+
+					echo "  <TD class=tdls>";
+						echo "[ $row[preference_id] ]&nbsp;"; // DEVONLY
+						echo "$row[preference_name]";
+					echo "  </TD>\n";
+
+					if ( $row[preference_value] == 'Yes' ){
+						echo "  <TD class=tdcs BGCOLOR=#66FF66>";
+					} elseif ( $row[preference_value] == 'No' ){
+						echo "  <TD class=tdcs BGCOLOR=#FF3333>";
+					}else{
+						echo "  <TD class=tdcs>";
+					}
+					echo "$row[preference_value]";
+					echo "</TD>\n";
+					echo "  <TD class=tdcs>";
+						if ($row[is_required] == "Yes" ) {
+							echo "&nbsp;<B>*</B>&nbsp;<BR>\n";
+						}else{
+							echo "<A HREF=$_SERVER[PHP_SELF]?warrior_preference_id=$row[warrior_preference_id]&Action=Delete>";
+							echo "<IMG SRC=/images/igroupportal/icons/delete.png BORDER=0></A>\n";
+						}
+					echo "</TD>\n";
+					echo "</TR>\n";
+					$id = $row[preference_id];
+					$MyPref[$id] = $row[preference_value];
+				}
+			}else{
+				echo "<TR><TD class=tdcs>You have no registered preferences</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<P class=trace><B>*</B>These preferences are required for all warriors. You may change their value below</P>\n";
+
+			$sql = " SELECT * from preference ORDER BY preference_name";	// DEVONLY
+			$sql = " SELECT * from preference WHERE is_released = 'Yes' ORDER BY preference_name";	// LIVEONLY
+			$result = mysql_query($sql) or die('Error, query failed: $sql' . mysql_error() );
+
+			$Pref = array();
+			$Type = array();
+			$Class = array();
+			$Binary = array();
+			$RangeList = array();
+			$Description = array();
+			$Id = array();
+			$YesNo = array('Yes','No');
+
+			//
+			// Extract and repackage Data Set of all preferences
+			//
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$id = $row[preference_id];
+				$name = $row[preference_name];
+				$Pref[$id] = $row[preference_name];
+				$Class[$id] = $row[preference_class];
+				$Type[$id] = $row[preference_type];
+				if ( ! empty ( $row[preference_description] ) ) {
+					if ( $row[preference_type] == "Binary" ) { 
+						$name = $row[preference_name];
+						$Description[$name] = $row[preference_description];
+					}
+				}
+				$RangeList[$id] = $row[range_list];
+				$Id[$name] = $id;
+				if ( $row[preference_type] == "Binary" ) {
+					$Binary[$id] = $row[preference_name];
+				}
+			}
+			
+			echo "<P class=trace>To update or add a preference, select the preference and value ";
+			echo "below and click on the <B>Add Preference</B> button</P>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE id=mypreferences_new_form BORDER>\n";
+			echo "<TH class=ths COLSPAN=2>Add or Update My Preferences</TH>\n";
+				echo "<TR>\n";
+			echo "<TH class=ths>Preference</TH><TH class=ths>Value</TH>\n";
+				// Binary
+				echo "<TR>\n";
+				echo "  <TD class=tds>";
+					spew_select_hash_menu('preference_id','','',$Binary);
+				echo "</TD>\n";
+				echo "  <TD class=tds>";
+					spew_select_menu('ANSYN','','', $YesNo);
+				echo "</TD>\n";
+				echo "</TR>\n";
+
+				//
+				// Range
+				//
+				foreach($Id as $name => $id ) {
+					if ($Type[$id] == "Range") {
+						echo "<TR>\n";
+						echo "  <TD class=tdls>";
+							echo "$name";
+						echo "</TD>\n";
+						echo "  <TD class=tds>";
+							$list = array();
+							$list = explode('|', $RangeList[$id]);
+							$pid = 'pref_' . $id;
+							spew_select_menu($pid,'','',$list);
+						echo "</TD>\n";
+						echo "</TR>\n";
+					}
+				}
+
+				//
+				// Query
+				//
+				foreach($Id as $name => $id ) {
+					if ($Type[$id] == "Query") {
+						echo "<TR>\n";
+						echo "  <TD class=tdls>";
+							echo "$name";
+						echo "</TD>\n";
+						echo "  <TD class=tds>";
+							$list = array();
+							$list = get_menu($RangeList[$id]);
+							$pid = 'pref_' . $id;
+							spew_select_menu($pid,'','',$list);
+						echo "</TD>\n";
+						echo "</TR>\n";
+					}
+				}
+
+				//
+				// QueryList
+				//
+				foreach($Id as $name => $id ) {
+					if ($Type[$id] == "QueryList") {
+						echo "<TR>\n";
+						echo "  <TD class=tdls>";
+							echo "$name";
+						echo "</TD>\n";
+						echo "  <TD class=tds>";
+							$list = array();
+							$list = get_menu_array($RangeList[$id]);
+							$pid = 'pref_' . $id;
+							spew_select_hash_menu($pid,'','',$list);
+						echo "</TD>\n";
+						echo "</TR>\n";
+					}
+				}
+
+				//
+				// Open
+				//
+				foreach($Id as $name => $id ) {
+					if ($Type[$id] == "Open") {
+						echo "<TR>\n";
+						echo "  <TD class=tdls>";
+							echo "$name";
+						echo "</TD>\n";
+						echo "  <TD class=tds>";
+							echo "<INPUT TYPE=TEXT NAME=pref_${id} SIZE=40>\n";
+						echo "</TD>\n";
+						echo "</TR>\n";
+					}
+				}
+
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Preference\">\n";
+			echo "</FORM>\n";
+
+			ksort($Description);
+
+			echo "<TABLE id=mypreferences_description_form BORDER CELLPADDING=4 WIDTH=80%>\n";
+			echo "<TH class=ths COLSPAN=2>Preference Explanations</TH>\n";
+			foreach ($Description as $item => $explanation) {
+				echo "<TR><TD VALIGN=TOP class=tdls WIDTH=30%>$item</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>$explanation</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+
+			echo "<P class=trace>If you need to add a preference to the selection list,";
+			echo " contact <A HREF=http://igroupportal.mkp.org/warrior.php?war_id=45759&Action=View>Jerry</A></P>\n";
+		}
+	}else{	// No Action
+		echo "<H1>Error: No Action Parameter: Contact Administrator</H1>\n";
+	}
+
+	spew_footer($FMT);
+?>

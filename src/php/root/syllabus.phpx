@@ -1,0 +1,1388 @@
+<?php
+	//#==================================================================
+	//# Training Syllabus
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/24 15:15:19 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/syllabus.phpx,v $
+	//# $Id: syllabus.phpx,v 1.2 2012/12/24 15:15:19 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no war_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+	session_start();
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$param = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl =  $_SERVER['PHP_SELF'] . '?' .  $param;
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}else{
+			$returl =  $_SERVER['PHP_SELF'];
+			header("Location: $WICCFG[WICURL]/login.phpx?RetUrl=$returl");;
+		}
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"I-Group Training Syllabus",
+		'TITLE'			=>	"I-Group Training Syllabus",
+		'MODULENAME'	=>	"syllabus.phpx",
+		'NAV1'			=>	"INFO",
+		'NAV2'			=>	"IGT"
+	);
+
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$SYLLABUSCFG = array (
+		'EDITLEVEL'		=>	'1'			// Access level to get edit screen
+	);
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+		'syllabus_id',
+		'curriculum_id',
+		'syllabus_name',
+		'syllabus_class',
+		'syllabus_source',
+		'variant_of',
+		'author_id',
+		'syllabus_description'
+	);
+
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+		'syllabus_id',	// DEVONLY
+		'syllabus_name',
+		'author_id',
+		'curriculum_id',
+		//'variant_of',
+		'syllabus_class',
+		'syllabus_source'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+		'author_id',
+		'syllabus_class',
+		'syllabus_source',
+		'syllabus_name'
+	);
+	//
+	// Fields that are from a Menu Picklist that can have new members
+	//
+	$EXTEND = array(
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+		'author_id'				=>	'Select author',
+		'syllabus_class'		=>	'Enter syllabus class',
+		'curriculum_id'			=>	'Select core curriculum',
+		'syllabus_description'	=>	'Enter syllabus description',
+		'syllabus_name'			=>	'Enter unique syllabus name',
+		'syllabus_source'		=>	'Enter syllabus source'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'syllabus_id'
+	);
+
+	$FieldType = array(
+		'curriculum_id'			=>	'MenuArray',
+		'variant_of'			=>	'MenuArray',
+		'author_id'				=>	'WhoMenuArray',
+		'syllabus_class'		=>	'Menu',
+		'syllabus_source'		=>	'Menu',
+		'syllabus_description'	=>	'TextArea'
+	);
+
+	$BASE = "SELECT choice FROM menu WHERE table_name = 'syllabus' AND field_name = ";
+	$Menu = array(
+		"syllabus_id"		=> "SELECT syllabus_id, syllabus_name from syllabus",
+		"variant_of"		=> "SELECT syllabus_id, syllabus_name from syllabus",
+		"curriculum_id"		=> "SELECT curriculum_id, curriculum_name from curriculum",
+		"syllabus_class"		=> "$BASE 'syllabus_class' ORDER by choice",
+		"syllabus_source"		=> "$BASE 'syllabus_source' ORDER by choice"
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'syllabus_name'		=>	'tds'	// small left justified
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+	if (array_key_exists(Action, $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		spew_query_form();
+
+
+		//----------------------------------------------------------------------
+	  	// Clone Syllabus as Variant
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Clone Syllabus as Variant" ) {
+			caa_connect();
+			$today = date('Y-m-d');
+			$wid = $_SESSION['war_id'];
+
+
+			//
+			// Confirm valid entry (Not default zero) selected in Variant Of
+			//
+			if ( array_key_exists('variant_of', $_REQUEST)) {
+				if ( isset ($_REQUEST['variant_of'] ) ) {
+					$vid = stripslashes( $_REQUEST['variant_of']);
+					if ( ! is_numeric($lid) ) {
+						die ("Syllabus  ID ($vid) from variant of is not an integer.") ;
+					}
+					if ( $vid < 1 ) {
+						die ("Invalid variant of selected for Syllabus clone ($vid).") ;
+					}
+				}else{
+					die ("NO Source Syllabus ID selected in variant of in Clone Function function.") ;
+				}
+			}else{
+				die ("No source syllabus in variant of set") ;
+			}
+
+			//
+			// Identify Clone Author
+			//
+			$sql = "SELECT war_fname, war_lname from warrior where war_id = 'wid'";
+			$Who = array();
+			$Who = get_menu($sql);
+			$me = "<A HREF=/warrior.phpx?war_id=$wid&Action=View>";
+			$me .= $Who['war_fname'] . " " . $Who['war_lname'] . "</A>";
+
+			//
+			// Get Information from Source variant_of
+			//
+			$CloneSource = array();
+			$sql = "SELECT * FROM syllabus WHERE syllabus_id = '$vid'";
+			$result = mysql_query($sql);
+			$CloneSource = mysql_fetch_array($result, MYSQL_ASSOC) ;
+			delete($CloneSource['syllabus_id']);
+			//
+			// Enter clone placeholder
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('syllabus','syllabus',$WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			$sql = 'INSERT INTO syllabus (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $CloneSource)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $CloneSource)) {
+					$val = strip_slashes($CloneSource[$f]);
+					$val2 = mysql_real_escape_string($val);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+			$sid = mysql_insert_id();
+			echo "<CENTER>\n";
+			echo "<H2>Clone Syllabus record successfully created</H2>\n";
+			echo "</CENTER>\n";
+			//
+			// Get roster of modules
+			// Create new roster of modules for new syllabus
+			//
+
+			//mysql> desc syllabusmodule;
+			//+-------------------+------------------+------+-----+---------+----------------+
+			//| Field             | Type             | Null | Key | Default | Extra          |
+			//+-------------------+------------------+------+-----+---------+----------------+
+			//| syllabusmodule_id | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+			//| syllabus_id       | int(10) unsigned | NO   |     | NULL    |                |
+			//| module_id         | int(10) unsigned | NO   |     | NULL    |                |
+			//| sequence          | smallint(6)      | NO   |     | NULL    |                |
+			//| duration          | tinyint(4)       | YES  |     | NULL    |                |
+			//| notes             | text             | YES  |     | NULL    |                |
+			//+-------------------+------------------+------+-----+---------+----------------+
+			//KKK
+			$row = array();
+			$sql = "SELECT * from syllabusmodule WHERE syllabub_id = '$vid'";
+			$result = mysql_query($sql);
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$sqlx = "INSERT INTO curriculum_module ";
+				$sqlx .= " (syllabus_id, module_id, sequence, duration, notes) VALUES (";
+				$sqlx .= " '$sid','$row[module_id]','$row[sequence]','$row[duration]',";
+				$sqlx .= " 'Cloned from <A HREF=/syllabus.phpx?syllabus_id=$vid&Action=View>";
+				$sqlx .= " $CloneSource[syllabus_name]</A> on $today by $me. Original Notes: ";
+				$sqlx .= " $row[notes]')";
+				echo "<p class=trace>$sqlx</p>\n";	//DEBUG DEVONLY
+				$result = mysql_query($sqlx);
+			}
+			//
+			// Edit New syllabus attributes, fall through to Edit function
+			//
+			$_REQUEST['syllabus_id'] = $sid;
+			$_REQUEST['Action'] = "Edit";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Entry" ) {
+			caa_connect();
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('syllabus','syllabus',$WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			// Define default values
+			$Default = array (
+				'state'	 =>  'New'
+			);
+
+
+			// Setup default values
+			foreach ($Default as $key => $val ) {
+				if ( ! isset ( $_REQUEST[$key]) ) {
+					$_REQUEST[$key] = $val;
+				}
+			}
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['syllabus_id']);
+
+			//
+			// Requred fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO syllabus (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+
+			echo "<CENTER>\n";
+			echo "<H2>Record successfully added</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+
+			if ( array_key_exists('syllabus_id', $_REQUEST)) {
+				$lid = $_REQUEST[syllabus_id];
+				if (! is_numeric( $lid ) ) {
+					die ("ERROR: Attempt to update requires syllabus_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Item Id Set") ;
+			}
+
+			caa_connect();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM syllabus WHERE syllabus_id = '$lid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('syllabus','aaaaaaaaaa',$WICCFG['DBNAME']);
+
+			print '<pre>';						// DEBUG DEVONLY
+			echo "Incoming Updated Fields\n";   // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';						// DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Update only the fields that have changed
+			//
+			$sql = 'UPDATE syllabus SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlentry[] = $f . " = '" . $val . "'";
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE syllabus_id = '$lid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST[Action] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Query or Full Query
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query" 
+	  		|| $_REQUEST['Action'] == "Query Derivatives" ) {
+
+			caa_connect();
+			$fieldlabel = array();
+
+			$fieldlabel = get_field_labels('syllabus','syllabus',$WICCFG['DBNAME']);
+			$fields = array_keys($fieldlabel);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters['Action'] = $_REQUEST['Action'];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$validentries[] = $key . '=' . $val;
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$What = array(
+				's.*',
+				'c.curriculum_name',
+				'w.war_fname',
+				'w.war_lname'
+			);
+			$Where = array(
+				's.author_id = w.war_id',
+				's.curriculum_id = c.curriculum_id'
+			);
+			$From = array(
+				'curriculum'	=>	'c',
+				'syllabus'		=>	's',
+				'warrior'		=>	'w'
+			);
+
+			//
+			// Show children of some specific syllabus
+			//
+			if ($_REQUEST['Action'] == 'Query Derviatives') {
+				$fields[] = 'variant_of';
+				$Where[] = "s.variant_if = '$_REQUEST[syllabus_id]'";
+			}
+
+			//
+			// Construct where clause into an array
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+					if ( ! empty($val) ) {	// DEV: Can we populate an entry with a blank, e.g. reset?
+						if ( preg_match('/%/', $val)) { 
+							$Where[] = 's.' . $f . "LIKE '" . $val . "'" ;
+						}else{
+							$Where[] =  's.' . $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT DISTINCT " . implode(',', $What);
+
+			$Fromsql = array();
+
+			foreach ($From as $table => $abbr) {
+				$Fromsql[] = $table . ' ' . $abbr;
+			}
+			$Fromsql = array_unique($Fromsql);
+
+			$sql .= ' FROM ' . implode(', ', $Fromsql);
+
+			if ( count($Where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $Where);
+			}
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Name'		=>	's.syllabus_name',
+				'Syllabus Name'		=>	's.syllabus_name',
+				'Curriculum Name'		=>	'c.curriculum_name, s.syllabus_name',
+				'Type'		=>	's.syllabus_type, s.syllabus_name'
+			);
+
+			$sortby = $_REQUEST['Sortmeby'];
+			$sby = $OrderBy[$sortby];
+
+			if (empty ($sby)){
+				$sql .= ' ORDER BY s.syllabus_name';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			if ($_SESSION['access'] >= $SYLLABUSCFG['EDITLEVEL'] ) {
+				echo "<TH class=ths>Edit</TH>\n";		// SECURITY
+			}
+
+			echo "<TH class=ths>View</TH>\n";
+
+			unset($fields[syllabus_id]);
+
+			foreach ($ALLFIELD as $f) {
+
+				if ($_REQUEST[Action] == "Full Query" ) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}else{
+					if (in_array($f, $SHOW)) {
+						echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+					}
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+				// Edit if authorized
+				// SECURITY
+				if ($_SESSION['access'] >= $SYLLABUSCFG['EDITLEVEL'] ) {	
+					echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?syllabus_id=$row[syllabus_id]";
+					echo "&Action=Edit>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif BORDER=0></A>";
+					echo "</TD>\n";
+				}
+	
+				// View for everyone
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+					echo "<A HREF=$_SERVER[PHP_SELF]?syllabus_id=$row[syllabus_id]";
+					echo "&Action=View>";
+					echo "<IMG SRC=/images/smallballs/yellowball.gif BORDER=0></A>";
+				echo "</TD>\n";
+	
+				foreach ($ALLFIELD as $f) {
+					$css = "tdcs";
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'syllabus_id' ) {
+						$display = $row[syllabus_name];
+					}
+
+					// Author ID
+					if ( $f  == 'author_id' ) {
+						$display = $row['war_fname'] . " " . $row['war_lname'];
+					}
+
+					// Curriculum ID
+					if ( $f  == 'curriculum_id' ) {
+						$display = "<A HREF=/curriculum.phpx?curriculum_id=$row[curriculum_id]&Action=View>";
+						$display .= $row['curriculum_name'];
+						$display .= "</A>";
+					}
+
+
+					if (in_array($f, $SHOW)) {
+
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+
+						echo "<TD VALIGN=TOP class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "New" ) {
+			caa_connect();
+
+			$menulist = array();
+			$table = 'syllabus';
+			// BLURB
+			echo "<P class=trace>";
+			echo "If this is a variant of an existing syllabus (including all modules), select the existing";
+			echo "syllabus name in the <I>Variant Of</I>\n";
+			echo "box and click on <I>Clone Syllabus as Variant</I> button. Otherwise, fill out form and click on\n";
+			echo "<I>Insert New Entry</I>. Once syllabus is created, you can add/edit content modules.\n";
+			echo "For help, see <A HREF=/help.phpx?table_name=syllabus&field_name=Overview&Action=Help>Overview</A>.";
+			echo "</P>\n";
+
+			echo "<CENTER>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabel = get_field_labels('syllabus','syllabus',$WICCFG['DBNAME']);
+
+			unset($fieldlabel['syllabus_id']);
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR>\n";
+				echo "<TD CLASS=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$val</A></TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+						if (in_array($fieldname, $EXTEND)) {
+							echo "-OR- <INPUT TYPE=TEXT NAME=NEW_${fieldname}>";
+						}
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						asort($menulist);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'',$menulist);
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname></TEXTAREA>\n";
+					}
+					if ($FieldType[$fieldname] == "WhoMenuArray" ) {
+						$Who = array();
+						$sqlw = "SELECT war_fname, war_lname from warrior where war_id = '$_SESSION[war_id]'";
+						$Who = get_menu($sqlw);
+						$display = implode(" ", $Who);
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname>";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HINDDEN NAME=author_id VALUE=\"$_SESSION[war_id]\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Clone Syllabus as Variant\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}//End if ($_REQUEST['Action'] == "New" ) 
+
+		//----------------------------------------------------------------------
+	  	// Edit 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+			$table='syllabus';
+
+			if ( array_key_exists('syllabus_id', $_REQUEST)) {
+				if ( isset ($_REQUEST['syllabus_id'] ) ) {
+					$sid = stripslashes( $_REQUEST['syllabus_id']);
+				}else{
+					die ("NO Syllabus ID in edit function.") ;
+				}
+				if ( ! is_numeric($sid) ) {
+					die ("Syllabus ID ($sid) is not an integer.") ;
+				}
+			}else{
+				die ("No Syllabus Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM syllabus WHERE syllabus_id = '$sid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('syllabus','syllabus',$WICCFG['DBNAME']);
+
+			echo "<CENTER>\n";
+			echo "<TABLE CELLPADDING=4 BORDER=4>\n";
+			echo "<TH class=ths>Syllabus Information</TH>\n";
+			echo "<TH class=ths>Training Module Roster</TH>\n";
+			echo "<TR>\n";
+			echo "<TD VALIGN=TOP>\n";
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR>\n";
+				echo "<TD class=tdls>";
+				echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+				echo "$label";
+				echo "</A>";
+				echo "</TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=syllabus_id VALUE=$_REQUEST[syllabus_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			// SECURITY
+			if ( $_SESSION['access'] >= $SYLLABUSCFG['EDITLEVEL'] ) {
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			}
+			echo "</FORM>\n";
+
+			show_comment_history($syllabus_id, $syllabus);
+
+			echo "</TD><TD VALIGN=TOP ALIGN=CENTER>\n";
+				$sql = "SELECT m.module_name, x.syllabusmodule_id, x.module_id, x.sequence, x.duration";
+				$sql .= " FROM module m, syllabusmodule x ";
+				$sql .= " WHERE x.syllabus_id = '$sid'";
+				$sql .= " AND x.module_id = m.module_id";
+				$sql .= " ORDER BY x.sequence, m.module_name";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+				// Blurb
+				echo "<P class=trace>Click on icons in move column to change order of modules.\n";
+				echo "</P>\n";
+
+				echo "<TABLE BORDER=1>\n";
+				echo "<TH class=tds>Move</TH>\n";
+				echo "<TH class=tds>Edit/Delete</TH>\n";
+				echo "<TH class=tds>Sequence</TH>\n";
+				echo "<TH class=tds>Module Name</TH>\n";
+				echo "<TH class=tds>Duration (Min)</TH>\n";
+				//KKK
+				$row = array();
+				$result = mysql_query($sql);
+				while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+					echo "<TR>\n";
+					// Move Icons
+					echo "<TD class=tdcs>\n";
+					// Icons
+					echo "TBD";
+					echo "</TD>\n";
+					// Edit/Delete
+					echo "<TD class=tdcs>\n";
+					echo "<A HREF=$_SERVER[PHP_SELF]?syllabusmodule_id=$row[syllabusmodule_id]$Action=Edit+Slot>";
+					echo "<IMG SRC=/images/smallballs/greenball.gif></A>\n";
+					echo "&nbsp;|&nbsp;";
+					echo "<A HREF=$_SERVER[PHP_SELF]?syllabusmodule_id=$row[syllabusmodule_id]$Action=Delete+Slot>";
+					echo "<IMG SRC=/images/smallballs/redball.gif></A>\n";
+					echo "</TD>\n";
+					// Sequence
+					echo "<TD class=tdcs>\n";
+					echo "$row[sequence]</A>\n";
+					echo "</TD>\n";
+					// Module name
+					echo "<TD class=tdcs>\n";
+					echo "<A HREF=/module.phpx?module_id=$row[module_id]&Action=View>";
+					echo "$row[module_name]</A>\n";
+					echo "</TD>\n";
+					// Duration
+					echo "<TD class=tdcs>\n";
+					echo "$row[duration]\n";
+					echo "</TD>\n";
+				}
+			echo "</TD>\n";
+			// Inner Right Table
+			echo "</TABLE>\n";
+
+			// Outer Table
+			echo "</TABLE>\n";
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "View" ) {
+
+			$table = 'syllabus';
+
+			if ( array_key_exists('syllabus_id', $_REQUEST)) {
+				if ( isset ( $_REQUEST[syllabus_id] ) ) {
+					$syllabus_id = $_REQUEST['syllabus_id'];
+				}else{
+					die ("No Syllabus ID in view function") ;
+				}
+				if ( ! is_numeric($syllabus_id) ) {
+					die ("Syllabus ID ($syllabus_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Syllabus Id Set") ;
+			}
+			$table_id = $syllabus_id;
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT s.*, c.curriculum_name, w.war_fname, w.war_lname";
+			$sql .= " FROM syllabus s, curriculum c, warrior w";
+			$sql .= " WHERE s.syllabus_id = '$syllabus_id'";
+			$sql .= " AND s.author_id = w.war_id";
+			$sql .= " AND c.curriculum_id = s.curriculum_id";
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('syllabus','syllabus',$WICCFG['DBNAME']);
+
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER=4 CELLSPACING=4>\n";
+			echo "<TH class=ths>Syllabus Details</TH>\n";
+			echo "<TH class=ths>Training Module Roster</TH>\n";
+
+			echo "<TR>\n";
+			echo "<TD VALIGN=TOP ALIGN=CENTER>\n";
+
+				echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+				echo "<TABLE BORDER>\n";
+	
+				foreach ($ALLFIELD as $fieldname ) {
+					$label = $fieldlabel[$fieldname];
+					echo "<TR>\n";
+					echo "<TD class=tdls>";
+					echo "<A HREF=/help.phpx?table_name=$table&field_name=$fieldname&Action=Help>";
+					echo "$label</A></TD>\n";
+
+					echo "<TD VALIGN=TOP class=tds>";
+					$display = stripslashes($row[$fieldname]);
+					if ($fieldname == 'author_id'){
+						$display = "<A HREF=/warrior.phpx?war_id=$row[author_id]&Action=View>";
+						$display .= $row['war_fname'] . " " . $row['war_lname'] . "</A>";
+					}
+					if ($fieldname == 'curriculum_id'){
+						$display = "<A HREF=/curriculum.phpx?curriculum_id=$row[curriculum_id]&Action=View>";
+						$display .= $row['curriculum_name'] . "</A>";
+					}
+	
+					echo "$display<BR>";
+					echo "</TD>\n";
+				}//Endforeach fieldname
+				echo "</TABLE>\n";
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+				echo "</FORM>\n";
+	
+				//
+				// Show Comment History
+				//
+				echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$_REQUEST[$tid]>\n";
+				echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=$table>\n";
+				if ( $_SESSION['access'] >= $SYLLABUSCFG['EDITLEVEL'] ) {
+					echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Edit\">\n";
+				}
+				echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+				echo "</FORM>\n";
+
+				show_comment_history($pid, $table);
+
+			echo "</TD><TD VALIGN=TOP ALIGN=CENTER>\n";
+				$sql = "SELECT m.module_name, x.syllabusmodule_id, x.module_id, x.sequence, x.duration";
+				$sql .= " FROM module m, syllabusmodule x ";
+				$sql .= " WHERE x.syllabus_id = '$sid'";
+				$sql .= " AND x.module_id = m.module_id";
+				$sql .= " ORDER BY x.sequence, m.module_name";
+				echo "<P class=trace>$sql</P>\n";	// DEVONLY
+
+				// Blurb
+				echo "<P class=trace>Sequence numbers need not be contiguous</P>\n";
+
+				echo "<TABLE BORDER=1>\n";
+				echo "<TH class=tds>Sequence</TH>\n";
+				echo "<TH class=tds>Duration (Min)</TH>\n";
+				echo "<TH class=tds>Module Name</TH>\n";
+				$row = array();
+				$result = mysql_query($sql);
+				while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+					echo "<TR>\n";
+					// Sequence
+					echo "<TD class=tdcs>\n";
+					echo "$row[sequence]</A>\n";
+					echo "</TD>\n";
+					// Duration
+					echo "<TD class=tdcs>\n";
+					echo "$row[duration]\n";
+					echo "</TD>\n";
+					// Module name
+					echo "<TD class=tdcs>\n";
+					echo "<A HREF=/module.phpx?module_id=$row[module_id]&Action=View>";
+					echo "$row[module_name]</A>\n";
+					echo "</TD>\n";
+				}
+			echo "</TD>\n";
+			// Inner Right Table
+			echo "</TABLE>\n";
+
+			// Outer Table
+			echo "</TABLE>\n";
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "View")
+
+		//----------------------------------------------------------------------
+		// END 'Action' Processing Options
+		//----------------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		global $WICCFG;
+		caa_connect();
+		echo "<P class=trace>";
+		echo "Help and explanations available on topics of ";
+		echo "<A HREF=$WICCFG[WICURL]/help.phpx?table_name=hhh&field_name=hhh&Action=Help>Blah</A>, ";
+		echo "or <A HREF=$WICCFG[WICURL]/help.phpx?table_name=hhh&field_name=hhh&Action=Help>Blee</A> ";
+		echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Syllabus Name</TH>\n";
+		echo "<TH class=ths>Curriculum Name</TH>\n";
+		echo "<TH class=ths>Author Name</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+
+		// Syllabus Name
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT syllabus_id, syllabus_name from syllabus order by syllabus_name";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('syllabus_id','','All',$list);
+		echo "</TD>\n";
+
+		// Curriculum Name
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT curriculum_id, curriculum_name from curriculum order by curriculum_name";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('curriculum_id','','All',$list);
+		echo "</TD>\n";
+
+		// Author Name
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT w.war_id, w.war_lname FROM warrior w, syllabus s";
+		$sql = " WHERE w.war_id = s.author_id ORDER by w.war_lname, w.war_fname";
+
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('author_id','All','All',$list);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Syllabus Name',
+			'Curriculum Name',
+			'Author'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Syllabus Name',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		// SECURITY
+		if ($_SESSION['access'] >= $SYLLABUSCFG['EDITLEVEL'] ) {
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		}
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function Show Comment History
+	//----------------------------------------------------------------
+
+	function show_comment_history ( $cid, $ctable ) {
+		global $WICCFG;
+
+		$subname = "show_comment_history";
+
+		echo "<P class=trace>Entering $subname in $program</P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"author_id"			=>	"45759",
+			"comment_type"		=>	"Comment",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		//
+		// Get List of nicknames for comment authors
+		//
+		$Who = array();
+		$sql = "SELECT w.war_id, w.war_fname, w.war_nname, w.war_lname, war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$pid' ";
+		$Who = get_warrior_name_picklist($sql);
+
+		//
+		// Get List of emails for comment authors
+		//
+		$AuthorEmail = array();
+		$sql = "SELECT w.war_id , war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$pid' ";
+		$AuthorEmail = get_menu_array($sql);
+
+		//
+		// Get List of existing comment types
+		//
+		$sql = "SELECT distinct comment_type from comment";
+		$ctypes =  get_menu($sql);
+
+		//
+		// Generate SQL query
+		//
+	
+		$dbh = caa_connect;
+		$cfields =  get_fields('comment','comment');
+	
+		$sql = "SELECT  ";
+		$sql .= " c.comment_id, c.comment_access,  c.author_id, c.date_created, c.comment_type,";
+		$sql .= " c.comment_summary, c.comment_detail"; 
+		$sql .= " FROM comment c WHERE c.table_name = '$ctable' and c.table_id = '$pid' ";
+
+		if (! isset($_SESSION[war_id] ) ) {
+			$sql .= " AND c.comment_access = 'Public' ";
+			echo "<P class=trace>Following are all public entries. ";
+			echo "Remaining entries visible after <A HREF=/login.phpx>logging in.</A></P>\n";
+		}
+
+		$sql .= " ORDER BY c.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//
+
+		$TotalEntries = '0';
+		$result = mysql_query($sql);
+		$rowcount = mysql_num_rows($result);
+		$Sort = array();
+		$Comment = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Comment History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Comment] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			print "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Comment Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Comment=Summary/', '', $url);
+			print "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">Show Comment Details</P>\n";
+		}
+
+		$count = mysql_num_rows($result);
+		echo "<CENTER>\n";
+		$howmany = "Entries";
+
+		if ( $count == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<TABLE id=${ctable}_comment_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Comment'] == "Detail" ) {
+			echo "<TH class=ths>Details of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=commentlist>\n";
+
+		while ($Comment = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			$ts =  timestamp2display($Comment[date_created]);
+			echo "<LI>";
+			echo "<A HREF=\"/comment.phpx?comment_id=$Comment[comment_id]&Action=View\">";
+			echo "<IMG SRC=/images/smallballs/greenball.gif HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Comment['author_id'];
+
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">$Who[$author_id]</A>:\n";
+
+			echo "$Comment[comment_summary]\n";
+
+			if ( $_REQUEST[Comment] == "Detail" ) {
+				echo "<UL id=commentlistbody><LI>\n";
+				echo "<PRE>\n";
+				$cleantext = stripslashes($Comment[comment_detail]);
+				$display = wordwrap($cleantext, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		if (! $count) {
+			echo "<LI>No comment entries</LI>\n";
+		}
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+	}// End funtion show_comment_history
+	//----------------------------------------------------------------
+	// Function Get Warrior Full Name Picklist
+	//----------------------------------------------------------------
+	function get_warrior_name_picklist ( $sql ) {
+		global $WICCFG;
+		caa_connect();
+		$row = array();
+		$MyWho = array();
+		if (empty ($sql) ) {
+			die ("Function get_warrior_name_picklist attempted without sql statement: $sql");
+		}
+		$result =  mysql_query($sql);
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			if ( empty ( $row['war_nname'] ) ) {
+				$name = $row['war_fname'] . ' ' . $row['war_lname'];
+			}else{
+				$name = $row['war_nname'] . ' ' . $row['war_lname'];
+			}
+			$id = $row['war_id'];
+			$MyWho[$id]  = $name;
+		}
+		return($MyWho);
+	}// End funtion get_warrior_name_picklist
+
+
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack ( array $Data ) {
+		global $WICCFG;
+		//
+		// Config parameters for email acknowledgement
+		//
+		$LOGINEMAIL = array (
+			'subject'		=>	"MKP Login Assistance", 
+			'fromemail'		=>	"mkphelp@mkp.org",
+			'toemail'		=>	"jerbowes@yahoo.com",	// Safety, overwritten in send_email_ack
+			'fromname'		=>	"MKP Login Assistant" 
+		);
+
+		if ( $Data[war_email] ) {
+			$LOGINEMAIL[toemail] = $Data[war_email];
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $Data[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "LOGINEMAIL<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($LOGINEMAIL), ENT_QUOTES);	//DEBUG DEVONLY
+		echo "Incoming Data<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($Data), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		$fd = popen($WICCFG[MAILER],"w"); 
+		//
+		// Construct Mail Headers
+		//
+		fputs($fd, "From: $LOGINEMAIL[fromname] <$LOGINEMAIL[fromemail]>\n"); 
+		fputs($fd, "To: $LOGINEMAIL[toname] <$LOGINEMAIL[toemail]>\n"); 
+
+		if ( $Data[war_email2] ) {
+			fputs($fd, "Cc: $Data[war_email2]\n"); 
+			echo "<CENTER>\n";
+			echo "<H2>A copy has also been sent to your alternate email $Data[war_email2]</H2>\n";
+			echo "</CENTER>\n";
+		}
+		//
+		// Subject
+		//
+		fputs($fd, "Subject: $LOGINEMAIL[subject]\n\n"); 
+		//
+		// Body
+		//
+		fputs($fd, "Your MKP login password has been reset. Below are your MKP login credentials\n\n"); 
+		fputs($fd, "Username (Warrior User Name): $Data[access_username]\n");
+		fputs($fd, "Password: $Data[password]\n\n");
+		fputs($fd, "Phonetic: $Data[phonetic]\n\n");
+		fputs($fd, "Expiration Date: $Data[expiration_date]\n\n");
+		fputs($fd, "You must reset your password before the expiration date.\n");
+		fputs($fd, "Click on the following link to log in and reset your password\n\n");
+		fputs($fd, "$WICCFG[WICURL]/login.phpx?wid=$Data[war_id]&encpw=$Data[encrypted_password]&login=$Data[login]&Action=Change\n\n");
+		fputs($fd, "Do not reply to this email. If you are having any difficulties, please fill\n");
+		fputs($fd, "out an MKP IT helpdesk request at the following link url:\n\n");
+		fputs($fd, "\thttp://helpdesk.mkp.org\n");
+
+		pclose($fd); 
+	}//End function send_email_ack
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>

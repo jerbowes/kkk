@@ -1,0 +1,655 @@
+<?php
+	//#==================================================================
+	//# Zipcode Map Query and Management
+	//#==================================================================
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/30 19:25:05 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/zipdata.phpx,v $
+	//# $Id: zipdata.phpx,v 1.21 2012/12/30 19:25:05 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once('./include/looknfeel-inc.phpx');
+	require_once('./include/msutils-inc.phpx');
+	require_once('./include/config-inc.phpx');
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+			header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		}else{
+			header("Location: $WICCFG[SECWICURL]/login.phpx");
+		}
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------
+    // Look and feel header and footer formatting
+	//------------------------------------------------------------------------
+	$FMT = array (
+		'BANNER'	=>	'I-Group Zip Code Region Management',
+		'TITLE'		=>	'I-Group Zip Code Region Management',
+		'MODULE'	=>	'zipdata.phpx',
+		'NAV1'		=>	'IGROUPS',
+		'JSCHECKBOX2'	=>	'TRUE'		// checkbox2.js
+	);
+
+	$ALLFIELD = array(
+		'zipdata_id',
+		'region_id',
+		'center_id',
+		'igroup_region_id',
+		'zip_code',
+		'city',
+		'state',
+		'state_abbreviation',
+		'province',
+		'province_abbreviation',
+		'county',
+		'country',
+		'area_codes',
+		'latitude',
+		'longitude',
+		'timezone ',
+		'is_dst',
+		'is_primary',
+		'multi_county',
+	);
+
+	$SHOW = array(
+		//'center_id',
+		//'igroup_region_id',
+		'zip_code',
+		'city',
+		'county',
+		'state',
+		'area_codes'
+	);
+	// Fields that can have query drill down links on display
+	$LINK = array(
+		'region_id',
+		'center_id',
+		'igroup_region_id',
+		'zip_code',
+		'city',
+		'county',
+		'state'
+	);
+
+	// Global query choices
+	$InValidChoice = array(
+		'All',
+		' ',
+		'',
+		'Choose'
+	);
+
+	// Edit record fields with edit disabled
+	$NoEdit = array(
+		'zipdata_id',
+		'zip_code',
+		'city',
+		'state',
+		'state_abbreviation',
+		'province',
+		'province_abbreviation',
+		'county',
+		'country',
+		'area_codes',
+		'latitude',
+		'longitude',
+		'timezone ',
+		'is_dst',
+		'is_primary',
+		'multi_county',
+	);
+	$MenuType = array(
+		"center_id"			=>	"Menu Array",
+		"igroup_region_id"	=>	"Menu Array",
+		"region_id"			=>	"Menu Array"
+	);
+
+	$Menu = array(
+		"center_id"			=>	"SELECT center_name, center_id from center order by center_name",
+		"igroup_region_id"	=>	"SELECT igrpreg_name, igrpreg_id_id from igroup_regions order by igrpreg_name",
+		"region_id"			=>	"SELECT georegion_name, georegion_id from georegion order by georegion_name"
+	);
+
+
+	// Display exceptions from default tdcs centered display table cell
+	$JustifyCss = array(
+		'summary',	'tds'	// small left justified
+	);
+
+	spew_header($FMT);
+
+	if (array_key_exists('Action', $_REQUEST)) {
+		echo "<PRE>\n";		// DEBUG DEVONLY
+		print_r ($_REQUEST);		// DEBUG DEVONLY
+		echo "</PRE>\n";		// DEBUG DEVONLY
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+			caa_connect();
+			$irid = $_REQUEST['igroup_region_id'];
+
+ 			if (! is_numeric( $irid ) ) {
+				echo "<CENTER>\n";
+				echo "<H3>You must select an I-Group Region to assign these zip code areas to</H3>\n";
+				echo "<H4>Please click the back button of your browser, select an I-Group Region and try again.</H4>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+
+			$msql = "SELECT r.igrpreg_id, r.igrpreg_name, ";
+			$msql .= " c.center_id, i.region_id FROM igroup_regions r, center c, iso_country i";
+			$msql .= " WHERE c.center_id = r.igrpreg_cen AND i.iso_code = 'US'";
+			echo "<p class=trace>$msql</p>\n";	//DEBUG DEVONLY
+			$mresult = mysql_query($msql);
+
+			$MyCenter = array();
+			$MyRegion = array();
+			$MyIgroupRegionName = array();
+
+			while ($mrow = mysql_fetch_array($mresult, MYSQL_ASSOC) ) {
+				$igregid = $mrow['igrpreg_id'];
+				$MyCenter[$igregid]	= $mrow['center_id'];
+				$MyRegion[$igregid]	= $mrow['region_id'];
+				$MyIgroupRegionName[$igregid]	= $mrow['igrpreg_name'];
+			}
+
+			$Manifest = array();
+
+			foreach ($_REQUEST[ZIP] as $zval ) {
+				echo "<P class=trace> Pushing [$zval] onto Manifest</P>\n"; // DEBUG DEVONLY
+				$Manifest[] = $zval;
+			}
+
+			$cid = $MyCenter[$irid];
+			$rid = $MyRegion[$irid];
+
+
+			if (count($Manifest) > 0 ) {
+				foreach ($Manifest as $id ) {
+					$sql = "UPDATE zipdata SET region_id = '$rid', center_id = '$cid', ";
+					$sql .= " igroup_region_id = '$irid' WHERE zipdata_id = '$id'";
+					$data .=  "<LI class=trace>$sql</LI>\n";	
+					$result = mysql_query($sql);
+				}
+			}else{
+				echo "<H2>No geographical zip code areas checked for assignment.</H2>\n";
+				spew_footer($FMT);
+				exit;
+			}
+			echo "<H3>Update successful.</H3>\n";
+
+			echo "<TABLE id=zipdata_update_success>\n";	// DEVONLY
+			echo "<TR><TD>\n";							// DEVONLY
+			echo "<UL>\n";								// DEVONLY
+			echo "$data";								// DEVONLY
+			echo "<UL>\n";								// DEVONLY
+			echo "</TD></TR>\n";						// DEVONLY
+			echo "<CENTER>\n";							// DEVONLY
+			echo "</TABLE>\n";							// DEVONLY
+
+			echo "</CENTER>\n";
+			spew_footer($FMT);
+		}
+		//----------------------------------------------------------------------
+	  	// Query 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Query"  || $_REQUEST[Action] == "Query Unassigned" ) {
+			caa_connect();
+			$fieldlabels = get_field_labels('zipdata','xxxxxx');
+			$fields = array_keys($fieldlabels);
+
+			// Get Array of Center Names
+			$sql = "SELECT center_id, center_name from center";
+			$Center = array();
+			$Center = get_menu_array($sql);
+			echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+
+			// Get Array of Center Abbreviations
+			$sql = "SELECT center_id, center_abbr from center";
+			$CenterAbbr = array();
+			$CenterAbbr = get_menu_array($sql);
+
+			echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+
+			$msql = "SELECT * FROM igroup_regions ";
+			if ( empty($_REQUEST['center_id']) ) {
+				echo "<P CLASS=trace>No center selected</P>\n"; // DEBUG DEVONLY
+			}else{
+				$cid = $_REQUEST['center_id'];
+				if (! in_array($cid, $InValidChoice)) {
+					$msql .= " WHERE igrpreg_cen = '$cid'";
+				}
+			}
+			echo "<p class=trace>$msql</p>\n";	//DEBUG DEVONLY
+			$MyIgroupRegionName = array();
+			$MyIgroupRegionNameOnly = array();
+			$result = mysql_query($msql);
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				$iid = $row['igrpreg_id'];
+				$iname = $row['igrpreg_name'];
+				$icid = $row['igrpreg_cen'];
+				# | igrpreg_id | igrpreg_name                           | igrpreg_cen 
+				$MyIgroupRegionName[$iid] = $CenterAbbr[$icid] . ': ' .$iname;
+				$MyIgroupRegionNameOnly[$iid] = $iname;
+				
+			}
+
+			//---------------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//---------------------------------------------------------------
+			$validentries = array();
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($param, $val) = explode( '=', $entry);	
+				if ( $val ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($param, $ALLFIELD) ) {
+							$val = preg_replace("/%/", "", $val); 
+							$parameters[$param] = $val;
+						}
+					}
+				}
+			}
+			$val = $_REQUEST['Action'];
+			$val = preg_replace("/\s+/", "+", $val); 
+			$parameters['Action'] = $val;
+			//
+			// Uniquify for duplicate entries
+			//
+			foreach ($parameters as $key => $val ) {
+				$newentry = $key . '=' . $val;
+				$validentries[] = $newentry;
+			}
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+			//---------------------------------------------------------------
+
+			$sql = 'SELECT * FROM zipdata ';
+			$pubsql = 'Show entries where ';
+			$where = array();
+			$pubwhere = array();
+	  		if ( $_REQUEST[Action] == "Query Unassigned" ) {
+				if (!isset($_REQUEST['center_id'])) {
+					$where[] = "center_id = ''";
+				}
+			}else{
+				array_push($SHOW, 'center_id');
+				array_push($SHOW, 'igroup_region_id');
+			}
+			foreach ($fields as $f) {
+	  			if ( $_REQUEST['Action'] == "Query Unassigned" ) {
+					if ( $f == 'center_id' ) {
+						continue;
+					}
+				}
+
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$label = $f;
+					$label = preg_replace("/_/", " ", $label); 
+					$rawval = $_REQUEST[$f];
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+						unset($rawval) ;
+					}
+					if ( $rawval ) {
+						if ( $f == 'center_id') {
+							$cid = $_REQUEST['center_id'];
+							$csql = "SELECT short_name from center where center_id = '$cid'";
+							$cname = get_value($csql);
+							$pubwhere[] = "in center $cname";
+						}
+						elseif ( $f == 'zip_code' || $f == 'area_codes') {
+							$numval = preg_replace("/[^0-9]/", "", $val); 
+							$where[] = $f . " LIKE '" . $numval . "%'" ;
+							$pubwhere[] = $label . " LIKE '" . $numval . "'" ;
+						}else{
+							$where[] = $f . "='" . $val . "'" ;
+							$pubwhere[] = $f . " = " . $val;
+						}
+					}
+				}
+			}
+			$criteriacount = count($where);
+
+			echo "<PRE>\n"; // DEBUG DEVONLY
+			print_r($where);// DEBUG DEVONLY
+			echo "</PRE>\n"; // DEBUG DEVONLY
+
+			//if ($criteriacount < 2 ) {
+				//echo "<H2>Need at least 2 critera to not kill server, you only have $criteriacount</H2>\n";
+				//spew_footer($FMT);
+				//exit;
+			//}
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+				$pubsql .=  implode(' AND ', $pubwhere);
+			}
+			if ( $_REQUEST[Sortmeby] == 'Reverse City') {
+				$sql .= ' ORDER BY city DESC';
+				$pubsql .= ', reverse sort by city';
+			}
+			//if ( $_REQUEST[Sortmeby] == 'I-Group Region') {
+				//$sql .= ' ORDER BY city DESC';
+			//}
+			if ( $_REQUEST[Sortmeby] == 'City') {
+				$sql .= ' ORDER BY city ';
+				$pubsql .= ', sort by city ';
+			}
+			if ( $_REQUEST[Sortmeby] == 'State') {
+				$sql .= ' ORDER BY state ';
+				$pubsql .= ', sort by state ';
+			}
+			if ( $_REQUEST[Sortmeby] == 'Zip Code') {
+				$sql .= ' ORDER BY zip_code ';
+				$pubsql .= ', sort by zip_code ';
+			}
+			if ( $_REQUEST[Sortmeby] == 'Reverse Zip Code') {
+				$sql .= ' ORDER BY zip_code DESC';
+				$pubsql .= ', reverse sort by zip_code';
+			}
+
+			echo "<p class=trace>$sql</p>\n";	//DEBUG
+			$result = mysql_query($sql);
+			$number_of_records = mysql_num_rows($result); 
+	
+			echo "<CENTER>\n";
+			echo "<HR>\n";
+
+			// Blurb
+			echo "<P class=trace>Select I-Group Region in upper table.\n";
+			echo " Click checkboxes (or box at top to select all in list)";
+            echo " for all cities/zip codes you wish to assign to that region,";
+			echo " then click on <B>Update</B> button at bottom to assign.</P>\n";
+
+			echo "<FORM NAME=\"ziplist\" ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+
+			echo "<TABLE id=zipdata_regionlist_form BORDER>\n";
+			echo "<TH>Assign Checked Zip Codes to this I-Group Region</TH>\n";
+			echo "<TR><TD ALIGN=CENTER>\n";
+			asort($MyIgroupRegionName);
+			spew_select_hash_menu('igroup_region_id','Choose','Choose',$MyIgroupRegionName);
+			echo "</TD>\n";
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Update\">\n";
+
+			echo "<P class=trace>$pubsql\n";
+			echo "<BR>... returned $number_of_records records</P>\n";
+			echo "<P class=trace>Clicking on any label link below will &quot;drill down&quot; to refine your selection.</P>\n";
+
+			echo "<div class=checkbox_container id=checkbox_container>";
+			echo "<TABLE id=zipdata_query_results BORDER>\n";
+			//
+			// Header Row
+			//
+			echo "<TH class=ths>";
+			//echo "Assign"; 
+				echo "<div class=all><input type=checkbox name=null value=1 id=all></div>\n";
+			echo "</TH>\n";
+			unset($fields[zipdata_id]);
+
+			foreach ($SHOW as $f) {
+				echo "<TH class=ths>$fieldlabels[$f]</TH>\n";
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+				echo "<TD ALIGN=CENTER VALIGN=TOP class=tdcs>";
+				$zid = $row['zipdata_id'];
+				echo "<INPUT TYPE=checkbox NAME=\"ZIP[]\" VALUE=\"$zid\">";
+				echo "</TD>\n";
+	
+				foreach ($SHOW as $f) {
+					$display = $row[$f];
+					$cleandisplay = $display;
+					$cleandisplay = preg_replace("/\s+/", "+", $cleandisplay); 
+					// Display Exceptions (lookup)
+					if ( $f  == 'center_id' ) {
+						$display = $Center[$row[$f]];
+					}
+					if ( $f  == 'region_id' ) {
+						$display = $Region[$row[$f]];
+					}
+					if ( $f  == 'igroup_region_id' ) {
+						$display = $MyIgroupRegionNameOnly[$row[$f]];
+					}
+					$linkdisplay = $display; 
+					if ( $f  == 'area_codes' ) {
+						$aclist = array();
+						$aclistdisplay = array();
+						$aclist = explode('/', $row[$f]);
+						foreach ($aclist as $ac ) {
+							$aclistdisplay[] = "<A HREF=$_SERVER[PHP_SELF]?$drilldown&area_codes=$ac>$ac</A>";
+						}
+						$display = implode('&nbsp;/&nbsp;', $aclistdisplay);
+					}
+					if (in_array($f, $SHOW)) {
+						$css = "tdcs";
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+						echo "<TD VALIGN=TOP class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							echo "$f=${cleandisplay}&"; 
+							echo "$drilldown>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</div>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Update\">\n";
+			echo "</CENTER>\n";
+			echo "</FORM>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+	}else{
+		spew_query_form ();
+		spew_howto ();
+		spew_footer($FMT);
+	}
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		caa_connect();
+		echo "<CENTER>\n";
+		echo "<H4>Geographical I-Group Region Database</H4>\n";
+		// Blurb
+		echo "<P class=trace>Enter selection criteria and click on <B>Query Unassigned</B> or <B>Query</B> button.\n";
+		echo "<BR>You can enter a full or partial zip code range e.g.  94523 or 945</P>\n";
+
+		echo "<FORM ACCEPT-CHARSET=\"UTF-8\" ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE id=zipdata_query_form BORDER>\n";
+		echo "<TH class=ths>Zip Code</TH>\n";
+		echo "<TH class=ths>City</TH>\n";
+		echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Area Code</TH>\n";
+		echo "<TH class=ths>Center</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		echo "<TR>\n";
+
+		// Zip Code
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT SIZE=5 NAME=zip_code>\n";
+		echo "</TD>\n";
+
+		// City
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT NAME=city>\n";
+		echo "</TD>\n";
+
+		// State
+		echo "<TD class=tds>\n";
+		$sql = "SELECT DISTINCT state from zipdata order by state";
+		$statelist = get_menu($sql);
+		spew_select_menu('state',$_REQUEST[state],'All',$statelist);
+		echo "</TD>\n";
+
+		// Area Code
+		echo "<TD class=tds>\n";
+		echo "<INPUT TYPE=TEXT SIZE=5 NAME=area_codes>\n";
+		echo "</TD>\n";
+
+		// Center
+		echo "<TD class=tds>\n";
+		$sql = "SELECT center_id, center_name FROM center ORDER BY center_name";
+		$cid = $_SESSION['center_id'];
+		$centerlist = array();
+		$centerlist = get_menu_array($sql);
+		spew_select_hash_menu('center_id',$cid,'All',$centerlist);
+		echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'City',
+			'Reverse City',
+			'State',
+			'Reverse Zip Code',
+			//'I-Group Region',
+			'Zip Code'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','City',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Query Unassigned\">\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+	//----------------------------------------------------------------
+	// Function spew_howto
+	//----------------------------------------------------------------
+	function spew_howto() {
+		echo "<CENTER>\n";
+		echo "<TABLE id=zipdata_description_form BORDER=3 CELLPADDING=4 CELLSPACING=4 WIDTH=80%>\n";
+		echo "<TR>\n";
+		echo "<TD class=tds>\n";
+		echo "<B>What Is This?</B>\n";
+		echo "<P>\n";
+		echo "For things like an online interest form, automated NWTA registration, helping new NWTA graduates find\n";
+		echo "an I-Group close to them, etc., we need some way to look up what\n";
+		echo "center and I-Group Region serves where a man lives or is visiting. This is a geographical lookup database table that\n";
+		echo "associates a USA postal zip-code with a center and I-Group Region so web\n";
+		echo "based tools can determine whom to contact for general interest queries, NWTA registration, and \n";
+		echo " men interested in contacting or visiting I-Groups.\n";
+		echo "</P>\n";
+		echo "<B>How This Works</B>\n";
+		echo "<P>\n";
+		echo "This page has two functions:\n";
+		echo "<UL>\n";
+		echo "<LI>It allows I-Group reps and leaders to register what I-Group regions\n";
+		echo " include which geographical regions by zip codes.\n";
+		echo "<LI>It allows people and automated tools to search based on a zip code\n";
+		echo " and through the online <A HREF=/orgchart.php>org chart</A> and list of \n";
+		echo " <A HREF=/admin/igregions.php>I-Group Region Reps</A> to\n";
+		echo " get more information about or an invitation to visit an I-Group.\n";
+		echo "</UL>\n";
+		echo "This web utility allows anyone to look up\n";
+		echo "postal zip code areas by city, state, area codes, or blocks of zip codes \n";
+		echo "(you can enter &quot;945&quot; and get all zip codes from 94501 - 94599).\n";
+		echo "From any block of zip code areas you can then select an I-Group Region and associate it \n";
+		echo "to some or all of the zip codes in a zip code area.\n";
+		echo "Since I-Group Regions already know what center they belong to this also updates its center.\n";
+		echo "The <B>Query</B> button shows all zip areas whether they are assigned or not, with the additional\n";
+		echo "information of what Center and I-Group Region they belong to if assigned.\n";
+		echo "</P>\n";
+		echo "<B>Assigning Unassigned Zip Code Areas</B>\n";
+		echo "<UL>\n";
+		echo "<LI>In above query form, enter some combination of a zip code block, telephone area code, county, and city</LI>\n";
+		echo "<LI>The form defaults to your home Center. Select a different center from the Center picklist if you wish\n";
+		echo "which will limit the I-Group Region assignment picklist to that Center.</LI>\n";
+		echo "<LI>Click on <B>Query Unassigned</B> button.\n";
+		echo "</UL>\n";
+		echo "You will see a box with a picklist of all I-Group Regions at the top and a long list of postal zip code areas that\n";
+		echo "match your query criteria. Each entry has a check box as the first entry. Clicking on the \n";
+		echo "checkbox at the upper left of the yellow header bar of the lower table toggle \n";
+		echo "(check if unchecked and vice versa) all of the checkboxes displayed.\n";
+		echo "<UL>\n";
+		echo "<LI>Select the I-Group Region from the select box at the top.</LI>\n";
+		echo "<LI>Click on the checkbox for each area (or click on the <B>Select All</B> button) that belongs to that I-Group Region.</LI>\n";
+		echo "<LI>Click on the <B>Update</B> button to assign all those zip code areas to that I-Group Region (and center)</LI>\n";
+		echo "<LI>Repeat the process with different area codes, counties, cities, zip code blocks until all are assigned.</LI>\n";
+		echo "</UL>\n";
+		echo "<B>Verifying Your I-Group Region</B>\n";
+		echo "<UL>\n";
+		echo "<LI>Select your center from the Center picklist</LI>\n";
+		echo "<LI>Click on the <B>Query</B> button</LI>\n";
+		echo "<LI>Click on one of the links under I-Group Region Id for your I-Group Region</LI>\n";
+		echo "<LI>If you see a city/zip code that is not in your I-Group Region: \n";
+		echo "<UL>\n";
+		echo " <LI>Click on the checkbox of that location </LI>\n";
+		echo " <LI>Select the correct I-Group Region from the picklist in the box at the top of the list</LI>\n";
+		echo " <LI>Click on the <B>Update</B> button at the bottom of the page.</LI>\n";
+		echo " </UL>\n";
+		echo "</UL>\n";
+
+		echo "</TD>\n";
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+	}
+?>

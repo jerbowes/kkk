@@ -1,0 +1,376 @@
+<?php
+	//#==================================================================
+	//# Headshot photo update utility
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/30 22:46:52 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/headshot.phpx,v $
+	//# $Id: headshot.phpx,v 1.18 2012/12/30 22:46:52 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#------------------------------------------------------------------
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+	//#------------------------------------------------------------------
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+
+	//------------------------------------------------------------------------
+	// START AUTH: If you are not authenticated, on to login you go
+	//------------------------------------------------------------------------
+	session_start();
+    global $WICCFG;
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$url = preg_replace('/&/','|', $_SERVER['QUERY_STRING']);
+		$returl = $_SERVER['PHP_SELF'];
+		if (! empty ($url) ) {
+			$returl .= '?' . $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=${returl}");
+		exit;
+	}
+	//------------------------------------------------------------------------
+	// END AUTH: 
+	//------------------------------------------------------------------------
+
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"USA I-Group Portal Headshot Image Upload",
+		'TITLE'			=>	"USA I-Group Portal Headshot Image Upload",
+		'MODULENAME'	=>	"$_SERVER[PHP_SELF]",
+		'NAV1'		    =>	"MYINFO"
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$HEADSHOTCFG = array (
+		'EDITLEVEL'		=>	'1',		// Access level to get edit screen (anyone)
+		'THUMBWIDTH'	=>	'76',		// Pixel width for thumbnail
+		'THUMBHEIGHT'	=>	'86',		// Pixel width for thumbnail
+        'MAXFILESIZE'   =>  '1000000',  // Max upload file size
+		'TARGETDIR'		=>	"$WICCFG[HEADSHOTDIR]/$_SESSION[center_id]"
+	);
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+	spew_header($FMT);
+
+	echo "<PRE>\n";		// DEVONLY
+	print_r($_REQUEST);	// DEVONLY
+	print_r ($_SESSION);	// DEVONLY
+	echo "</PRE>\n";	// DEVONLY
+	if (!isset($_SESSION['center_id'])){
+		echo "<CENTER>\n";
+		echo "<H2>Your login session default center is not set.</H2>\n";
+		echo "If you are logged in and have disabled you default center, you will need to";
+		echo " <A HREF=http://igroupportal.jbowes.net:8085/login.phpx?Action=Enable>";
+		echo " re-enable your session to contain your default center</A>.\n";
+		echo "<BR>Otherwise, please (logout and) <A HREF=/login.php>login</A>.\n";
+		echo "</CENTER>\n";
+		spew_footer($FMT);
+		exit;
+	}
+
+	if (array_key_exists(Action, $_REQUEST)) {
+		//----------------------------------------------------------------------
+	  	// Upload
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Upload" ) {
+			$extlimit = "yes"; 		    	// Limit allowed extensions? (no for all extensions allowed)
+
+            //
+			//List of allowed extensions if extlimit = yes
+            //
+			$AllowedExt = array(
+				'.gif',
+				'.jpg',
+				'.jpeg',
+				'.png'
+			);		
+			
+            //
+			// $_FILES is the array auto filled when you upload a file and submit a form.
+            //
+			$userfile_name = $_FILES['NewImage']['name']; 		// file name
+			$userfile_tmp  = $_FILES['NewImage']['tmp_name'];	// actual location
+			$userfile_size  = $_FILES['NewImage']['size'];		// file size
+			$userfile_type  = $_FILES['NewImage']['type'];		// mime type of file determined by php
+			$userfile_error  = $_FILES['NewImage']['error'];	// any error!. get reason here
+
+			switch (true) {
+				// Check error if any
+				case ($userfile_error == UPLOAD_ERR_NO_FILE):
+					echo '<H1>You must select a jpeg image file to upload.</H1>';
+					spew_footer($FMT);
+					exit;
+					break;
+				case ($userfile_error == UPLOAD_ERR_INI_SIZE):
+				case ($userfile_error == UPLOAD_ERR_FORM_SIZE):
+					echo '<P classs=trace>The photo you have attempted to upload is too large.</P>\n';
+					break;
+				case ($userfile_error == UPLOAD_ERR_PARTIAL):
+					echo 'An error occured while trying to recieve the file. Please try again.';
+					break;
+			}
+			//
+			//check if you have selected a file.
+			//
+			if(!is_uploaded_file($userfile_tmp)){
+				echo "<P class=trace>Upload failure: Please choose a file to upload.</P>";
+				spew_footer($FMT);
+				exit();
+			}
+
+			//
+			// Content uploading.
+			//
+			if( !empty($userfile_tmp)) {
+				echo "<PRE>\n";	// DEVONLY
+				print_r ($_FILES);	// DEVONLY
+				echo "</PRE>\n";	// DEVONLY
+
+				echo '<BR>Your File Type is:'. $userfile_type; // DEVONLY
+				echo '<BR>Your File Name is:'. $userfile_name; // DEVONLY
+				echo '<BR>Your File Error is:'. $userfile_error; // DEVONLY
+				echo '<BR>Your File Tmp is:'. $userfile_tmp; // DEVONLY
+				// only MS office and text file is accepted.
+				//if( !(($userfile_type=="application/msword") || ($userfile_type=="text/plain")) ) {
+					//echo '<br>File type must be text(.txt) or msword(.doc).';
+					//exit;
+				//}
+
+				//
+				// Return the portion of userfile_name which starts at the last occurrence of '.'
+				// and goes until the end of userfile_name
+				//
+				$rawext = strrchr($userfile_name,'.');
+				$ext = strtolower($rawext);
+
+				//
+				// Validate that extension is allowed
+				//
+				if (($extlimit == "yes") && (!in_array($ext,$AllowedExt))) {
+					echo "<P class=trace>Wrong file extension. Please upload gif, png, jpg, or jpeg formated file.  --&gt; <a href=\"$_SERVER[PHP_SELF]\">back</a>";
+					spew_footer($FMT);
+					exit();
+				}
+
+				// If storing in a database, we encode the data just to make it more database friendly
+				// $file_data = base64_encode(@fread(fopen($userfile_tmp, 'r'), filesize($userfile_tmp) ) );
+
+				$rand_name = date('Y-m-d-h-m-s');
+				$rawtargetfile = $HEADSHOTCFG[TARGETDIR] .  '/import/' . $rand_name . '_' . $_SESSION['war_id'] . $ext;
+				$targetfile = $HEADSHOTCFG[TARGETDIR] .  '/portrait_' . $_SESSION['war_id'] . $ext;
+
+			    echo "<P class=trace>Raw file: $rawtargetfile\n";  // DEVONLY
+			    echo "<P class=trace>Target file: $targetfile\n";  // DEVONLY
+			    echo "<P class=trace>userfile_tmp: $userfile_tmp\n";  // DEVONLY
+			    echo "<P class=trace>userfile_type: $userfile_type\n";  // DEVONLY
+	
+				echo "<P class=trace>Validated extension of $ext, reading $userfile_tmp</P>\n"; // DEVONLY
+				$fpRead = @fopen($userfile_tmp, 'rb');
+
+				echo "<P class=trace>Writing to $targetfile</P>\n"; // DEVONLY
+				$fpWrite = @fopen($targetfile, 'wb');
+
+				while (!feof($fpRead)) {
+					fwrite($fpWrite, fread($fpRead, 1024));
+				}
+
+				fclose($fpWrite);
+				fclose($fpRead);
+			}
+			//----------------------------------------------------------------------
+			// Resize and write resized thumbnamil
+			// Assume width is fixed and height tweaked to maintain aspect ratio
+			//----------------------------------------------------------------------
+			$ThumbWidth = $HEADSHOTCFG[THUMBWIDTH];
+			
+			if($userfile_size){
+				if($userfile_type == "image/pjpeg" || $userfile_type == "image/jpeg"){
+					$new_img = imagecreatefromjpeg($userfile_tmp);
+					echo "<P class=trace>Creating jpeg new image</P>\n"; // DEVONLY
+
+				}elseif($userfile_type == "image/x-png" || $userfile_type == "image/png"){
+					$new_img = imagecreatefrompng($userfile_tmp);
+					echo "<P class=trace>Creating png new image</P>\n"; // DEVONLY
+
+				}elseif($userfile_type == "image/gif"){
+					$new_img = imagecreatefromgif($userfile_tmp);
+					echo "<P class=trace>Creating gif new image</P>\n"; // DEVONLY
+				}
+				
+				//
+				// List the width and height and keep the height ratio.
+				// Calculate the image ratio
+				//
+				
+				//
+				// 7 Element array is returned, only two used
+				// list($width, $height, $imagetype, $urlattrs,...) = getimagesize($userfile_tmp);
+				//
+				list($width, $height) = getimagesize($userfile_tmp);
+				$imgratio=$width/$height;	// "Fatness"
+
+				echo "<P class=trace>Width: $width, Height: $height, Ratio: $imgratio</P>\n"; // DEVONLY
+				
+				if ($imgratio > 1){
+					// Landscape Orientation (wider than taller)
+					$newwidth = $ThumbWidth;
+					$newheight = $ThumbWidth/$imgratio;
+				}else{
+					// Portrait Orientation (taller than wider)
+					$newheight = $ThumbWidth;
+					$newwidth = $ThumbWidth*$imgratio;
+				}
+				echo "<P class=trace>NewWidth: $newwidth, NewHeight: $newheight</P>\n"; // DEVONLY
+				
+				//
+				// Test that installation has resize GD capability
+				//
+				
+				if (function_exists(imagecreatetruecolor)){
+					$resized_img = imagecreatetruecolor($newwidth,$newheight);
+					echo "<P class=trace>Creating resized image</P>\n"; // DEVONLY
+				}else{
+					die("Error: Please make sure you have GD library ver 2+");
+				}
+				
+				//
+				// Resize
+				//
+				imagecopyresized($resized_img, $new_img, 0, 0, 0, 0, $newwidth, $newheight, $width, $height);
+				
+                //
+				// Save the image
+                //
+				echo "<P class=trace>Saving Resized Image to $targetfile</P>\n"; // DEVONLY
+					ImageJpeg ($resized_img,"$targetfile");
+					ImageDestroy ($resized_img);
+					ImageDestroy ($new_img);
+				}
+				
+				//
+				// Copy the Original file to the thumbnail directory with random name
+				//
+				echo "<P class=trace>Saving original to $rawtargetfile</P>\n"; // DEVONLY
+				move_uploaded_file ($userfile_tmp, "$rawtargetfile");
+				
+				echo "<CENTER>\n";
+				echo "<TABLE id=headshot_upload_successful>\n";
+				echo "<TR><TD><H3>Upload successful</H3></TD></TR>\n";
+				echo "<TR><TD>\n";
+				echo "<UL>\n";
+				echo "<LI><A HREF=$WICCFG[WICURL]/login.phpx>Verify my photo is visible.</A></LI>\n";
+				echo "</UL>\n";
+				echo "</TD><TR>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+			}
+	}else{
+		spew_query_form();
+	}
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+        echo "<P class=trace>";
+        echo "This will upload whatever file you choose and convert it into a thumbnail photo no larger\n";
+        echo "<BR> than 86 x 76 pixels, to maintain compatibility with the thumbnails used in the CAA.\n";
+        echo "<BR> The converter does its best to keep height to width ratio of the uploaded photo the\n";
+        echo "<BR> same. For those with a photo editor, providing a photo with the same ratio as the target\n";
+        echo "<BR> with your head in the center will yield best results. If this does not work for you, you\n";
+        echo "<BR> can email it to the author link at the bottom of the page.\n";
+        echo "<BR> Formats of jpg, jpeg, gif, or png are acceptable.\n";
+        echo "</P>\n";
+		echo "<CENTER>\n";
+		echo "<FORM method=POST action=$_SERVER[PHP_SELF] enctype=\"multipart/form-data\" >\n";
+		echo "<TABLE id=headshot_query_form BORDER>\n";
+		echo "<TH>Upload New Photo Image</TH>\n";
+
+		echo "<TR><TD>";
+		echo "<input type=file name=NewImage value=AttachFile device=files accept=\"image/*\" tabindex=18 >\n";
+		echo "</TD>\n";
+
+		echo "</TABLE>\n";
+		echo "<input type=hidden name=MAX_FILE_SIZE value=$HEADSHOTCFG[MAXFILESIZE]>\n";
+		echo "<input type=submit name=Action value=Upload>\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+
+		spew_prior_uploads();
+	}
+
+	//----------------------------------------------------------------
+	// Function spew_prior_uploads
+	//----------------------------------------------------------------
+	function spew_prior_uploads() {
+		global $WICCFG;
+		$ValidExt = array(
+			'.png',
+			'.gif',
+			'.jpeg',
+			'.jpg'
+			);
+
+		$LastImg = array();
+		$cid = $_SESSION['center_id'];
+		$wid = $_SESSION['war_id'];
+		foreach ($ValidExt as $ext) {
+			$imgfile = $_SERVER{'DOCUMENT_ROOT'} .  $WICCFG['HEADSHOTURL'] . '/' . $cid . '/' . 'portrait_' . $wid . $ext;
+			echo "<P class=trace>Looking for $imgfile</P>\n"; // DEVONLY
+			if( file_exists( "$imgfile"))  {
+				$ts = filemtime("$imgfile");
+				$imgurl = $WICCFG['HEADSHOTURL'] . '/' . $cid . '/' . 'portrait_' . $wid . $ext;
+				echo "<P class=trace>Found It. Using : $imgurl [$ts]</P>\n"; // DEVONLY
+				$LastImg[$ts] = $imgurl;
+			}
+		}
+		krsort($LastImg);
+		echo "<CENTER>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH COLSPAN=2>Previously Uploaded Images Date</TH>\n";
+		echo "<TR><TH>Thumnail</TH><TH>Upload Date</TH>\n";
+		foreach ($LastImg as $ts => $img){
+			$date = date("Y-m-d @ H:i", $ts);
+			echo "<TR><TD><IMG SRC=$img></TD><TD VALIGN=TOP>$date $WICCFG[LOCALTIMEZONE]</TD>\n";
+		}
+		echo "</TABLE>\n";
+		echo "</CENTER>\n";
+	}
+?>

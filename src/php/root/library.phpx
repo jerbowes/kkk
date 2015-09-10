@@ -1,0 +1,1516 @@
+<?php
+	//#==================================================================
+	//# Reference Libaray
+	//#------------------------------------------------------------------
+	//# MKP-USA I-Group Portal
+	//# Formerly Warrior Information Center (WIC)
+	//# Jerry Bowes, MKP-USA IT Development Coordinator, 2010-2011
+	//# Jerry Bowes, MKP-USA I-Group Council Vice-Chairman, 2011-2013
+	//#------------------------------------------------------------------
+	//# $URL$
+	//# $Date: 2012/12/30 23:23:55 $
+	//# $Source: /home/jbowes/igroupportal/src/php/root/RCS/library.phpx,v $
+	//# $Id: library.phpx,v 1.4 2012/12/30 23:23:55 jbowes Exp $
+	//#------------------------------------------------------------------
+	//# SET EDITOR FOR 4 space TAB stops
+	//# :set autoindent tabstop=4 showmatch	 (vi)
+	//#==================================================================
+	//#------------------------------------------------------------------
+	//# To Edit subversion controlled version
+	//#------------------------------------------------------------------
+	//# Check out the subversion igroupportal web content directory
+	//# % cd /tmp 
+	//# % svn co http://svn.mkp.org/repo/igroupportal/httpdocs
+	//# -or, locally on MKP1-
+	//# % svn co file:///home/subversion/repo/igroupportal/httpdocs
+	//#
+	//# % cd /tmp/httpdocs
+	//# % vi (thisfile)
+	//# % svn ci [-m'<message describing change>'] (thisfile)
+	//#------------------------------------------------------------------
+	//# Deploy as root on mkp1
+	//#------------------------------------------------------------------
+	//# % cd /var/httpdocs/vhosts/igroupportal.mkp.org/httpdocs
+	//# % svn update
+	//# % chown -R igroupportalweb.psacln *.php
+	//#==================================================================
+
+	require_once("./include/auth-inc.phpx");
+	require_once("./include/config-inc.phpx");
+	require_once("./include/looknfeel-inc.phpx");
+	require_once("./include/msutils-inc.phpx");
+	require_once("./include/session-inc.phpx");
+
+	//--------------------------------------------------------------------------
+	// If you are not authenticated (no war_id in $_SESSION), 
+	// Construct return url and redirect to login for authentication
+	//--------------------------------------------------------------------------
+	//
+	session_start();
+
+	if ( ! isset ( $_SESSION['war_id'] )) {
+		$returl =  $_SERVER['PHP_SELF'];
+		if (array_key_exists('QUERY_STRING', $_SERVER)){
+			$url = preg_replace('/&/', '|', $_SERVER['QUERY_STRING'] );
+			$returl .=  '?' .  $url;
+		}
+		header("Location: $WICCFG[SECWICURL]/login.phpx?RetUrl=$returl");;
+		exit;
+	}
+
+	//------------------------------------------------------------------------
+	// Formatting and navbar options for looknfeel-inc header and footer functions
+	//------------------------------------------------------------------------
+	//
+	$FMT = array (
+		'BANNER'		=>	"USA I-Group Resource Library",
+		'TITLE'			=>	"USA I-Group Resource Library",
+		'MODULENAME'	=>	"library.phpx",
+		'NAV1'		    =>	"INFO"	// Level 1 menu navigation group
+	);
+
+	//------------------------------------------------------------------------
+	// Local configuration paremeters
+	//------------------------------------------------------------------------
+	$LIBCFG = array (
+		'EDITLEVEL'		=>	'4'
+	);
+
+    $DIRMAP = array(
+        'Calendar'                  =>  'calendar',
+        'FAQ'                       =>  'faq',
+        'I-Group Resource'          =>  'igroup_resource',
+        'I-Group Process'           =>  'igroup_process',
+        'I-Group Training'          =>  'igroup_training',
+        'Miscellaneous'             =>  'misc',
+        'MKP Governing Document'    =>  'legal',
+        'MKP Organization'          =>  'org',
+        'Plans and Presentations'   =>  'plans',
+        'NWTA Protocol'             =>  'nwta_protocol',
+        'NWTA Training'             =>  'nwta_training',
+        'NWTA Resource'             =>  'nwta_resource'
+    );
+
+	//------------------------------------------------------------------------
+	// Database Fields
+	//------------------------------------------------------------------------
+	$ALLFIELD = array(
+        'library_id',
+        'library_title',
+        'library_class',
+        'library_type',
+        'library_format',
+        'library_state',
+        'contact_id',
+        'organization_id',
+        'library_rating',
+        'library_description',
+        'file_location',
+        'library_url',
+        'access_level',
+        'library_shelflife',
+        'last_modified',
+        'library_attribution'
+	);
+	$VIEW = array(
+        'library_title',
+        'library_type',
+        'library_class',
+        'contact_id',
+        'library_attribution',
+        'library_description'
+	);
+
+    $NEW = array(
+        'organization_id',
+        'library_title',
+        'library_class',
+        'library_type',
+        'library_format',
+        'library_state',
+        'library_description',
+        'library_url',
+        'access_level',
+        'library_shelflife',
+        'library_attribution'
+	);
+
+	//
+	//	Fields visible in query output list
+	//
+	$SHOW = array(
+        'contact_id',
+        'organization_id',
+        'library_title',
+        'library_class',
+        'library_type',
+        'library_format'
+	);
+
+	//
+	// Fields that can have query drill down links on display
+	//
+	$LINK = array(
+        'contact_id',
+        'organization_id',
+        'library_class',
+        'library_type',
+        'library_format',
+        'library_state',
+        'access_level',
+        'library_shelflife'
+	);
+
+	//
+	// Required for New Entry
+	//
+	$RequiredField = array(
+        'library_class'             =>  'select reference class',
+        'library_description'       =>  'enter description of resource',
+        'library_format'            =>  'enter format of resource',
+        'library_title'             =>  'enter name, title, or summary of document',
+        'organization_id'           =>  'enter organization owning document',
+        'library_shelflife'         =>  'enter shelflife: number of days before it should be reviewed for currency',
+        'library_type'              =>  'enter type of resource'
+	);
+	//
+	// Global query choices
+	//
+	$InValidChoice = array(
+		'All',
+		'',
+		' ',
+		'None',
+		'Choose'
+	);
+	//
+	// Edit record fields with edit disabled
+	//
+	$NoEdit = array(
+		'library_id',
+        'last_modified',
+		'library_rating'
+	);
+
+	$FieldType = array(
+		'contact_id'		    	=>	'Menu',
+		'organization_id'	    	=>	'MenuArray',
+		'library_type'				=>	'Menu',
+		'library_class'				=>	'Menu',
+		'library_format'			=>	'Menu',
+		'library_shelflife'			=>	'Menu',
+		'library_state'				=>	'Menu',
+		'library_url'			   	=>	'LongText',
+		'file_location'		    	=>	'LongText',
+		'library_title'			   	=>	'LongText',
+		'library_description'		=>	'TextArea'
+	);
+
+	$Menu = array(
+		"library_type"      => "SELECT choice from menu where table_name = 'library' and field_name = 'library_type'",
+		"library_shelflife" => "SELECT choice from menu where table_name = 'library' and field_name = 'library_shelflife'",
+		"library_class"	    => "SELECT choice from menu where table_name = 'library' and field_name = 'library_class'",
+		"library_state"	    => "SELECT choice from menu where table_name = 'library' and field_name = 'library_state'",
+		"library_format"    => "SELECT choice from menu where table_name = 'library' and field_name = 'library_format'",
+        "organization_id"   => "SELECT organization_id, organization_name from organization"
+	);
+
+	//
+	// Display exceptions from default tdcs centered display table cell
+	//
+	$JustifyCss = array(
+		'contact_id'		=>	'tdcs',	// small left justified
+		'library_state'		=>	'tdcs',	// small left justified
+		'library_format'	=>	'tdcs',	// small left justified
+		'library_rating'	=>	'tdcs'	// small left justified
+	);
+
+	//------------------------------------------------------------------------
+	// BEGIN Program
+	//------------------------------------------------------------------------
+
+	spew_header($FMT);
+	if (array_key_exists(Action, $_REQUEST)) {
+		echo "<PRE>\n";		// DEVONLY
+		print_r($_REQUEST);	// DEVONLY
+		echo "</PRE>\n";	// DEVONLY
+		spew_query_form();
+
+		//----------------------------------------------------------------------
+	  	// Insert New Entry
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Insert New Entry" || $_REQUEST[Action] == "Insert New Entry And Upload File" ) {
+			caa_connect();
+
+	  	    if ($_REQUEST[Action] == "Insert New Entry" ) {
+	            $RequiredField['library_url'] = 'enter web url or web link of resource';
+            }
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('library','library');
+			$fields = array_keys($fieldlabel);
+
+            $Default = array (
+                "library_state"             =>  "New",
+                "library_access"             =>  "1",
+                "library_shelflife"         =>  "90"
+            );
+
+            foreach ($Default as $key => $val ) {
+                if ( ! empty ( $_REQUEST[$key] )) {
+                    $_REQUEST[$key] = $val;
+                }
+            }
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Delete auto_increment primary keys
+			//
+			unset ($_REQUEST['library_id']);
+
+			//
+			// Required fields gauntlet
+			//
+			foreach ($RequiredField as $key => $val) {
+				if (! array_key_exists($key, $_REQUEST)) {
+					$err .= '<LI>Please ' . $RequiredField[$key] . '.</LI>';
+				}
+			}
+			if ( $err ) {
+				echo "<CENTER>\n";
+				echo "<H3>Incomplete Information</H3>\n";
+				echo "<TABLE BORDER>\n";
+				echo "<TR><TD><UL>$err</UL></TD></TABLE>\n";
+				echo "</TABLE>\n";
+				echo "</CENTER>\n";
+				spew_footer($FMT);
+				exit;
+			}
+
+			$sql = 'INSERT INTO library (';
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$sql .= $f . ',';
+				}
+			}
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					$sql2 .= "'" . $val . "'" . ',';
+				}
+			}
+
+			$finalsql = rtrim($sql, ",") .  ') VALUES (' .  rtrim($sql2, ",") . ")";
+			echo "<p class=trace>$finalsql</p>\n";	//DEBUG DEVONLY
+			$result = mysql_query($finalsql) or die('Error, query failed: $sql' . mysql_error() );
+
+            $lid = mysql_insert_id();
+
+		    echo "<CENTER>\n";
+            if ( $lid > 1 ) {
+			    echo "<H2>Record for <I>$_REQUEST[library_title]</I> Successfully Added</H2>\n";
+	  	        if ( $_REQUEST[Action] == "Insert New Entry And Upload File" ) {
+			        echo "<H2>Browse and Enter File to Upload</H2>\n";
+		            echo "<FORM method=POST action=$_SERVER[PHP_SELF] enctype=\"multipart/form-data\" >\n";
+		            echo "<TABLE id=library_upload_form BORDER>\n";
+		            echo "<TH COLSPAN=2 class=ths>Browse and Upload File</TH>\n";
+		            echo "<TR><TD>";
+		            echo "<input type=file name=NewFile value=AttachFile device=files  tabindex=18 >\n";
+		            echo "</TD>\n";
+		            echo "</TABLE>\n";
+		            echo "<input type=hidden name=library_id value=$lid>\n";
+		            echo "<input type=hidden name=MAX_FILE_SIZE value=1000000>\n";
+		            echo "<input type=submit name=Action value=Upload>\n";
+                }
+            }else{
+			    echo "<H2>Record Insert Failed</H2>\n";
+            }
+		    echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// File upload
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Upload" ) {
+            $Item = array();
+
+            if (empty ( $_REQUEST['library_id']) ) {
+                die("No library ID from Upload Form\n");
+            }
+
+            caa_connect();
+
+            $sql = "SELECT * from library where library_id = '$_REQUEST[library_id]'";
+			echo "<p class=trace>$sql</p>\n";	//DEBUG DEVONLY
+            $result = mysql_query($sql);
+			$Item = mysql_fetch_array($result, MYSQL_ASSOC) ;
+            echo "<PRE>\n";     // DEVONLY
+            print_r($Item);     // DEVONLY DEBUG
+            echo "</PRE>\n";    // DEVONLY
+
+            //
+			// $_FILES is the array auto filled when you upload a file and submit a form.
+            //
+			$userfile_name = $_FILES['NewFile']['name']; 		// file name
+			$userfile_tmp  = $_FILES['NewFile']['tmp_name'];	// actual location
+			$userfile_size  = $_FILES['NewFile']['size'];		// file size
+			$userfile_type  = $_FILES['NewFile']['type'];		// mime type of file determined by php
+			$userfile_error  = $_FILES['NewFile']['error'];	// any error!. get reason here
+
+
+			switch (true) {
+				// Check error if any
+				case ($userfile_error == UPLOAD_ERR_NO_FILE):
+					echo '<H1>You must select a file to upload.</H1>';
+					spew_footer($FMT);
+					exit;
+					break;
+				case ($userfile_error == UPLOAD_ERR_INI_SIZE):
+				case ($userfile_error == UPLOAD_ERR_FORM_SIZE):
+					echo '<P classs=trace>The file you have attempted to upload is too large.</P>\n';
+					break;
+				case ($userfile_error == UPLOAD_ERR_PARTIAL):
+					echo 'An error occured while trying to upload the file. Please try again.';
+					break;
+			}
+			//
+			// Check if you have selected a file.
+			//
+			if(!is_uploaded_file($userfile_tmp)){
+				echo "<P class=trace>Upload failure: Please choose a file to upload.</P>";
+				spew_footer($FMT);
+				exit ;
+			} 
+			//
+			// Alternate way to get mime info
+            // return mime type ala mimetype extension
+			//
+            //$finfo = finfo_open(FILEINFO_MIME_TYPE); 
+            //echo finfo_file($finfo, $userfile_tmp) . "\n"; 
+            //finfo_close($finfo);
+
+			//
+			// Content uploading.
+			//
+			if( !empty($userfile_tmp)) {
+				echo "<PRE>\n";	// DEVONLY
+				print_r ($_FILES);	// DEVONLY
+				echo "</PRE>\n";	// DEVONLY
+
+				echo '<BR>Your File Type is:'. $userfile_type;      // DEVONLY
+				echo '<BR>Your File Name is:'. $userfile_name;      // DEVONLY
+				echo '<BR>Your File Error is:'. $userfile_error;    // DEVONLY
+				echo '<BR>Your File Tmp is:'. $userfile_tmp;        // DEVONLY
+
+				// only MS office and text file is accepted.
+				//if( !(($userfile_type=="application/msword") || ($userfile_type=="text/plain")) ) {
+					//echo '<br>File type must be text(.txt) or msword(.doc).';
+					//exit;
+				//}
+
+                //
+                // DIRMAP is an omniscient map of initial rollout menu categories
+                // If someone adds one later, we need to accommodate
+                //
+                $type = $Item['library_type'];
+                if (array_key_exists($type, $DIRMAP)) {
+                    $subdir = $DIRMAP[$type];
+                }else{
+                    $subdir = strtolower( $type ) ;
+                }
+                echo "<P class=trace>Subdir: $subdir</P>\n"; // DEVONLY
+
+                //
+                // Using native file name, append library_id for uniqueness....
+                //
+                // Insure no period delimiters
+                //
+                list($filename, $dontcare) = explode('.', $userfile_name,2);
+                $ext = ltrim(strrchr($userfile_name, '.'), '.');
+
+                // Append library_id for tracking
+                $filepathname =  $filename . '_' .  $_REQUEST['library_id'] . '.' . $ext ;
+
+                echo "<P class=trace>Raw Filepath: $filepath</P>\n"; // DEVONLY
+
+                // Get rid of weird characters to enable unix file system compatibility
+                $cleanfilepath = strtolower($filepathname);
+                echo "<P class=trace>2 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/\s+/','_',$cleanfilepath);
+                echo "<P class=trace>3 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/\-/','_',$cleanfilepath);
+                echo "<P class=trace>4 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/\//','_',$cleanfilepath);
+                echo "<P class=trace>5 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/^\./','',$cleanfilepath);
+                echo "<P class=trace>6 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/\"/','',$cleanfilepath);
+                echo "<P class=trace>7 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/\|/','_',$cleanfilepath);
+                echo "<P class=trace>8 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $cleanfilepath = preg_replace('/\'/','',$cleanfilepath);
+                echo "<P class=trace>9 Raw LC Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                echo "<P class=trace>Clean Filepath: $cleanfilepath</P>\n"; // DEVONLY
+                $filepath =  $subdir . '/' . $cleanfilepath ;
+
+                // Using native file name
+				$targetfile = $WICCFG['LIBRARYTARGETDIR'] . '/' .  $filepath ;
+				$targetdir = $WICCFG['LIBRARYTARGETDIR'] . '/' .  $subdir ;
+				$targeturl = $WICCFG['WICURL'] . $WICCFG['LIBRARYTARGETURL'] . '/' .  $filepath;
+                if ( is_dir($targetdir) ) {
+                    echo "<P class=trace>Verified exists directory $targetdir</P>\n"; // DEVONLY
+                }else{
+                    if (mkdir($targetdir)) {
+                        echo "<P class=trace>Making directory $targetdir</P>\n"; // DEVONLY
+                    }else{
+                        echo "<P class=trace>Failed Making directory $targetdir</P>\n"; // DEVONLY
+                    }
+                }
+
+				echo "<BR>Target Dir: $targetdir\n"; // DEVONLY
+				echo "<BR>Target file: $targetfile\n"; // DEVONLY
+	
+				echo "<P class=trace>Reading $userfile_tmp</P>\n"; // DEVONLY
+				$fpRead = @fopen($userfile_tmp, 'rb');
+
+				echo "<P class=trace>Writing to $targetfile</P>\n"; // DEVONLY
+				$fpWrite = @fopen($targetfile, 'wb');
+
+				while (!feof($fpRead)) {
+					fwrite($fpWrite, fread($fpRead, 1024));
+				}
+
+				fclose($fpWrite);
+				fclose($fpRead);
+
+
+                $sql = "UPDATE library ";
+                $sql .= " set library_url = '$targeturl', ";
+                $sql .= " file_location = '$targetfile' ";
+                $sql .= " WHERE library_id = '$_REQUEST[library_id]'";
+                print "<P class=trace>$sql</P>\n"; // DEVONLY
+                mysql_query($sql);
+
+			}
+        }
+
+		//----------------------------------------------------------------------
+	  	// Update Existing Entry 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Update" ) {
+
+			if ( array_key_exists('library_id', $_REQUEST)) {
+				$lid = $_REQUEST['library_id'];
+				if (! is_numeric( $lid ) ) {
+					die ("ERROR: Attempt to update requires library_id to be integer. It is not.");
+				}
+			}else{
+				die ("No Item Id Set") ;
+			}
+
+			caa_connect();
+            $fieldlabel = array();
+            $fields = array();
+
+			//
+			// Get Original Record
+			//
+			$Original = array();
+			$sql = "SELECT * FROM library WHERE library_id = '$lid'";
+			$result = mysql_query($sql);
+			$Original = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			//
+			// Get list of fields for this table
+			//
+			$fieldlabel = get_field_labels('library','id');
+
+			print '<pre>';	                    // DEBUG DEVONLY
+			echo "Incoming Updated Fields\n";   // DEBUG DEVONLY
+			print htmlspecialchars(print_r($fieldlabel), ENT_QUOTES);	// DEBUG DEVONLY
+			print '</pre>';	                    // DEBUG DEVONLY
+
+			$fields = array_keys($fieldlabel);
+
+			//
+			// Eliminate all keys that have invalid answers
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (in_array($_REQUEST[$f], $InValidChoice)) {
+					unset ($_REQUEST[$f]);
+				}
+				if (in_array($_REQUEST[$altkey], $InValidChoice)) {
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+			//
+			// Find the extended entries for picklists and return 
+			// them to base names, overwriting picklist entry
+			//
+			foreach ($fields as $f) {
+				$altkey = "NEW_" . $f;
+				if (array_key_exists($altkey, $_REQUEST)) {
+					$_REQUEST[$f] =  $_REQUEST[$altkey];
+					unset ($_REQUEST[$altkey]);
+				}
+			}
+
+            //
+            // Update only the fields that have changed
+            //
+			$sql = 'UPDATE library SET ';
+			$sqlentry = array ();
+			foreach ($fields as $f) {
+				if ( array_key_exists($f, $_REQUEST)) {
+					$val = $_REQUEST[$f];
+					echo "<BR>$f : Comparing Orig ( $Original[$f] ) with Update ( $_REQUEST[$f] ) \n"; // DEVONLY
+
+					if ( $_REQUEST[$f] != $Original[$f] ) {
+						echo "<BR>XXX Different\n"; // DEVONLY
+						$val = mysql_real_escape_string($_REQUEST[$f]);
+						$sqlentry[] = $f . " = '" . $val . "'";
+					}else{
+						echo "<BR>YYY Same\n"; // DEVONLY
+					}
+				}
+			}
+			$sql .= implode (', ', $sqlentry);
+			$sql .= " WHERE library_id = '$lid'";
+
+			echo "<p class=trace>$sql</p>\n";	// DEVONLY DEBUG
+
+			if (count($sqlentry)) {
+				$result = mysql_query($sql) or die('Error, update failed: $sql' . mysql_error() );
+				echo "<H3>Update successful</H3>\n";
+			}else{
+				echo "<H3>No Changes Made</H3>\n";
+			}
+
+			$_REQUEST[Action] = "View";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Random
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Random") {
+			caa_connect();
+			$fieldlabel = array();
+			$where = array();
+            $List = array();
+
+			//
+			// Construct where clause into an array
+			//
+			foreach ($ALLFIELD as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+
+					if ( ! empty($val) ) {	
+						if ( preg_match('/%/', $val)) { 
+							$where[] =  $f . "LIKE '" . $val . "'" ;
+						}else{
+							$where[] =  $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT DISTINCT library_id FROM library";
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+            $rowcount = mysql_num_rows($result);
+
+            $List = get_menu($sql);
+            $idx = rand(0,$rowcount);
+            echo "<P class=trace>Range: $rowcount, Index: $idx</P>\n"; // DEVONLY
+
+            $_REQUEST['library_id'] = $List[$idx];
+            $_REQUEST['Action'] = 'View';
+	
+	  	}//if ($_REQUEST[Action] == "Random")) {
+
+		//----------------------------------------------------------------------
+	  	// Query 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Query") {
+			caa_connect();
+			$fieldlabel = array();
+
+			$fieldlabel = get_field_labels('library','library');
+			$fields = array_keys($fieldlabel);
+            $fieldlabel['contact_id'] = 'Contact';
+
+			//----------------------------------------------------------
+            // Look up tables: Center ID -> Center Name
+			//----------------------------------------------------------
+            $sql = "SELECT center_id, center_name from center";
+            $Center = array();
+            $Center = get_menu_array($sql);
+
+			//----------------------------------------------------------
+            // Look up tables: Organization ID -> Organization Short Name
+			//----------------------------------------------------------
+            $sql = "SELECT organization_id, organization_name from organization";
+            $Org = array();
+            $Org = get_menu_array($sql);
+
+			//----------------------------------------------------------
+			// Capture previous selection criteria and append to links
+			// To enable drill down subqueries
+			//----------------------------------------------------------
+
+			foreach(explode( '&', $_SERVER[QUERY_STRING])  as $entry ) {
+				list($key, $val) = explode( '=', $entry);	
+
+				if ( ! empty( $val ) ) {
+					if (! in_array($val, $InValidChoice)) {
+						if (in_array($key, $ALLFIELD) ) {
+							$parameters[$key] = $val;
+						}
+					}
+				}
+			}
+			$parameters[Action] = $_REQUEST[Action];
+
+			//----------------------------------------------------------
+			// Uniquify for duplicate entries
+			//----------------------------------------------------------
+			$validentries = array();
+
+			foreach ($parameters as $key => $val ) {
+				$val = preg_replace('/\s+/', '+', $val);
+				$newentry = $key . '=' . $val;
+				array_push($validentries, $newentry);
+			}
+
+			if (count($validentries)) {
+				$drilldown = implode('&', $validentries);
+			}
+
+			//
+			// Base sql query
+			//
+			$where = array(
+                'l.contact_id = w.war_id'
+			);
+			$from = array(
+				'library'	=>	'l',
+				'warrior'	=>	'w',
+			);
+
+			//
+			// Construct where clause into an array
+			//
+			foreach ($fields as $f) {
+				if (array_key_exists($f, $_REQUEST)) { 
+
+					$val = mysql_real_escape_string($_REQUEST[$f]);
+
+					if (in_array($val, $InValidChoice)){
+						unset($val) ;
+					}
+
+					if ( ! empty($val) ) {	
+						if ( preg_match('/%/', $val)) { 
+							$where[] = 'l.' .  $f . "LIKE '" . $val . "'" ;
+						}else{
+							$where[] =  'l.' . $f . "='" . $val . "'" ;
+						}
+					}
+				}
+			}
+
+			$sql = "SELECT DISTINCT l.*, w.war_nname, w.war_lname ";
+
+			$fromsql = array();
+
+			foreach ($from as $table => $abbr) {
+				$fromsql[] = $table . ' ' . $abbr;
+			}
+			$fromsql = array_unique($fromsql);
+
+			$sql .= ' FROM ' . implode(',', $fromsql);
+
+			if ( count($where) ) {
+				$sql .= ' WHERE ' . implode(' AND ', $where);
+			}
+
+			//---------------------------------------------------
+			// ORDER BY
+			//---------------------------------------------------
+			$OrderBy = array(
+				'Title'	    	=>	'l.library_title',
+				'Class'	    	=>	'l.library_class, l.library_title',
+				'State'	    	=>	'l.library_state, l.library_title',
+				'Type'	    	=>	'l.library_type, l.library_title'
+			);
+
+			$sortby = $_REQUEST[Sortmeby];
+            $sby = $OrderBy[$sortby];
+			if (empty ($sby)){
+				$sql .= ' ORDER BY l.library_title';
+			}else{
+				$sql .= ' ORDER BY ' . $sby;
+			}
+
+			echo "<P class=trace>$sql</P>\n";	// DEVONLY
+			$result = mysql_query($sql);
+            $rowcount = mysql_num_rows($result);
+	
+            echo "<P class=trace>";
+            if ( $rowcount > 0 ) {
+                if ( $rowcount > 1 ) {
+                    echo "$rowcount entries. ";
+                }else{
+                    echo "$rowcount entry. ";
+                }
+            }
+            echo "Yellow icon shows info <I>about</I> document.";
+            echo " Click on Title link to view or download. Other links";
+            echo " &quot;drill down&quot; to narrow search.";
+            echo "</P>\n";
+			echo "<CENTER>\n";
+			echo "<TABLE BORDER id=library_query_result_listing>\n";
+
+			unset($fields[library_id]);
+
+            if ( $_SESSION['access'] > $LIBCFG['EDITLEVEL'] ) {
+			    echo "<TH class=ths>Edit</TH>\n";
+            }
+            echo "<TH class=ths>View</TH>\n";
+
+			foreach ($ALLFIELD as $f) {
+				if (in_array($f, $SHOW)) {
+					echo "<TH class=ths>$fieldlabel[$f]</TH>\n";
+				}
+			}
+
+			while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+				echo "<TR>\n";
+
+                if ( $_SESSION['access'] > $LIBCFG['EDITLEVEL'] ) {
+                    echo "<TD ALIGN=CENTER VALIGN=TOP>\n";
+                    echo "<A HREF=$_SERVER[PHP_SELF]/library.phpx?library_id=$row[library_id]&Action=Edit>";
+                    echo "<IMG SRC=/images/smallballs/redball.gif></A>";
+                    echo "</TD>\n";
+                }
+                echo "<TD ALIGN=CENTER VALIGN=TOP>\n";
+                echo "<A HREF=$_SERVER[PHP_SELF]?library_id=$row[library_id]&Action=View>";
+                echo "<IMG SRC=/images/smallballs/yellowball.gif></A>";
+                echo "</TD>\n";
+
+				foreach ($ALLFIELD as $f) {
+					$css = "tds";
+					$display = stripslashes($row[$f]); 
+
+					// Display Exceptions (lookup)
+					if ( $f  == 'center_id' ) {
+						$display = $Center[$row[$f]];
+					}
+					if ( $f  == 'contact_id' ) {
+						$display = "<A HREF=/warrior.phpx?war_id=$row[$f]&Action=View>";
+                        $display .= $row['war_nname'] . ' ' . $row['war_lname'];
+                        $display .= "</A>";
+					}
+					if ( $f  == 'organization_id' ) {
+						$display = $Org[$row[$f]];
+					}
+					if ( $f  == 'library_title' ) {
+                        if ( ! empty( $row['library_url']) ) {
+						    $display = "<A HREF=$row[library_url]>$row[$f]</A>";
+                        }else{
+                            $display = "<A HREF=$_SERVER[PHP_SELF]/library.phpx?library_id=$lid&Action=Show>";
+                            $display .= $row[$f];
+                            $display .= "</A>\n";
+                        }
+					}
+
+					if (in_array($f, $SHOW)) {
+
+						if (array_key_exists($f, $JustifyCss)) {
+							$css = $JustifyCss[$f];
+						}
+
+						echo "<TD VALIGN=TOP class=$css>";
+						if (in_array($f, $LINK)) {
+							echo "<A HREF=";
+							echo "$_SERVER[PHP_SELF]";
+							echo '?';
+							$url = preg_replace('/\s+/', '+', $row[$f]);
+							echo "$f=${url}"; 
+							echo "&${drilldown}>";
+							echo "$display</A>\n";
+						}else{
+							echo "$display\n";
+						}
+						echo "<BR></TD>\n";
+					}
+				}
+			}
+			echo "</TABLE>\n";
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Query")) {
+
+
+
+
+
+
+
+
+
+
+		//----------------------------------------------------------------------
+	  	// New Entry Form
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "New" ) {
+			$menulist = array();
+			$fieldlabel = array();
+			$fields = array();
+
+            echo "<P class=trace>Complete the right column and click on <I>Insert New Entry</I> button at bottom.";
+            echo " For help, see <A HREF=/help.php?table_name=library&field_name=Overview&Action=Help>";
+			echo " overview</A> or click on the labels in the left column for details for that item.\n";
+            echo "</P>\n";
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+			echo "<CENTER>\n";
+
+            echo "<H2>Enter New Library Resource Item</H2>\n";
+			echo "<TABLE BORDER>\n";
+
+			$fieldlabel = get_field_labels('library','library');
+			$fieldlabel['organization_id'] = "Organization";
+
+			unset($fieldlabel['library_id']);
+
+			foreach ($NEW as $fieldname ) {
+				$val = $fieldlabel[$fieldname];
+				
+				echo "<TR><TD VALIGN=TOP CLASS=tdls>";
+                echo "<A HREF=/help.php?table_name=library&help_type=Explanation&field_name=${fieldname}&Action=Help>";
+                echo "$val</A></TD>\n";
+
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (array_key_exists($fieldname, $FieldType)) {
+					if ( $FieldType[$fieldname] == "Menu" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu($menusql);
+						sort($menulist);
+						spew_select_menu($fieldname, $_REQUEST[$fieldname],'Choose',$menulist);
+					}
+
+					if ($FieldType[$fieldname] == "MenuArray" ) {
+						$menusql = $Menu[$fieldname];
+						$menulist = get_menu_array($menusql);
+						asort($menulist);
+						spew_select_hash_menu($fieldname, $_REQUEST[$fieldname],'Choose',$menulist);
+					}
+
+					if ($FieldType[$fieldname] == "TextArea" ) {
+						echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=20></TEXTAREA>\n";
+					}
+
+					if ($FieldType[$fieldname] == "LongText" ) {
+						echo "<INPUT TYPE=TEXT SIZE=60 NAME=$fieldname>";
+					}
+
+				}else{
+					echo "<INPUT TYPE=TEXT NAME=$fieldname>";
+				}
+				echo "</TD>\n";
+			}
+
+			echo "</TABLE>\n";
+            echo "<INPUT TYPE=HIDDEN NAME=contact_id VALUE=$_SESSION[war_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry\">\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Insert New Entry And Upload File\">\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+		}
+
+		//----------------------------------------------------------------------
+	  	// Edit 
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST['Action'] == "Edit") {
+
+			if ( array_key_exists('library_id', $_REQUEST)) {
+				$lid = $_REQUEST[library_id];
+				if ( ! is_numeric($lid) ) {
+					die ("Location ID ($lid) is not an integer.") ;
+				}
+			}else{
+				die ("No Library Item Id Set") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM library WHERE library_id = '$lid'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('library','id');
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+            echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($ALLFIELD as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+				echo "<TR><TD VALIGN=TOP class=tdls>$label</TD>\n";
+				echo "<TD VALIGN=TOP class=tds>";
+
+				if (in_array($fieldname, $NoEdit)) {
+					echo "$row[$fieldname]<BR>";
+				}else{
+					if (array_key_exists($fieldname, $FieldType)) {
+
+						if ( $FieldType[$fieldname] == "Menu" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu($menusql);
+							sort($menulist);
+							spew_select_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ($FieldType[$fieldname] == "MenuArray" ) {
+							$menusql = $Menu[$fieldname];
+							$menulist = get_menu_array($menusql);
+							ksort($menulist);
+							spew_select_hash_menu($fieldname, $row[$fieldname],'',$menulist);
+						}
+
+						if ( $FieldType[$fieldname] == "TextArea" ) {
+							echo "<TEXTAREA NAME=$fieldname COLS=60 ROWS=30>$row[$fieldname]</TEXTAREA>\n";
+						}
+
+						if ( $FieldType[$fieldname] == "LongText" ) {
+							echo "<INPUT TYPE=TEXT NAME=$fieldname SIZE=60 VALUE=\"$row[$fieldname]\">\n";
+						}
+
+					}else{	// No fieldtype
+						echo "<INPUT TYPE=TEXT NAME=$fieldname VALUE=\"$row[$fieldname]\"><BR>";
+					}
+						
+				}//Endif NoEdit
+				echo "</TD>\n";
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=library_id VALUE=$_REQUEST[library_id]>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+            // SECURITY: Could double check here
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Update>\n";
+			echo "</FORM>\n";
+			echo "</CENTER>\n";
+
+			show_comment_history($library_id, 'library');
+
+	  	}//if ($_REQUEST[Action] == "Edit") 
+
+
+		//----------------------------------------------------------------------
+	  	// View
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "View" ) {
+
+			if ( array_key_exists('library_id', $_REQUEST)) {
+				$library_id = $_REQUEST['library_id'];
+				if ( ! is_numeric($library_id) ) {
+					die("Library ID ($library_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Library Id Set in View Module") ;
+			}
+
+			caa_connect();
+
+			$menulist = array();
+
+			$sql = "SELECT * FROM library WHERE library_id = '$library_id'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+			$fieldlabel = get_field_labels('library','library');
+            echo "<P class=trace>";
+            echo "Information about the library item.";
+            echo " Click <I>Title</I> link to see web page or download document.";
+            echo "</P>\n";
+
+			echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+            echo "<CENTER>\n";
+			echo "<TABLE BORDER>\n";
+
+			foreach ($VIEW as $fieldname ) {
+				$label = $fieldlabel[$fieldname];
+                if (! empty ( $row[$fieldname] ) ) {
+				    echo "<TR>";
+                    echo "<TD class=tdls>";
+                    echo "<A HREF=/help.phpx?table_name=library&field_name=$fieldname&help_type=Explanation&Action=Help>";
+                    echo "$label</TD>\n";
+    
+				    echo "<TD VALIGN=TOP class=tds>";
+    
+				    $display = stripslashes($row[$fieldname]);
+				    //
+				    // View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+				    //
+				    if ( $fieldname == "contact_id" ) {
+					    $sql = "SELECT war_nname, war_lname from warrior where war_id = '$row[$fieldname]'";
+                        $Who = array();
+                        $Who = get_menu($sql);
+                        $display = "<A HREF=/warrior.phpx?war_id=$row[contact_id]&Action=View>";
+					    $display .= $Who[0] . ' ' . $Who[1];
+					    $display .= "</A>";
+				    }
+    
+				    if ( $fieldname == "library_title" ) {
+                        $display = "<A HREF=$row[library_url]>";
+						$display .= stripslashes($row[$fieldname]);
+						$display .= "</A>";
+				    }
+    
+				    echo "$display<BR>";
+				    echo "</TD>\n";
+                }
+			}//Endforeach fieldname
+			echo "</TABLE>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+			echo "</FORM>\n";
+
+			//
+			// Show Comment History
+			//
+			echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$library_id>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=library>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+			echo "</FORM>\n";
+
+			show_comment_history($library_id, 'library');
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "View")
+
+		//----------------------------------------------------------------------
+	  	// Show
+		//----------------------------------------------------------------------
+	  	if ($_REQUEST[Action] == "Show" ) {
+
+			if ( array_key_exists('library_id', $_REQUEST)) {
+				$library_id = $_REQUEST['library_id'];
+				if ( ! is_numeric($library_id) ) {
+					die("Library ID ($library_id) is not an integer.") ;
+				}
+			}else{
+				die ("No Library Id Set in Show") ;
+			}
+
+			caa_connect();
+
+            $row = array();
+            $table = "library";
+
+			$sql = "SELECT * FROM library WHERE library_id = '$library_id'";
+			$result = mysql_query($sql);
+			$row = mysql_fetch_array($result, MYSQL_ASSOC) ;
+
+            echo "<CENTER>\n";
+			echo "<TABLE BORDER WIDTH=90%>\n";
+            echo "<TH class=ths>Content</TH>\n";
+
+			echo "<TR>";
+            echo "<TD class=tds>";
+			$display = stripslashes($row['library_description']);
+			//
+			// View Entry Lookup Map Translations (id -> othertable.name for foreign keys)
+			//
+			if ( $fieldname == "contact_id" ) {
+	            $sql = "SELECT war_nname, war_lname from warrior where war_id = '$row[$fieldname]'";
+                $Who = array();
+                $Who = get_menu($sql);
+                $display = "<A HREF=/warrior.phpx?war_id=$row[contact_id]&Action=View>";
+				$display .= $Who[0] . ' ' . $Who[1];
+				$display .= "</A>";
+			}
+
+			echo "$display<BR>";
+			echo "</TD>\n";
+
+			echo "</TABLE>\n";
+
+			//
+			// Show Comment History
+			//
+			echo "<FORM ACTION=/comment.phpx TYPE=POST>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_id VALUE=$library_id>\n";
+			echo "<INPUT TYPE=HIDDEN NAME=table_name VALUE=library>\n";
+			echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"Add Comment\">\n";
+			echo "</FORM>\n";
+
+			show_comment_history($library_id, $table);
+
+			echo "</CENTER>\n";
+	  	}//if ($_REQUEST[Action] == "Show")
+
+		//----------------------------------------------------------------------
+		// END 'Action' Processing Options
+		//----------------------------------------------------------------------
+
+	}else{	// No Action Field
+		spew_query_form();
+	}
+
+	spew_footer($FMT);
+	//----------------------------------------------------------------
+	// Function spew_query_form
+	//----------------------------------------------------------------
+	function spew_query_form() {
+		global $WICCFG;
+        $list = array();
+		caa_connect();
+        echo "<P class=trace>";
+        echo "An ";
+        echo "<A HREF=$WICCFG[WICURL]/help.phpx?table_name=library&field_name=Overview&Action=Help>overview</A> ";
+        echo " or help and explanations available on";
+        echo " <A HREF=$WICCFG[WICURL]/help.phpx?table_name=library&field_name=library_class&Action=Help>class</A>, ";
+        echo " <A HREF=$WICCFG[WICURL]/help.phpx?table_name=library&field_name=library_type&Action=Help>type</A>, ";
+        echo " or <A HREF=$WICCFG[WICURL]/help.phpx?table_name=library&field_name=library_format&Action=Help>format</A> ";
+        echo " available.\n";
+        echo "</P>\n";
+
+		echo "<CENTER>\n";
+		echo "<FORM ACTION=$_SERVER[PHP_SELF] TYPE=POST>\n";
+		echo "<TABLE BORDER>\n";
+		echo "<TH class=ths>Organization</TH>\n";
+		echo "<TH class=ths>Type</TH>\n";
+		echo "<TH class=ths>Class</TH>\n";
+		//echo "<TH class=ths>State</TH>\n";
+		echo "<TH class=ths>Sort By</TH>\n";
+
+		// Organization Name
+		echo "<TR><TD class=tds>\n";
+		$sql = "SELECT DISTINCT o.organization_id, o.organization_name";
+        $sql .= " FROM organization o, library l ";
+        $sql .= " WHERE o.organization_id = l.organization_id";
+		$list = get_menu_array($sql);
+		spew_select_hash_menu('organization_id','','All',$list);
+		echo "</TD>\n";
+
+		// Type 
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct library_type from  library order by library_type" ;
+		$list = get_menu($sql);
+		spew_select_menu('library_type','All','All',$list);
+		echo "</TD>\n";
+
+		// Class
+		echo "<TD class=tds>\n";
+		$sql = "SELECT distinct library_class from  library order by library_class" ;
+		$list = get_menu($sql);
+		spew_select_menu('library_class','All','All',$list);
+		echo "</TD>\n";
+
+		// State
+		//echo "<TD class=tds>\n";
+		//$sql = "SELECT distinct library_state from  library order by library_state" ;
+		//$list = get_menu($sql);
+		//spew_select_menu('library_state','All','All',$list);
+		//echo "</TD>\n";
+
+		// Sort By
+		echo "<TD class=tds>\n";
+		$sortby = array (
+			'Title',
+			'Type',
+			'Class'
+			);
+		sort($sortby);
+		spew_select_menu('Sortmeby','','Title',$sortby);
+		echo "</TD>\n";
+
+		// End Table
+
+		echo "</TR>\n";
+		echo "</TABLE>\n";
+		// End Form
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Query>\n";
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=Random>\n";
+        // SECURITY
+		echo "<INPUT TYPE=SUBMIT NAME=Action VALUE=\"New\">\n";
+		echo "</FORM>\n";
+		echo "</CENTER>\n";
+	}
+
+	//----------------------------------------------------------------
+	// Function Show Comment History
+	//----------------------------------------------------------------
+
+	function show_comment_history ( $cid, $ctable ) {
+		global $WICCFG;
+
+		$subname = "show_comment_history";
+
+    	echo "<P class=trace>Entering $subname in $program</P>\n" ; // DEBUG DEVONLY;
+	
+		$Default = array( 
+			"comment_type"		=>	"Library Comment",
+			"sortby"			=>	'Date Submitted'
+			);
+	
+		$NoPropagate = array( 
+			"sortby"	=>					"sort by",
+			"thread"	=>					"thread"
+			);
+	
+		//
+		// Get List of nicknames for comment authors
+		//
+		$Who = array();
+		$sql = "SELECT w.war_id, w.war_fname, w.war_nname, w.war_lname, war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$pid' ";
+        $Who = get_warrior_name_picklist($sql);
+
+		//
+		// Get List of emails for comment authors
+		//
+		$AuthorEmail = array();
+		$sql = "SELECT w.war_id , war_email from warrior w, comment c";
+		$sql .= " WHERE w.war_id = c.author_id ";
+		$sql .= " AND c.table_name = '$ctable' AND c.table_id = '$cid' ";
+        $AuthorEmail = get_menu_array($sql);
+
+		//
+		// Get List of existing comment types
+		//
+		$sql = "SELECT distinct comment_type from comment";
+		$ctypes =  get_menu($sql);
+
+		//
+		// Generate SQL query
+		//
+	
+		$dbh = caa_connect;
+		$cfields =  get_fields('comment','comment');
+	
+		$sql = "SELECT  ";
+		$sql .= " c.comment_id, c.comment_access,  c.author_id, c.date_created, c.comment_type,";
+		$sql .= " c.comment_summary, c.comment_detail"; 
+		$sql .= " FROM comment c WHERE c.table_name = '$ctable' and c.table_id = '$cid' ";
+
+		if (! isset($_SESSION[war_id] ) ) {
+			$sql .= " AND c.comment_access = 'Public' ";
+			echo "<P class=trace>Following are all public entries. ";
+			echo "Remaining entries visible after <A HREF=/login.phpx>logging in.</A></P>\n";
+		}
+
+		$sql .= " ORDER BY c.date_created desc";
+		
+		echo  "<P class=trace>$sql</P>\n" ; // DEBUG DEVONLY;
+
+		//
+		// Fetch and prepackage via sort/thread criteria WWWW
+		//
+
+		$TotalEntries = '0';
+		$result = mysql_query($sql);
+		$rowcount = mysql_num_rows($result);
+
+		$Sort = array();
+		$Comment = array();
+		$Allauthors = array();
+	
+		//--------------------------------------------------------
+		// Print Comment History
+		//--------------------------------------------------------
+		$url = $_SERVER['QUERY_STRING'];
+
+		print "<P class=trace>Incoming URI: $url</P>\n"; // DEVONLY DEBUG
+
+		if ( $_REQUEST[Comment] == "Detail" ) {
+			$url = preg_replace('/=Detail/', '=Summary', $url);
+			print "<P class=trace>Detail: url: ${url}</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?$url\">Show Comment Summary Only</P>\n";
+		}else{
+			$url = preg_replace('/&Comment=Summary/', '', $url);
+			print "<P class=trace>NO Detail: url: $url</P>\n"; // DEVONLY DEBUG
+			//print "<P class=trace><A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">Show Comment Details</P>\n";
+		}
+
+		$count = mysql_num_rows($result);
+		echo "<CENTER>\n";
+		$howmany = "Entries";
+
+		if ( $count == "1" ) {
+			$howmany = "Entry";
+		}
+		echo "<TABLE id=${ctable}_comment_table BORDER CELLSPACING=2 CELLPADDING=4>\n";
+
+		if ( $_REQUEST['Comment'] == "Detail" ) {
+			echo "<TH class=ths>Details of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?$url\">summaries only</A>.)";
+			echo "</TH>\n";
+		}else{
+			echo "<TH class=ths>Summary of $count Comment $howmany\n";
+			echo "(Show <A HREF=\"$_SERVER[PHP_SELF]?${url}&Comment=Detail\">details</A>.)";
+			echo "</TH>\n";
+		}
+		echo "<TR><TD class=tds>\n";
+		echo "<UL id=commentlist>\n";
+
+		while ($Comment = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+
+			$ts =  timestamp2display($Comment[date_created]);
+			echo "<LI>";
+			echo "<A HREF=\"/comment.phpx?comment_id=$Comment[comment_id]&Action=View\">";
+			echo "<IMG SRC=/images/smallballs/greenball.gif HEIGHT=10 WIDTH=10 VALIGN=CENTER></A>\n";
+			echo "&nbsp;[$ts]&nbsp;\n";
+			$author_id = $Comment['author_id'];
+
+			echo "<A HREF=\"mailto:$AuthorEmail[$author_id]\">$Who[$author_id]</A>:\n";
+
+			echo "$Comment[comment_summary]\n";
+
+			if ( $_REQUEST[Comment] == "Detail" ) {
+				echo "<UL id=commentlistbody><LI>\n";
+				echo "<PRE>\n";
+				$cleantext = stripslashes($Comment[comment_detail]);
+				$display = wordwrap($cleantext, 60, "\n");
+				echo "$display";
+				echo "</PRE>\n";
+				echo "</LI></UL>\n";
+			}
+
+			echo "</LI>\n";
+		}#Endwhile
+
+		if (! $count) {
+			echo "<LI>No comment entries</LI>\n";
+		}
+		echo "</UL>\n";
+		echo "</TD>\n";
+		echo "</TABLE>\n";
+	
+	}// End funtion show_comment_history
+	//----------------------------------------------------------------
+	// Function Get Warrior Full Name Picklist
+	//----------------------------------------------------------------
+	function get_warrior_name_picklist ( $sql ) {
+		global $WICCFG;
+        caa_connect();
+        $row = array();
+        $MyWho = array();
+        if (empty ($sql) ) {
+            die ("Function get_warrior_name_picklist attempted without sql statement: $sql");
+        }
+		$result =  mysql_query($sql);
+		while ($row = mysql_fetch_array($result, MYSQL_ASSOC) ) {
+			if ( empty ( $row['war_nname'] ) ) {
+				$name = $row['war_fname'] . ' ' . $row['war_lname'];
+			}else{
+				$name = $row['war_nname'] . ' ' . $row['war_lname'];
+			}
+			$id = $row['war_id'];
+			$MyWho[$id]  = $name;
+		}
+        return($MyWho);
+	}// End funtion get_warrior_name_picklist
+
+
+
+	//----------------------------------------------------------------
+	// Function send_email_ack
+	//----------------------------------------------------------------
+	function send_email_ack ( array $Data ) {
+		global $WICCFG;
+		//
+		// Config parameters for email acknowledgement
+		//
+		$LOGINEMAIL = array (
+			'subject'		=>	"MKP Login Assistance", 
+			'fromemail'		=>	"mkphelp@mkp.org",
+			'toemail'		=>	"jerbowes@yahoo.com",	// Safety, overwritten in send_email_ack
+			'fromname'		=>	"MKP Login Assistant" 
+		);
+
+		if ( $Data[war_email] ) {
+			$LOGINEMAIL[toemail] = $Data[war_email];
+			echo "<CENTER>\n";
+			echo "<H2>The info has been emailed to $Data[war_email]</H2>\n";
+			echo "</CENTER>\n";
+		}
+
+		echo '<pre>';	//DEBUG DEVONLY
+		echo "ENTERING EMAIL ACK<BR>\n";//DEBUG DEVONLY
+		echo "LOGINEMAIL<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($LOGINEMAIL), ENT_QUOTES);	//DEBUG DEVONLY
+		echo "Incoming Data<BR>\n";//DEBUG DEVONLY
+		echo htmlspecialchars(print_r($Data), ENT_QUOTES);	//DEBUG DEVONLY
+		echo '</pre>';	//DEBUG DEVONLY
+
+		$fd = popen($WICCFG[MAILER],"w"); 
+        //
+        // Construct Mail Headers
+        //
+		fputs($fd, "From: $LOGINEMAIL[fromname] <$LOGINEMAIL[fromemail]>\n"); 
+		fputs($fd, "To: $LOGINEMAIL[toname] <$LOGINEMAIL[toemail]>\n"); 
+
+		if ( $Data[war_email2] ) {
+			fputs($fd, "Cc: $Data[war_email2]\n"); 
+			echo "<CENTER>\n";
+			echo "<H2>A copy has also been sent to your alternate email $Data[war_email2]</H2>\n";
+			echo "</CENTER>\n";
+		}
+        //
+        // Subject
+        //
+		fputs($fd, "Subject: $LOGINEMAIL[subject]\n\n"); 
+        //
+        // Body
+        //
+		fputs($fd, "Your MKP login password has been reset. Below are your MKP login credentials\n\n"); 
+		fputs($fd, "Username (Warrior User Name): $Data[access_username]\n");
+		fputs($fd, "Password: $Data[password]\n\n");
+		fputs($fd, "Phonetic: $Data[phonetic]\n\n");
+		fputs($fd, "Expiration Date: $Data[expiration_date]\n\n");
+		fputs($fd, "You must reset your password before the expiration date.\n");
+		fputs($fd, "Click on the following link to log in and reset your password\n\n");
+		fputs($fd, "$WICCFG[WICURL]/login.phpx?wid=$Data[war_id]&encpw=$Data[encrypted_password]&login=$Data[login]&Action=Change\n\n");
+		fputs($fd, "Do not reply to this email. If you are having any difficulties, please fill\n");
+		fputs($fd, "out an MKP IT helpdesk request at the following link url:\n\n");
+		fputs($fd, "\thttp://helpdesk.mkp.org\n");
+
+		pclose($fd); 
+	}//End function send_email_ack
+
+	//----------------------------------------------------------------
+	// END FUNCTIONS
+	//----------------------------------------------------------------
+		
+?>
