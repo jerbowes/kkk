@@ -2,41 +2,11 @@
 #============================================================================= 
 # Import 3 column file into a survey
 #-----------------------------------------------------------------------------
-# $Source: /home/jbowes/igroupportal/src/perl/RCS/slurp_survey.pl,v $
 # $Id: slurp_survey.pl,v 1.15 2013/03/31 21:57:30 jbowes Exp $
-# $Date: 2013/03/31 21:57:30 $
-# Subversion 
-# $LastChangedBy$
-# $Rev$
-# $URL$
 #-----------------------------------------------------------------------------
 # Jerry Bowes, BCS Solutions, www.bcs-solutions.com, jerbowes@yahoo.com
 # Jerry Bowes, MKP-USA IT Development Coordinator
 # Jerry Bowes, MKP-USA I-Group Council Vice-Chairman
-#-----------------------------------------------------------------------------
-# To Edit:
-#
-# Set project variable, $PROJ to 'igroupportal'
-# 	% setenv PROJ igroupportal
-#
-# Edit Development copy:
-#	% P slurp_survey.pl		; This does a RCS checkout and opens a vi
-#				; session as controlled by master.scm.rcs
-#				; script to which 'P' command is linked.
-#				; After edit, script deletes all lines that
-#				; contain keyword 'liveoly' in upper case
-#				; and updates the executable in the ~/${PROJ}/bin
-#				; ( PROJ is environment variable, defaults to hostname)
-#				; directory WITH THE .pl EXTENSION. Once
-#				; this script is verified, it is released
-# 				; to the production version without the
-#				; .pl extension
-#	% rel -P slurp_survey.pl	; Strips out all lines with 'devonly' keyword
-#				; in upper case, changes all instances of
-#				; '${PROJ}dev' (in upper case) to '${PROJ}live' (in
-#				; upper case) and replaces the executable in 
-#				; the ~/{Machine_Name}/bin  directory without .pl extension
-#	% rel -P -b slurp_survey.pl	; Releases to ~/bin
 #=============================================================================
 my $program;
 my $summary = "Slurp Survey";		# Functional identifier for usage
@@ -101,12 +71,15 @@ open(SURVEY, "> $TARGDIR/load-survey.sql");
 print Q "\n#====================================================================\n";
 print Q "# Survey $opt_i, Starting Index $opt_s\n";
 print Q "#====================================================================\n";
+
 print A "\n#====================================================================\n";
 print A "# Survey $opt_i, Starting Index $opt_s\n";
 print A "#====================================================================\n";
+
 print SEC "\n#====================================================================\n";
 print SEC "# Survey $opt_i, Starting Index $opt_s\n";
 print SEC "#====================================================================\n";
+
 print M "\n#====================================================================\n";
 print M "# Survey $opt_i, Starting Index $opt_s\n";
 print M "#====================================================================\n";
@@ -149,6 +122,7 @@ while(<IN>){
 		#print SEC "INSERT INTO surveysection( survey_id, surveysection_name, sequence)\n";
 		#print SEC "VALUES('$survid','$what','$secid');\n";
 	}
+
 	if ($class =~ /Q/){	# Question
 		$qid++;
 		$mid++;
@@ -162,6 +136,7 @@ while(<IN>){
 		print M "INSERT INTO surveymanifest (surveymanifest_id, survey_id, surveysection_id, surveyquestion_id, sequence)\n";
 		print M "VALUES('$mid','$survid','$secid','$qid','$mseq');\n";
 	}
+	
 	if ($class =~ /A/){	# Answer
 		$aid++;
 		$thistype =~ s/\'/\'\'/g;
@@ -177,7 +152,6 @@ close(Q);
 close(A);
 close(M);
 
-#=============================================================================
 #=============================================================================
 #--------------------------------------
 # Database stuff
@@ -205,7 +179,6 @@ if ( $opt_t ) {
 
 $dbh->disconnect;		# Dis-Connect to the data base server 
 exit(0);
-#=============================================================================
 #=============================================================================
 #	Help documentation
 #=============================================================================
@@ -289,7 +262,7 @@ sub igroupportal_connect {
 	if ($WHATHOST =~ /mkp/) {
 		$dbname = "dbi:mysql:dbname=caa_master";
 		$dbuser = "caa_master";
-		$dbpwd = "W0rkT0g3th3r";
+		$dbpwd = "Not_The_Droids_You're_Looking_4";
 	}
 	# Development depot.jbowes.net
 	if ($WHATHOST =~ /depot/) {
@@ -434,54 +407,28 @@ TEMPLATE [-huvdq -c <class> -l <login>  -s <shell> ]
 
 =head1 DESCRIPTION
 
-The TEMPLATE command does stuff.
+The slurp_survey.pl script reads a text csv file exported from the
+template spreadsheet given to each customer to create their survey.
+It then correlates the questions, questions types,  and answer choices 
+into the several sql files to be imported into the survey utility database.
 
 
 It does the following:
 
 =over 8
 
-=item * Reads all current logins to guarantee new one is unique
+=item * Slurps textfile with question, type, answer
 
-=item * Generates a random password
+=item * Generates sql load files or survey components
 
-=item * Adds user to appropriate email aliases (all-unix, all-users)
-
-=item * Emails a welcome letter with account info to user, manager, and script operator
 
 =back
 
-A random alphanumeric password is generated and after the account is created,
-an email message with all account information is sent to the requester (at
-their Directory email address), their manager (as gleaned from the 
-Directory entry), and the person executing the script.
+See source
 
 =head1 OPTIONS
 
 =over
-
-=item 
-B<-l xxx>
-The user login. It may not contain non-alphanumeric characters and should be less
-than 12 characters. This is optional. If not provided, the script will attempt 
-to create a unique (unused) login from permutations of their Danger Directory
-email and full name. If three attempts to find a uniq login fail, the script
-will exit. This option is required (along with the gecos field) for non-human 
-accounts. It will be tested to insure it is unique and script will exit if not.
-
-=item 
-B<-e email>
-The email address.  
-At least one of ssid, email address, or full name must be provided for human accounts.
-
-=item 
-B<-f "Full Name">
-The Directory full name.
-At least one of ssid, email address, or full name must be provided for human accounts.
-
-=item 
-B<-n>
-Disable sending email notification.
 
 =item 
 B<-h>
@@ -491,40 +438,7 @@ Displays help in text format.
 B<-u>
 Displays synopsys usage and exits.
 
-
-=item 
-B<-c class>
-Specify the class of user:
-
-=over 4
-
-=item 
-B<dba>: Default. Creates 10M home directory, primary group of 'oracle'.
-
-=item 
-B<unix>: Group is staff, creates 5G home directory.
-
-=item 
-B<admin>: Group is sysops, creates 25G home directory.
-
-=item 
-B<restricted>: Unix account, 5G home directory, added to rv-all group.
-
 =back
-
-=back
-
-
-=head1 EXAMPLES
-
-=item B<Add account with no login capability, send no email>
-
-TEMPLATE -f "Sally Jones" -s /bin/false -n
-
-=item B<Add unix account with bash shell>
-
-TEMPLATE -f "Sally Jones" -s /bin/bash -N "bash shell required for oracle administration"
-
 
 
 =head1 BUGS AND CORNER CASES
