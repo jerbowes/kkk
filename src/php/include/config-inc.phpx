@@ -5,7 +5,6 @@
 	//# Jerry Bowes, jerbowes@yahoo.com
 	//#------------------------------------------------------------------
 	//# $Date: 2015/08/16 19:18:18 $
-	//# $Source: /home/jbowes/kkk/src/php/include/RCS/config-inc.phpx,v $
 	//# $Id: config-inc.phpx,v 1.10 2015/08/16 19:18:18 jbowes Exp $
 	//#------------------------------------------------------------------
 	//# SET EDITOR FOR 4 space TAB stops
@@ -26,8 +25,8 @@
 		'DBUSER'			=>	'kkk',
 		'DBNAME'			=>	'kkkdev',				//DEVONLY 
 		'DBNAME'			=>	'kkklive',				//LIVEONLY 
-		'DBPASSWD'			=>	'kkkG0d',						// LIVEONLY
-		'DBPASSWD'			=>	'kkkG0d',						// DEVONLY
+		'DBPASSWD'			=>	'Not_The_Droids_You_R_Looking_4',						// LIVEONLY
+		'DBPASSWD'			=>	'Not_The_Droids_You_R_Looking_4',						// DEVONLY
 		'DBHOST'			=>	'localhost',
 		'DBPORT'			=>	'3306',
 		'DOMAIN'			=>	'kkk.jbowes.net',
@@ -44,7 +43,6 @@
 		//'MAILER'			=>  "cat /tmp/kkkmail.$$",			// DEVONLY SAFETY ON
 		'SECKKKURL'			=>	'https://kkk.jbowes.org',
 		'TIMEZONE'			=>	'America/Los Angles',
-		'KKKITTEAM'			=>	'jerbowes@yahoo.com',
 		'WEBMASTER'			=>	'jerbowes@yahoo.com',
 		);
 
